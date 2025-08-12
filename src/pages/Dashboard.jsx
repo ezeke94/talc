@@ -157,24 +157,33 @@ const Dashboard = () => {
     return (
         <Box>
             <Typography variant="h4" gutterBottom>Dashboard</Typography>
-            <Paper sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Paper sx={{ p: 2, display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'flex-end', alignItems: 'center', mb: 3 }}>
                 <ToggleButtonGroup
                     color="primary"
                     value={kpiType}
                     exclusive
                     onChange={(e, newType) => newType && setKpiType(newType)}
+                    sx={{ mr: 2 }}
                 >
                     <ToggleButton value="Intellect">Intellect KPI</ToggleButton>
                     <ToggleButton value="Cultural">Cultural KPI</ToggleButton>
                 </ToggleButtonGroup>
-                
-                <Autocomplete
-                    options={centers}
-                    sx={{ width: 300 }}
-                    value={centerFilter}
-                    onChange={(e, newValue) => setCenterFilter(newValue)}
-                    renderInput={(params) => <TextField {...params} label="Filter by Center" />}
-                />
+                <Box sx={{ minWidth: 220 }}>
+                    <TextField
+                        select
+                        label="Filter by Center"
+                        value={centerFilter || ''}
+                        onChange={e => setCenterFilter(e.target.value || null)}
+                        SelectProps={{ native: true }}
+                        fullWidth
+                        InputLabelProps={{ shrink: true }}
+                    >
+                        <option value="">All Centers</option>
+                        {centers.map(center => (
+                            <option key={center} value={center}>{center}</option>
+                        ))}
+                    </TextField>
+                </Box>
             </Paper>
 
             <Paper sx={{ p: 2 }}>

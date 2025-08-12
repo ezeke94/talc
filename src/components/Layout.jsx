@@ -65,18 +65,13 @@ const Layout = () => {
 
     return (
         <Box sx={{ display: 'flex', minHeight: '100vh' }}>
-            <AppBar position="fixed" elevation={1}>
-                <Toolbar>
-                    {isMobile && (
-                        <IconButton
-                            color="inherit"
-                            edge="start"
-                            onClick={handleDrawerToggle}
-                            sx={{ mr: 2 }}
-                        >
-                            <MenuIcon />
-                        </IconButton>
-                    )}
+            <AppBar position="fixed" elevation={1} sx={{
+                bgcolor: 'primary.main',
+                color: 'primary.contrastText',
+                borderRadius: '0 0 12px 12px',
+                boxShadow: '0 4px 24px 0 rgba(80, 63, 205, 0.08)'
+            }}>
+                <Toolbar sx={{ minHeight: { xs: 56, sm: 64 }, px: 2 }}>
                     <Box 
                         component="img"
                         src={logo} 
@@ -106,30 +101,50 @@ const Layout = () => {
                                     color="inherit" 
                                     component={RouterLink} 
                                     to={item.path}
+                                    sx={{ borderRadius: 2, fontWeight: 500 }}
                                 >
                                     {item.text}
                                 </Button>
                             ))}
-                            <Button color="inherit" onClick={handleLogout}>
+                            <Button color="inherit" onClick={handleLogout} sx={{ borderRadius: 2, fontWeight: 500 }}>
                                 Logout
                             </Button>
                         </Box>
+                    )}
+                    {isMobile && (
+                        <IconButton
+                            color="inherit"
+                            edge="end"
+                            onClick={handleDrawerToggle}
+                            sx={{ ml: 2 }}
+                        >
+                            <MenuIcon />
+                        </IconButton>
                     )}
                 </Toolbar>
             </AppBar>
 
             <Drawer
                 variant="temporary"
-                anchor="left"
+                anchor="right"
                 open={mobileOpen}
                 onClose={handleDrawerToggle}
                 ModalProps={{ keepMounted: true }}
                 sx={{
                     display: { xs: 'block', md: 'none' },
-                    '& .MuiDrawer-paper': { width: 240 },
+                    '& .MuiDrawer-paper': {
+                        width: 240,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        minHeight: '100vh',
+                        borderTopRightRadius: 12,
+                        borderBottomRightRadius: 12
+                    },
                 }}
             >
-                {drawer}
+                <Box sx={{ width: '100%' }}>{drawer}</Box>
             </Drawer>
 
             <Container 

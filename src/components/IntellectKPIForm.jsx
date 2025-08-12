@@ -80,20 +80,19 @@ const IntellectKPIForm = () => {
 
     return (
         <>
-            <Paper component="form" onSubmit={handleSubmit} sx={{ p: { xs: 2, md: 3 } }}>
+
+            <Paper component="form" onSubmit={handleSubmit} sx={{ p: { xs: 2, md: 3 }, bgcolor: 'background.paper', borderRadius: 3, boxShadow: '0 2px 8px 0 rgba(80, 63, 205, 0.04)' }}>
                 <Typography variant="h4" gutterBottom>Intellect KPI Form</Typography>
-
-                <RatingScaleWithNotes label="4. Subject knowledge *" value={formData.subjectKnowledge} onChange={handleChange('subjectKnowledge')} options={['Critical', 'Not Up to Expectation', 'As Expected', 'Shows Intention', 'Exceeds Expectations']} />
-                <RatingScaleWithNotes label="6. Material readiness *" value={formData.materialReadiness} onChange={handleChange('materialReadiness')} options={['Never Prepares', '1-2 days prepared', '3 days prepared', '4 days prepared', 'Ready Everyday']} />
-                <RatingScaleWithNotes label="8. Child-Centric Teaching *" value={formData.childCentricTeaching} onChange={handleChange('childCentricTeaching')} options={['Critical', 'Not Up to Expectation', 'As Expected', 'Shows Intention', 'Exceeds Expectations']} />
-                <RatingScaleWithNotes label="10. Differential Methods / Experiential Learning *" value={formData.differentialMethods} onChange={handleChange('differentialMethods')} options={['Critical', 'Not Up to Expectation', 'As Expected', 'Shows Intention', 'Exceeds Expectations']} />
-                <RatingScaleWithNotes label="12. Lesson Plan Implementation" value={formData.lessonPlanImplementation} onChange={handleChange('lessonPlanImplementation')} options={['Never', 'Rarely', 'Sometimes', 'Often', 'Always']} />
-                <RatingScaleWithNotes label="14. Report Quality" value={formData.reportQuality} onChange={handleChange('reportQuality')} options={['Defensive of feedback', 'Takes Feedback, No Action', 'Inconsistent', 'Consistently integrates feedback', 'Implements feedback']} />
-                <RatingScaleWithNotes label="16. Learners Engagement *" value={formData.learnersEngagement} onChange={handleChange('learnersEngagement')} options={['Critical', 'Not Up to Expectation', 'As Expected', 'Shows Intention', 'Exceeds Expectations']} />
-                <RatingScaleWithNotes label="18. Percentage of learners engaged *" value={formData.percentageOfLearners} onChange={handleChange('percentageOfLearners')} options={['< 50%', '50%', '60%', '80%', '> 80%']} />
-
+                <RatingScaleWithNotes label="1. Subject knowledge *" value={formData.subjectKnowledge} onChange={handleChange('subjectKnowledge')} options={['Critical', 'Not Up to Expectation', 'As Expected', 'Shows Intention', 'Exceeds Expectations']} />
+                <RatingScaleWithNotes label="2. Material readiness *" value={formData.materialReadiness} onChange={handleChange('materialReadiness')} options={['Never Prepares', '1-2 days prepared', '3 days prepared', '4 days prepared', 'Ready Everyday']} />
+                <RatingScaleWithNotes label="3. Child-Centric Teaching *" value={formData.childCentricTeaching} onChange={handleChange('childCentricTeaching')} options={['Critical', 'Not Up to Expectation', 'As Expected', 'Shows Intention', 'Exceeds Expectations']} />
+                <RatingScaleWithNotes label="4. Differential Methods / Experiential Learning *" value={formData.differentialMethods} onChange={handleChange('differentialMethods')} options={['Critical', 'Not Up to Expectation', 'As Expected', 'Shows Intention', 'Exceeds Expectations']} />
+                <RatingScaleWithNotes label="5. Lesson Plan Implementation" value={formData.lessonPlanImplementation} onChange={handleChange('lessonPlanImplementation')} options={['Never', 'Rarely', 'Sometimes', 'Often', 'Always']} />
+                <RatingScaleWithNotes label="6. Report Quality" value={formData.reportQuality} onChange={handleChange('reportQuality')} options={['Defensive of feedback', 'Takes Feedback, No Action', 'Inconsistent', 'Consistently integrates feedback', 'Implements feedback']} />
+                <RatingScaleWithNotes label="7. Learners Engagement *" value={formData.learnersEngagement} onChange={handleChange('learnersEngagement')} options={['Critical', 'Not Up to Expectation', 'As Expected', 'Shows Intention', 'Exceeds Expectations']} />
+                <RatingScaleWithNotes label="8. Percentage of learners engaged *" value={formData.percentageOfLearners} onChange={handleChange('percentageOfLearners')} options={['< 50%', '50%', '60%', '80%', '> 80%']} />
                 <Box mt={3}>
-                    <Button type="submit" variant="contained" color="primary" disabled={loading} fullWidth>
+                    <Button type="submit" variant="contained" color="secondary" disabled={loading} fullWidth sx={{ borderRadius: 2, fontWeight: 600, fontSize: '1rem', py: 1.2 }}>
                         {loading ? <CircularProgress size={24} color="inherit" /> : 'Submit Form'}
                     </Button>
                 </Box>

@@ -96,21 +96,19 @@ const CulturalKPIForm = () => {
 
     return (
         <>
-            <Paper component="form" onSubmit={handleSubmit} sx={{ p: { xs: 2, md: 3 } }}>
+            <Paper component="form" onSubmit={handleSubmit} sx={{ p: { xs: 2, md: 3 }, bgcolor: 'background.paper', borderRadius: 3, boxShadow: '0 2px 8px 0 rgba(80, 63, 205, 0.04)' }}>
                 <Typography variant="h4" gutterBottom>Cultural KPI Form</Typography>
-
-                {culturalFields.map(field => (
+                {culturalFields.map((field, idx) => (
                      <RatingScaleWithNotes 
                         key={field}
-                        label={kpiLabels[field]} 
+                        label={`${idx + 1}. ${kpiLabels[field]}`}
                         value={formData[field]} 
                         onChange={handleChange(field)} 
                         options={options} 
                     />
                 ))}
-
                 <Box mt={3}>
-                    <Button type="submit" variant="contained" color="primary" disabled={loading} fullWidth>
+                    <Button type="submit" variant="contained" color="secondary" disabled={loading} fullWidth sx={{ borderRadius: 2, fontWeight: 600, fontSize: '1rem', py: 1.2 }}>
                         {loading ? <CircularProgress size={24} color="inherit" /> : 'Submit Form'}
                     </Button>
                 </Box>

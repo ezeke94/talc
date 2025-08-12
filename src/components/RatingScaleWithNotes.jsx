@@ -16,26 +16,73 @@ const RatingScaleWithNotes = ({ label, options, value, onChange }) => {
     };
 
     return (
-        <Box sx={{ p: 2, border: '1px solid #e0e0e0', borderRadius: 2, mb: 2 }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Typography component="legend" fontWeight="500">{label}</Typography>
+        <Box sx={{
+            p: 2,
+            border: '1px solid #e0e0e0',
+            borderRadius: 3,
+            mb: 2,
+            bgcolor: 'background.paper',
+            boxShadow: '0 2px 8px 0 rgba(80, 63, 205, 0.04)'
+        }}>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                <Typography component="legend" fontWeight="500" sx={{ fontSize: { xs: '1rem', sm: '1.1rem' } }}>{label}</Typography>
                 <IconButton onClick={() => setNotesVisible(!notesVisible)} size="small" title="Add Note">
                     <AddCommentIcon color={notesVisible ? "primary" : "action"} />
                 </IconButton>
             </Box>
-            <ToggleButtonGroup
-                value={value.score}
-                exclusive
-                onChange={handleScoreChange}
-                fullWidth
-                sx={{ mt: 1 }}
-            >
-                {options.map((opt, i) => (
-                    <ToggleButton key={i} value={String(i + 1)} sx={{ p: 1, fontSize: '0.75rem' }}>
-                        {opt}
-                    </ToggleButton>
-                ))}
-            </ToggleButtonGroup>
+            <Box sx={{
+                width: '100%',
+                display: 'flex',
+                justifyContent: { xs: 'flex-start', sm: 'center' },
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: 1,
+                pb: 1,
+                mt: 1
+            }}>
+                <ToggleButtonGroup
+                    value={value.score}
+                    exclusive
+                    onChange={handleScoreChange}
+                    sx={{
+                        flexWrap: 'wrap',
+                        justifyContent: { xs: 'flex-start', sm: 'center' },
+                        width: '100%',
+                        bgcolor: 'transparent',
+                        boxShadow: 'none',
+                        border: 'none'
+                    }}
+                >
+                    {options.map((opt, i) => (
+                        <ToggleButton
+                            key={i}
+                            value={String(i + 1)}
+                            sx={{
+                                p: { xs: '6px 10px', sm: '8px 18px' },
+                                fontSize: { xs: '0.85rem', sm: '1rem' },
+                                borderRadius: 2,
+                                color: 'primary.main',
+                                bgcolor: 'grey.100',
+                                border: 'none',
+                                mx: 0.5,
+                                my: 0.5,
+                                minWidth: 120,
+                                '&.Mui-selected': {
+                                    bgcolor: 'primary.main',
+                                    color: 'primary.contrastText',
+                                    fontWeight: 600,
+                                },
+                                '&:hover': {
+                                    bgcolor: 'primary.light',
+                                    color: 'primary.contrastText',
+                                }
+                            }}
+                        >
+                            {opt}
+                        </ToggleButton>
+                    ))}
+                </ToggleButtonGroup>
+            </Box>
             <Collapse in={notesVisible}>
                 <TextField
                     fullWidth

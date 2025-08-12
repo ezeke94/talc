@@ -95,7 +95,7 @@ const MentorDetail = () => {
     const KPISection = ({ title, data, formType }) => (
         <Paper sx={{ p: { xs: 2, md: 3 }, mt: 3 }}>
             <Typography variant="h5">{title}</Typography>
-            <Box sx={{ width: '100%', height: 300, mt: 3 }}>
+            <Box sx={{ width: '100%', height: 300, mt: 3, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                 <ResponsiveContainer>
                     <LineChart data={data.monthlyData}>
                         <CartesianGrid strokeDasharray="3 3" />
