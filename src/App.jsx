@@ -7,6 +7,7 @@ import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Mentors from './pages/Mentors';
 import MentorDetail from './pages/MentorDetail';
+import SeedData from './pages/SeedData';
 import IntellectKPIForm from './components/IntellectKPIForm';
 import CulturalKPIForm from './components/CulturalKPIForm';
 
@@ -22,6 +23,7 @@ function App() {
                         <Route path="mentor/:mentorId" element={<MentorDetail />} />
                         <Route path="mentor/:mentorId/fill-intellect-kpi" element={<IntellectKPIForm />} />
                         <Route path="mentor/:mentorId/fill-cultural-kpi" element={<CulturalKPIForm />} />
+                        <Route path="seed-data" element={<SeedData />} />
                     </Route>
                 </Routes>
             </BrowserRouter>

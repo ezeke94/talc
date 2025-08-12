@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { db } from '../firebase/config';
 import { collection, writeBatch, addDoc, doc } from 'firebase/firestore';
 import { mentors as seedMentors, kpiSubmissions as seedKpiSubmissions } from '../utils/seedData';
-import { Button, Typography, Box, CircularProgress, Alert, Paper } from '@mui/material';
+import seedKpiData from '../utils/seedKpiData';
+import { Button, Typography, Box, CircularProgress, Alert, Paper, Stack } from '@mui/material';
 
 const SeedData = () => {
     const [loading, setLoading] = useState(false);
@@ -41,21 +42,45 @@ const SeedData = () => {
         }
     };
 
+    const handleSeedKpiData = async () => {
+        setLoading(true);
+        setMessage('');
+        try {
+            await seedKpiData();
+            setMessage('Successfully seeded KPI data for selected mentors!');
+        } catch (error) {
+            console.error("Error seeding KPI data:", error);
+            setMessage(`Error: ${error.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <Paper sx={{p: 3}}>
             <Typography variant="h4" gutterBottom>Seed Firestore Data</Typography>
             <Typography paragraph color="text.secondary">
-                Click the button to populate your database with sample data.
-                This is for testing only. Before seeding, you should clear the 'mentors' and 'kpiSubmissions' collections in Firebase to avoid duplicates.
+                Click the buttons below to populate your database with sample data.
+                This is for testing only. Before seeding, you should clear the respective collections in Firebase to avoid duplicates.
             </Typography>
-            <Button
-                variant="contained"
-                color="secondary"
-                onClick={handleSeedData}
-                disabled={loading}
-            >
-                {loading ? <CircularProgress size={24} /> : 'Seed Sample Data'}
-            </Button>
+            <Stack direction="row" spacing={2}>
+                <Button
+                    variant="contained"
+                    color="secondary"
+                    onClick={handleSeedData}
+                    disabled={loading}
+                >
+                    {loading ? <CircularProgress size={24} /> : 'Seed Initial Data'}
+                </Button>
+                <Button
+                    variant="contained"
+                    color="primary"
+                    onClick={handleSeedKpiData}
+                    disabled={loading}
+                >
+                    {loading ? <CircularProgress size={24} /> : 'Seed KPI Data'}
+                </Button>
+            </Stack>
             {message && (
                 <Alert severity={message.startsWith('Error') ? 'error' : 'success'} sx={{ mt: 2 }}>
                     {message}

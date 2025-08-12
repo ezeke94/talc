@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase/config';
 import { doc, getDoc, collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { Box, Typography, Button, Paper, CircularProgress, List, ListItem, ListItemText, Divider, Grid } from '@mui/material';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import KPIScoreScale from '../components/KPIScoreScale';
 
 const MentorDetail = () => {
@@ -36,39 +37,98 @@ const MentorDetail = () => {
         return () => unsubscribe();
     }, [mentorId]);
 
-    const getLatestKpiData = (kpiType) => {
+    const getKpiData = (kpiType) => {
         const filteredSubs = submissions.filter(s => s.kpiType === kpiType);
-        if (filteredSubs.length === 0) return { avgScore: 0, notes: [], totalResponses: 0 };
+        if (filteredSubs.length === 0) return { monthlyData: [], notes: [], totalResponses: 0 };
 
-        const latestSub = filteredSubs[0];
-        const scores = Object.values(latestSub.form).map(item => item.score).filter(score => typeof score === 'number');
-        const avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-        
-        // Aggregate all non-empty notes from the latest 5 submissions
+        // Get current academic year start date (April 2025)
+        const currentDate = new Date();
+        const academicYearStart = new Date(currentDate.getFullYear(), 3, 1); // April 1st of current year
+        if (currentDate < academicYearStart) {
+            academicYearStart.setFullYear(academicYearStart.getFullYear() - 1);
+        }
+
+        // Group submissions by month and calculate average scores
+        const monthlySubmissions = {};
+        filteredSubs.forEach(sub => {
+            const submissionDate = sub.createdAt.toDate();
+            if (submissionDate >= academicYearStart) {
+                const monthKey = `${submissionDate.getFullYear()}-${String(submissionDate.getMonth() + 1).padStart(2, '0')}`;
+                if (!monthlySubmissions[monthKey]) {
+                    monthlySubmissions[monthKey] = [];
+                }
+                const scores = Object.values(sub.form).map(item => item.score).filter(score => typeof score === 'number');
+                const avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+                monthlySubmissions[monthKey].push(avgScore);
+            }
+        });
+
+        // Calculate monthly averages and format for chart
+        const monthlyData = Object.entries(monthlySubmissions)
+            .map(([month, scores]) => ({
+                month,
+                average: scores.reduce((a, b) => a + b, 0) / scores.length
+            }))
+            .sort((a, b) => a.month.localeCompare(b.month));
+
+        // Get notes from latest 5 submissions
         const allNotes = filteredSubs.slice(0, 5).flatMap(sub =>
             Object.values(sub.form)
                 .map(item => item.note)
                 .filter(note => note && note.trim() !== '')
         );
         
-        return { avgScore, notes: allNotes.slice(0, 5), totalResponses: filteredSubs.length };
+        return { 
+            monthlyData,
+            notes: allNotes.slice(0, 5),
+            totalResponses: filteredSubs.length,
+            latestScore: monthlyData.length > 0 ? monthlyData[monthlyData.length - 1].average : 0
+        };
     };
 
     if (loading) return <CircularProgress />;
     if (!mentor) return <Typography>Mentor not found.</Typography>;
 
-    const intellectData = getLatestKpiData('Intellect');
-    const culturalData = getLatestKpiData('Cultural'); // Assuming cultural form is also updated
+    const intellectData = getKpiData('Intellect');
+    const culturalData = getKpiData('Cultural');
 
     const KPISection = ({ title, data, formType }) => (
         <Paper sx={{ p: { xs: 2, md: 3 }, mt: 3 }}>
             <Typography variant="h5">{title}</Typography>
-            <KPIScoreScale score={data.avgScore} />
+            <Box sx={{ width: '100%', height: 300, mt: 3 }}>
+                <ResponsiveContainer>
+                    <LineChart data={data.monthlyData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis 
+                            dataKey="month" 
+                            tickFormatter={(value) => {
+                                const [year, month] = value.split('-');
+                                return `${new Date(year, month - 1).toLocaleString('default', { month: 'short' })}`;
+                            }}
+                        />
+                        <YAxis domain={[0, 5]} />
+                        <Tooltip 
+                            formatter={(value) => [value.toFixed(2), "Average Score"]}
+                            labelFormatter={(value) => {
+                                const [year, month] = value.split('-');
+                                return `${new Date(year, month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}`;
+                            }}
+                        />
+                        <Line type="monotone" dataKey="average" stroke="#8884d8" strokeWidth={2} dot={{ r: 4 }} />
+                    </LineChart>
+                </ResponsiveContainer>
+            </Box>
             <Divider sx={{ my: 3 }} />
             <Grid container spacing={2}>
                 <Grid item xs={12} sm={4}>
                     <Typography variant="h4" align="center">{data.totalResponses}</Typography>
                     <Typography variant="body1" align="center">Responses</Typography>
+                    {data.latestScore > 0 && (
+                        <>
+                            <Typography variant="h4" align="center" sx={{ mt: 2 }}>{data.latestScore.toFixed(1)}</Typography>
+                            <Typography variant="body1" align="center">Latest Score</Typography>
+                        </>
+                    )}
                 </Grid>
                 <Grid item xs={12} sm={8}>
                     <Typography variant="h6">Latest Notes (up to 5)</Typography>
