@@ -1,6 +1,12 @@
 {
   "short_name": "KPI TALC",
   "name": "KPI TALC",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": ".",
+  "background_color": "#f6f7fb",
+  "theme_color": "#5040cd",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "favicon.ico",
@@ -17,9 +23,5 @@
       "type": "image/png",
       "sizes": "512x512"
     }
-  ],
-  "start_url": ".",
-  "display": "standalone",
-  "theme_color": "#5040cd",
-  "background_color": "#f6f7fb"
+  ]
 }
