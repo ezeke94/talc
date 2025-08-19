@@ -28,8 +28,13 @@ const Login = () => {
                     alt="App Logo"
                     sx={{ height: 60, mb: 3 }}
                 />
-                <Typography component="h1" variant="h5">
-                    KPI Assessor Login
+                <Typography component="h1" variant="h5" sx={{ mb: 1 }}>
+                    TALC Management Login
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 2 }}>
+                    <a href="https://www.talcworld.com" target="_blank" rel="noopener noreferrer" style={{ color: '#5040cd', textDecoration: 'underline' }}>
+                        Visit TALC Website
+                    </a>
                 </Typography>
                 <Box sx={{ mt: 3, width: '100%' }}>
                     <Button
@@ -41,6 +46,12 @@ const Login = () => {
                     >
                         Sign In with Google
                     </Button>
+                </Box>
+                <Box sx={{ mt: 4, width: '100%', textAlign: 'center' }}>
+                    <Typography variant="body2" sx={{ mb: 1 }}>
+                        <a href="/privacy-policy" style={{ color: '#5040cd', textDecoration: 'underline', marginRight: 16 }}>Privacy Policy</a>
+                        <a href="/terms-of-use" style={{ color: '#5040cd', textDecoration: 'underline' }}>Terms of Use</a>
+                    </Typography>
                 </Box>
             </Paper>
         </Container>

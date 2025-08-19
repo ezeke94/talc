@@ -1,9 +1,9 @@
 {
-  "short_name": "KPI TALC",
-  "name": "KPI TALC",
+  "short_name": "TALC",
+  "name": "TALC Management",
   "display": "standalone",
   "orientation": "portrait",
-  "start_url": ".",
+  "start_url": "/",
   "background_color": "#f6f7fb",
   "theme_color": "#5040cd",
   "prefer_related_applications": false,

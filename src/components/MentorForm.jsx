@@ -1,23 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Select, MenuItem, FormControl, InputLabel } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Select, MenuItem, FormControl, InputLabel, Chip } from '@mui/material';
 import { centers } from '../utils/seedData';
 
 const MentorForm = ({ open, onClose, onSave, mentor }) => {
     const [name, setName] = useState('');
-    const [center, setCenter] = useState('');
+    const [assignedCenters, setAssignedCenters] = useState([]);
 
     useEffect(() => {
         if (mentor) {
             setName(mentor.name || '');
-            setCenter(mentor.center || '');
+            setAssignedCenters(mentor.assignedCenters || (mentor.center ? [mentor.center] : []));
         } else {
             setName('');
-            setCenter('');
+            setAssignedCenters([]);
         }
     }, [mentor, open]);
 
     const handleSave = () => {
-        onSave({ name, center });
+        onSave({ name, assignedCenters });
     };
 
     return (
@@ -35,11 +35,17 @@ const MentorForm = ({ open, onClose, onSave, mentor }) => {
                     onChange={(e) => setName(e.target.value)}
                 />
                 <FormControl fullWidth margin="dense">
-                    <InputLabel>Center</InputLabel>
+                    <InputLabel>Assigned Centers</InputLabel>
                     <Select
-                        value={center}
-                        label="Center"
-                        onChange={(e) => setCenter(e.target.value)}
+                        multiple
+                        value={assignedCenters}
+                        label="Assigned Centers"
+                        onChange={e => setAssignedCenters(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}
+                        renderValue={selected => (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                {selected.map(value => <Chip key={value} label={value} />)}
+                            </Box>
+                        )}
                     >
                         {centers.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
                     </Select>

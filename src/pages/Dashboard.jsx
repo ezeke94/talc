@@ -136,27 +136,9 @@ const Dashboard = () => {
         setModalOpen(true);
     };
 
-    if (loading) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
-                <CircularProgress />
-            </Box>
-        );
-    }
-
-    if (chartData.length === 0) {
-        return (
-            <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
-                <Typography color="text.secondary">
-                    No data available for the selected filters
-                </Typography>
-            </Box>
-        );
-    }
-
     return (
         <Box>
-            <Typography variant="h4" gutterBottom>Dashboard</Typography>
+            <Typography variant="h4" gutterBottom>KPI Dashboard</Typography>
             <Paper sx={{ p: 2, display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'flex-end', alignItems: 'center', mb: 3 }}>
                 <ToggleButtonGroup
                     color="primary"
@@ -165,8 +147,8 @@ const Dashboard = () => {
                     onChange={(e, newType) => newType && setKpiType(newType)}
                     sx={{ mr: 2 }}
                 >
-                    <ToggleButton value="Intellect">Intellect KPI</ToggleButton>
-                    <ToggleButton value="Cultural">Cultural KPI</ToggleButton>
+                    <ToggleButton value="Intellect" button="true">Intellect KPI</ToggleButton>
+                    <ToggleButton value="Cultural" button="true">Cultural KPI</ToggleButton>
                 </ToggleButtonGroup>
                 <Box sx={{ minWidth: 220 }}>
                     <TextField
@@ -188,7 +170,19 @@ const Dashboard = () => {
 
             <Paper sx={{ p: 2 }}>
                 <Typography variant="h6">Average Mentor Score Distribution</Typography>
-                <KPIChart data={chartData} onSegmentClick={handleChartClick} />
+                {loading ? (
+                    <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+                        <CircularProgress />
+                    </Box>
+                ) : chartData.length === 0 ? (
+                    <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+                        <Typography color="text.secondary">
+                            No data available for the selected filters
+                        </Typography>
+                    </Box>
+                ) : (
+                    <KPIChart data={chartData} onSegmentClick={handleChartClick} />
+                )}
             </Paper>
 
             <Dialog onClose={() => setModalOpen(false)} open={modalOpen}>
@@ -205,4 +199,4 @@ const Dashboard = () => {
     );
 };
 
-export default Dashboard;
+export default Dashboard; // Component name remains for routing, but UI is 'KPI Dashboard'

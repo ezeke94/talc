@@ -1,34 +1,38 @@
-# KPI Tracker Application
+# TALC Management Application
 
-A web application for tracking and managing Key Performance Indicators (KPIs) for mentors. Built with React, Material-UI, and Firebase.
+
+A web application for managing KPIs, events, SOPs, mentors, and operational metrics for TALC centers. Built with React, Material-UI, and Firebase.
+
 
 ## Features
 
 - **Authentication**: Secure Google Sign-in
-- **Dashboard**: Visual representation of mentor performance distributions
-- **KPI Management**: 
-  - Intellect KPI tracking
-  - Cultural KPI tracking
-- **Mentor Management**:
-  - Add/Edit/Delete mentors
-  - View mentor details and history
-- **Data Visualization**: Interactive charts showing KPI distributions
-- **Center-based Filtering**: Filter data by different centers
+- **User Management**: Role assignment, center assignment, activation/deactivation
+- **Profile Management**: Edit name, assigned centers, view privacy/terms
+- **Calendar/Event Management**: Create, edit, reschedule, delete events/tasks; recurring events; to-do lists; SOP application; PDF export
+- **Mentor Management**: Add/Edit/Delete mentors, assign centers
+- **SOP Management**: Admin/Quality can create/edit global SOPs
+- **Operational Dashboard**: Center effectiveness, deadline metrics
+- **Notifications**: Push notifications for upcoming events/tasks and reschedules (FCM)
+- **PWA Support**: Offline access, installable on mobile
+
 
 ## Tech Stack
 
 - React 19
 - Material-UI v7
-- Firebase (Authentication & Firestore)
+- Firebase (Authentication, Firestore, Cloud Messaging)
 - Recharts for data visualization
 - Vite for build tooling
+- jsPDF for PDF export
+
 
 ## Getting Started
 
 1. Clone the repository
 ```bash
 git clone [repository-url]
-cd kpi-app
+cd talc-management
 ```
 
 2. Install dependencies
@@ -37,10 +41,12 @@ npm install
 ```
 
 3. Configure Firebase
-- Create a Firebase project
-- Enable Google Authentication
-- Create a Firestore database
-- Update `src/firebase/config.js` with your Firebase credentials
+  - Create a Firebase project
+  - Enable Google Authentication
+  - Enable Firestore database
+  - Enable Firebase Cloud Messaging (FCM)
+  - Update `src/firebase/config.js` with your Firebase credentials
+  - Add your VAPID key for FCM to `.env` as `VITE_FIREBASE_VAPID_KEY`
 
 4. Run the development server
 ```bash
@@ -52,23 +58,30 @@ npm run dev
 npm run build
 ```
 
+
 ## Project Structure
 
 ```
 src/
 ├── components/     # Reusable UI components
-├── context/       # React context providers
-├── firebase/      # Firebase configuration
-├── pages/         # Main application pages
-└── utils/         # Utility functions and data
+├── context/        # React context providers
+├── firebase/       # Firebase configuration
+├── pages/          # Main application pages
+├── utils/          # Utility functions and data
+└── service-worker.js # PWA service worker
 ```
 
-## Available Scripts
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run lint` - Run ESLint
+## Notifications Setup
+
+- Users are prompted to allow notifications on login/profile.
+- FCM tokens are saved to the `users` collection (`notificationTokens`).
+- Service worker handles push notifications for events/tasks.
+
+## Schema Documentation
+
+- See `firebase-schema.md` for all collections and fields, including notification support.
+
 
 ## Contributing
 

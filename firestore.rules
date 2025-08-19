@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Users collection: Only Admins can read/write user management data
+    match /users/{userId} {
+      allow read, write: if isAdmin();
+    }
+
+    // Events collection
+    match /events/{eventId} {
+      // Evaluators can only mark as completed (tick), not edit/delete
+      allow update: if isEvaluator() && isTickUpdate();
+      allow update, delete: if !isEvaluator();
+      allow create: if request.auth != null;
+      allow read: if request.auth != null;
+    }
+
+    // SOPs collection
+    match /sops/{sopId} {
+      // Evaluators cannot edit or delete
+      allow update, delete: if !isEvaluator();
+      allow create: if request.auth != null;
+      allow read: if request.auth != null;
+    }
+
+    // Other collections: allow authenticated users
+    match /{document=**} {
+      allow read, write: if request.auth != null;
+    }
+
+    function isAdmin() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Admin";
+    }
+    function isEvaluator() {
+      return request.auth != null &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Evaluator";
+    }
+    function isTickUpdate() {
+      // Only allow update if status is being set to "completed"
+      return request.resource.data.status == "completed";
+    }
+  }
+}

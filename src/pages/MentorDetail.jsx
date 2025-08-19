@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase/config';
 import { doc, getDoc, collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
-import { Box, Typography, Button, Paper, CircularProgress, List, ListItem, ListItemText, Divider, Grid } from '@mui/material';
+import { Box, Typography, Button, Paper, CircularProgress, List, ListItem, ListItemText, Divider, Grid, Dialog, DialogTitle, DialogContent, IconButton } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useTheme, useMediaQuery } from '@mui/material';
 import KPIScoreScale from '../components/KPIScoreScale';
@@ -13,6 +14,10 @@ const MentorDetail = () => {
     const [mentor, setMentor] = useState(null);
     const [submissions, setSubmissions] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [notesDialogOpen, setNotesDialogOpen] = useState(false);
+    const [allNotes, setAllNotes] = useState([]);
+    const [notesPage, setNotesPage] = useState(1);
+    const NOTES_PER_PAGE = 10;
 
     useEffect(() => {
         const fetchMentor = async () => {
@@ -38,33 +43,50 @@ const MentorDetail = () => {
         return () => unsubscribe();
     }, [mentorId]);
 
+    // Helper to extract all notes for a mentor and kpiType, with evaluator name and date
+    const getAllNotes = (kpiType) => {
+        const filteredSubs = submissions.filter(s => s.kpiType === kpiType);
+        let notesArr = [];
+        filteredSubs.forEach(sub => {
+            Object.entries(sub.form).forEach(([field, item]) => {
+                if (item.note && item.note.trim() !== '') {
+                    notesArr.push({
+                        note: item.note,
+                        field,
+                        evaluatorName: sub.evaluatorName || sub.assessorName,
+                        createdAt: sub.createdAt.toDate(),
+                    });
+                }
+            });
+        });
+        // Sort by date desc
+        notesArr.sort((a, b) => b.createdAt - a.createdAt);
+        return notesArr;
+    };
+
     const getKpiData = (kpiType) => {
         const filteredSubs = submissions.filter(s => s.kpiType === kpiType);
         if (filteredSubs.length === 0) return { monthlyData: [], notes: [], totalResponses: 0 };
 
-        // Get current academic year start date (April 2025)
+        // Academic year logic
         const currentDate = new Date();
-        const academicYearStart = new Date(currentDate.getFullYear(), 3, 1); // April 1st of current year
+        const academicYearStart = new Date(currentDate.getFullYear(), 3, 1);
         if (currentDate < academicYearStart) {
             academicYearStart.setFullYear(academicYearStart.getFullYear() - 1);
         }
 
-        // Group submissions by month and calculate average scores
+        // Monthly averages
         const monthlySubmissions = {};
         filteredSubs.forEach(sub => {
             const submissionDate = sub.createdAt.toDate();
             if (submissionDate >= academicYearStart) {
                 const monthKey = `${submissionDate.getFullYear()}-${String(submissionDate.getMonth() + 1).padStart(2, '0')}`;
-                if (!monthlySubmissions[monthKey]) {
-                    monthlySubmissions[monthKey] = [];
-                }
+                if (!monthlySubmissions[monthKey]) monthlySubmissions[monthKey] = [];
                 const scores = Object.values(sub.form).map(item => item.score).filter(score => typeof score === 'number');
                 const avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
                 monthlySubmissions[monthKey].push(avgScore);
             }
         });
-
-        // Calculate monthly averages and format for chart
         const monthlyData = Object.entries(monthlySubmissions)
             .map(([month, scores]) => ({
                 month,
@@ -72,16 +94,24 @@ const MentorDetail = () => {
             }))
             .sort((a, b) => a.month.localeCompare(b.month));
 
-        // Get notes from latest 5 submissions
-        const allNotes = filteredSubs.slice(0, 5).flatMap(sub =>
-            Object.values(sub.form)
-                .map(item => item.note)
-                .filter(note => note && note.trim() !== '')
-        );
-        
-        return { 
+        // Get notes from latest 5 submissions (for preview)
+        const previewNotes = [];
+        filteredSubs.slice(0, 5).forEach(sub => {
+            Object.entries(sub.form).forEach(([field, item]) => {
+                if (item.note && item.note.trim() !== '') {
+                    previewNotes.push({
+                        note: item.note,
+                        field,
+                        evaluatorName: sub.evaluatorName || sub.assessorName,
+                        createdAt: sub.createdAt.toDate(),
+                    });
+                }
+            });
+        });
+
+        return {
             monthlyData,
-            notes: allNotes.slice(0, 5),
+            notes: previewNotes.slice(0, 5),
             totalResponses: filteredSubs.length,
             latestScore: monthlyData.length > 0 ? monthlyData[monthlyData.length - 1].average : 0
         };
@@ -153,10 +183,9 @@ const MentorDetail = () => {
         return new Date(year, month - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
     };
 
-    const KPISection = ({ title, data, formType }) => (
+    const KPISection = ({ title, data, formType, kpiType }) => (
         <Paper sx={{ p: { xs: 2, md: 3 }, mt: 3 }}>
             <Typography variant="h5">{title}</Typography>
-            {/* Responsive chart with score labels for desktop only */}
             <ChartWithLabels data={data.monthlyData} />
             <Divider sx={{ my: 3 }} />
             <Grid container spacing={2}>
@@ -175,10 +204,20 @@ const MentorDetail = () => {
                 <Grid item xs={12} sm={8}>
                     <Typography variant="h6">Latest Notes (up to 5)</Typography>
                     <List dense>
-                        {data.notes.length > 0 ? data.notes.map((note, index) => (
-                           <ListItem key={index} disableGutters><ListItemText primary={`" ${note} "`}/></ListItem>
+                        {data.notes.length > 0 ? data.notes.map((noteObj, index) => (
+                            <ListItem key={index} disableGutters>
+                                <ListItemText 
+                                    primary={`"${noteObj.note}"`}
+                                    secondary={`By ${noteObj.evaluatorName || 'Unknown'} on ${noteObj.createdAt ? noteObj.createdAt.toLocaleDateString() : ''}`}
+                                />
+                            </ListItem>
                         )) : <ListItem><ListItemText primary="No recent notes available."/></ListItem>}
                     </List>
+                    <Button variant="text" sx={{ mt: 1 }} onClick={() => {
+                        setAllNotes(getAllNotes(kpiType));
+                        setNotesDialogOpen(true);
+                        setNotesPage(1);
+                    }}>View More</Button>
                 </Grid>
             </Grid>
             <Button variant="contained" onClick={() => navigate(`/mentor/${mentorId}/fill-${formType}-kpi`)} sx={{ mt: 3 }} fullWidth>
@@ -187,13 +226,42 @@ const MentorDetail = () => {
         </Paper>
     );
 
+    // Notes dialog for viewing all notes
+    const paginatedNotes = allNotes.slice((notesPage - 1) * NOTES_PER_PAGE, notesPage * NOTES_PER_PAGE);
+
     return (
         <Box>
             <Typography variant="h4" gutterBottom>{mentor.name}</Typography>
             <Typography variant="h6" color="text.secondary">{mentor.center}</Typography>
-            
-            <KPISection title="Intellect KPI" data={intellectData} formType="intellect" />
-            <KPISection title="Cultural KPI" data={culturalData} formType="cultural" />
+
+            <KPISection title="Intellect KPI" data={intellectData} formType="intellect" kpiType="Intellect" />
+            <KPISection title="Cultural KPI" data={culturalData} formType="cultural" kpiType="Cultural" />
+
+            <Dialog open={notesDialogOpen} onClose={() => setNotesDialogOpen(false)} maxWidth="md" fullWidth>
+                <DialogTitle>
+                    All Notes
+                    <IconButton aria-label="close" onClick={() => setNotesDialogOpen(false)} sx={{ position: 'absolute', right: 8, top: 8 }}>
+                        <CloseIcon />
+                    </IconButton>
+                </DialogTitle>
+                <DialogContent dividers>
+                    <List>
+                        {paginatedNotes.length > 0 ? paginatedNotes.map((noteObj, idx) => (
+                            <ListItem key={idx} alignItems="flex-start">
+                                <ListItemText 
+                                    primary={`"${noteObj.note}"`}
+                                    secondary={`By ${noteObj.evaluatorName || 'Unknown'} on ${noteObj.createdAt ? noteObj.createdAt.toLocaleDateString() : ''} (${noteObj.field})`}
+                                />
+                            </ListItem>
+                        )) : <ListItem><ListItemText primary="No notes found." /></ListItem>}
+                    </List>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+                        <Button disabled={notesPage === 1} onClick={() => setNotesPage(notesPage - 1)}>Previous</Button>
+                        <Typography>Page {notesPage} / {Math.ceil(allNotes.length / NOTES_PER_PAGE)}</Typography>
+                        <Button disabled={notesPage * NOTES_PER_PAGE >= allNotes.length} onClick={() => setNotesPage(notesPage + 1)}>Next</Button>
+                    </Box>
+                </DialogContent>
+            </Dialog>
         </Box>
     );
 };
