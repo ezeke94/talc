@@ -33,3 +33,6 @@ yarn-error.log*
 *.njsproj
 *.sln
 *.sw?
+
+# Firebase schema documentation
+firebase-schema.md
