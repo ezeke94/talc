@@ -9,15 +9,16 @@ import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
     const navigate = useNavigate();
-    const { currentUser, loading } = useAuth();
+    const { currentUser } = useAuth();
     const [signingIn, setSigningIn] = useState(false);
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        if (!loading && currentUser) {
+        // Navigate as soon as a user exists; don't wait on profile sync
+        if (currentUser) {
             navigate('/');
         }
-    }, [currentUser, loading, navigate]);
+    }, [currentUser, navigate]);
 
     // Detect iOS standalone (app added to home screen) where popups are blocked
     const isIOSStandalone = () => {
@@ -40,7 +41,9 @@ const Login = () => {
                 // redirect will take over; navigation happens after redirect completes
             } else {
                 await signInWithPopup(auth, googleProvider);
-                // Let AuthProvider detect auth state and drive navigation to `/`
+                // Navigate immediately after popup success to avoid waiting on background profile sync
+                navigate('/');
+                return;
             }
         } catch (err) {
             console.error('Popup sign-in failed, falling back to redirect:', err);

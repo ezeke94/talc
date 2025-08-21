@@ -37,11 +37,13 @@ export const AuthProvider = ({ children }) => {
 
             // Now subscribe to auth state changes
             unsubscribe = onAuthStateChanged(auth, async (user) => {
-                // Whenever auth state changes, mark as loading until we finish syncing profile
-                setLoading(true);
+                // Start processing this change
                 if (user) {
-                    // Set the raw Firebase user immediately so routes can proceed
+                    // Expose Firebase user immediately so routes can proceed
                     setCurrentUser(prev => prev || user);
+                    // Stop blocking UI immediately; profile sync continues in background
+                    setLoading(false);
+
                     // notifications removed
                     try {
                         const userRef = doc(db, 'users', user.uid);
@@ -72,11 +74,14 @@ export const AuthProvider = ({ children }) => {
                     } catch (e) {
                         console.error('Failed to upsert user profile', e);
                         setCurrentUser(user);
+                    } finally {
+                        // Ensure we are not stuck in loading if any of the above throws
+                        setLoading(false);
                     }
                 } else {
                     setCurrentUser(null);
+                    setLoading(false);
                 }
-                setLoading(false);
             });
         };
 
