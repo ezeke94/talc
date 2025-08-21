@@ -5,7 +5,7 @@ import { CircularProgress, Box } from '@mui/material';
 import { setupNotifications } from '../utils/notifications';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
-const AuthContext = createContext();
+const AuthContext = createContext({ currentUser: null, loading: true });
 
 export const useAuth = () => {
     return useContext(AuthContext);
@@ -17,6 +17,8 @@ export const AuthProvider = ({ children }) => {
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async user => {
+            // Whenever auth state changes, mark as loading until we finish syncing profile
+            setLoading(true);
             if (user) {
                 // Run notifications setup in background so it cannot block auth loading
                 setupNotifications(user).catch(err => {
@@ -61,7 +63,7 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     return (
-        <AuthContext.Provider value={{ currentUser }}>
+        <AuthContext.Provider value={{ currentUser, loading }}>
             {loading ? (
                 <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
                     <CircularProgress />

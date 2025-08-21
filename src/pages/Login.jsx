@@ -1,13 +1,21 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, googleProvider } from '../firebase/config';
 import { signInWithPopup } from 'firebase/auth';
 import { Button, Container, Typography, Paper, Box } from '@mui/material';
 import GoogleIcon from '@mui/icons-material/Google';
 import logo from '../assets/logo.png'; // <-- Import your logo
+import { useAuth } from '../context/AuthContext';
 
 const Login = () => {
     const navigate = useNavigate();
+    const { currentUser, loading } = useAuth();
+
+    useEffect(() => {
+        if (!loading && currentUser) {
+            navigate('/');
+        }
+    }, [currentUser, loading, navigate]);
 
     const handleGoogleSignIn = async () => {
         try {
@@ -17,6 +25,9 @@ const Login = () => {
             console.error("Authentication error:", error);
         }
     };
+
+    // Optionally avoid flashing the login screen while checking auth
+    if (loading) return null;
 
     return (
         <Container component="main" maxWidth="xs">

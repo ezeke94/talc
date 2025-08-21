@@ -4,7 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import InactiveAccount from '../pages/InactiveAccount';
 
 const ProtectedRoute = ({ children }) => {
-    const { currentUser } = useAuth();
+    const { currentUser, loading } = useAuth();
+    // While auth is initializing, don't redirect or render protected content
+    if (loading) return null;
     if (!currentUser) {
         return <Navigate to="/login" />;
     }
