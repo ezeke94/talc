@@ -116,6 +116,33 @@ if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/service-worker.js')
         .then(reg => {
           console.log('Service worker registered:', reg);
+          // Listen for updates to the service worker.
+          if (reg.waiting) {
+            console.log('A new service worker is waiting. Call window.activateNewSW() to activate.');
+          }
+
+          reg.addEventListener?.('updatefound', () => {
+            const newWorker = reg.installing;
+            if (!newWorker) return;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed') {
+                if (navigator.serviceWorker.controller) {
+                  // New update available
+                  console.log('New service worker installed and waiting. Call window.activateNewSW() to activate.');
+                } else {
+                  // First install
+                  console.log('Service worker installed for the first time.');
+                }
+              }
+            });
+          });
+
+          // Expose a helper to activate the new SW from the console for testing
+          window.activateNewSW = () => {
+            if (!reg.waiting) return console.log('No waiting service worker');
+            reg.waiting.postMessage('SKIP_WAITING');
+            console.log('Sent SKIP_WAITING to waiting service worker');
+          };
         })
         .catch(err => {
           console.error('Service worker registration failed:', err);
