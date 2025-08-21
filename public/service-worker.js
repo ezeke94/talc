@@ -57,6 +57,26 @@ self.addEventListener('fetch', event => {
     (event.request.method === 'GET' && event.request.headers.get('accept')?.includes('text/html'));
 
   if (isNavigate) {
+    // If the navigation URL contains OAuth / redirect query params (common during
+    // Firebase / Google redirect sign-in flows), prefer a network fetch and
+    // do NOT fall back to the cached index.html. Returning the cached index at
+    // that moment can swallow important query params or redirect responses and
+    // prevent the Firebase SDK from handling the sign-in result.
+    try {
+      const url = new URL(event.request.url);
+      const hasQuery = !!url.search;
+      const oauthKeys = ['code', 'state', 'access_token', 'oauth_token', 'error', 'g_csrf_token'];
+      const hasOAuthParams = oauthKeys.some(k => url.searchParams.has(k));
+
+      if (hasQuery && hasOAuthParams) {
+        // Let the browser perform a full network navigation for redirect results.
+        event.respondWith(fetch(event.request));
+        return;
+      }
+    } catch (e) {
+      // If URL parsing fails for any reason, fall back to the normal handling below.
+    }
+
     event.respondWith(
       fetch(event.request)
         .then(response => {

@@ -17,14 +17,30 @@ const app = initializeApp(firebaseConfig);
 // Initialize and export Firebase services for use throughout the app
 export const auth = getAuth(app);
 // Ensure auth state persists across tabs and reloads.
-// Prefer IndexedDB-backed persistence (more robust on some Safari/iOS configs).
+// Prefer IndexedDB-backed persistence in regular browsers but fall back to
+// browserLocalPersistence (localStorage) when running as an installed PWA or
+// in iOS standalone mode where IndexedDB/storage may be restricted.
 // Export a promise so callers can await persistence being configured.
-export const persistencePromise = setPersistence(auth, indexedDBLocalPersistence).catch((e) => {
-  console.warn('indexedDB persistence failed, falling back to browserLocalPersistence:', e);
-  // Fallback to localStorage-based persistence
-  return setPersistence(auth, browserLocalPersistence).catch((e2) => {
-    console.warn('Failed to set auth persistence, falling back to default:', e2);
-    // Resolve regardless to avoid blocking app init; return undefined
+const detectStandalone = () => {
+  try {
+    if (typeof window === 'undefined') return false;
+    // iOS older standalone flag or modern display-mode
+    if (window.navigator && window.navigator.standalone) return true;
+    if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
+    return false;
+  } catch (e) {
+    return false;
+  }
+};
+
+const preferredPersistence = detectStandalone() ? browserLocalPersistence : indexedDBLocalPersistence;
+
+export const persistencePromise = setPersistence(auth, preferredPersistence).catch((e) => {
+  console.warn('Preferred auth persistence failed, attempting fallbacks:', e);
+  // Try the other persistence option next
+  const fallback = preferredPersistence === indexedDBLocalPersistence ? browserLocalPersistence : indexedDBLocalPersistence;
+  return setPersistence(auth, fallback).catch((e2) => {
+    console.warn('Fallback auth persistence failed, proceeding without explicit persistence:', e2);
     return undefined;
   });
 });
