@@ -392,16 +392,9 @@ const Calendar = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Events
-        const eventsRef = collection(db, 'events');
-        let q;
-        if (import.meta.env.MODE !== 'production') {
-          q = query(eventsRef);
-        } else if (currentUser.email === 'mr.prerak.arya@gmail.com') {
-          q = query(eventsRef);
-        } else {
-          q = query(eventsRef, where('ownerId', '==', currentUser.uid));
-        }
+  // Events: show all events to authenticated users
+  const eventsRef = collection(db, 'events');
+  const q = query(eventsRef);
         const eventsSnapshot = await getDocs(q);
         let eventsData = eventsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
