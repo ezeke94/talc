@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, googleProvider } from '../firebase/config';
-import { signInWithPopup } from 'firebase/auth';
-import { Button, Container, Typography, Paper, Box } from '@mui/material';
+import { signInWithPopup, signInWithRedirect } from 'firebase/auth';
+import { Button, Container, Typography, Paper, Box, CircularProgress } from '@mui/material';
 import GoogleIcon from '@mui/icons-material/Google';
 import logo from '../assets/logo.png'; // <-- Import your logo
 import { useAuth } from '../context/AuthContext';
@@ -10,6 +10,7 @@ import { useAuth } from '../context/AuthContext';
 const Login = () => {
     const navigate = useNavigate();
     const { currentUser, loading } = useAuth();
+    const [signingIn, setSigningIn] = useState(false);
 
     useEffect(() => {
         if (!loading && currentUser) {
@@ -19,15 +20,22 @@ const Login = () => {
 
     const handleGoogleSignIn = async () => {
         try {
+            setSigningIn(true);
             await signInWithPopup(auth, googleProvider);
             navigate('/');
         } catch (error) {
-            console.error("Authentication error:", error);
+            console.error('Popup sign-in failed, falling back to redirect:', error);
+            try {
+                await signInWithRedirect(auth, googleProvider);
+            } catch (e) {
+                console.error('Redirect sign-in also failed:', e);
+            }
+        } finally {
+            setSigningIn(false);
         }
     };
 
-    // Optionally avoid flashing the login screen while checking auth
-    if (loading) return null;
+    // Keep login screen visible; if already authenticated, use effect redirects.
 
     return (
         <Container component="main" maxWidth="xs">

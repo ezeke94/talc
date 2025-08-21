@@ -20,6 +20,8 @@ export const AuthProvider = ({ children }) => {
             // Whenever auth state changes, mark as loading until we finish syncing profile
             setLoading(true);
             if (user) {
+                // Set the raw Firebase user immediately so routes can proceed
+                setCurrentUser(prev => prev || user);
                 // Run notifications setup in background so it cannot block auth loading
                 setupNotifications(user).catch(err => {
                     console.error('Notification setup failed (background):', err);
