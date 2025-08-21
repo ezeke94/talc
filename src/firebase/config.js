@@ -17,11 +17,12 @@ const app = initializeApp(firebaseConfig);
 // Initialize and export Firebase services for use throughout the app
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
-// Use long polling to avoid QUIC/HTTP3 issues on some networks and hosts
-export const db = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true,
-  experimentalForceLongPolling: true,
-  useFetchStreams: false
-});
+// Use long polling to avoid QUIC/HTTP3 issues on some networks and hosts.
+// Only one of these options may be used at a time; prefer force in production for stability.
+const firestoreSettings = import.meta.env?.PROD
+  ? { experimentalForceLongPolling: true, useFetchStreams: false }
+  : { experimentalAutoDetectLongPolling: true };
+
+export const db = initializeFirestore(app, firestoreSettings);
 
 export default app;
