@@ -16,34 +16,20 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize and export Firebase services for use throughout the app
 export const auth = getAuth(app);
-// Ensure auth state persists across tabs and reloads.
-// Prefer IndexedDB-backed persistence in regular browsers but fall back to
-// browserLocalPersistence (localStorage) when running as an installed PWA or
-// in iOS standalone mode where IndexedDB/storage may be restricted.
-// Export a promise so callers can await persistence being configured.
-const detectStandalone = () => {
-  try {
-    if (typeof window === 'undefined') return false;
-    // iOS older standalone flag or modern display-mode
-    if (window.navigator && window.navigator.standalone) return true;
-    if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return true;
-    return false;
-  } catch (e) {
-    return false;
-  }
-};
-
-const preferredPersistence = detectStandalone() ? browserLocalPersistence : indexedDBLocalPersistence;
-
-export const persistencePromise = setPersistence(auth, preferredPersistence).catch((e) => {
-  console.warn('Preferred auth persistence failed, attempting fallbacks:', e);
-  // Try the other persistence option next
-  const fallback = preferredPersistence === indexedDBLocalPersistence ? browserLocalPersistence : indexedDBLocalPersistence;
-  return setPersistence(auth, fallback).catch((e2) => {
-    console.warn('Fallback auth persistence failed, proceeding without explicit persistence:', e2);
-    return undefined;
+// Set auth persistence. Start with the most robust (IndexedDB), and fall back
+// to localStorage. This is crucial for PWAs/standalone apps where session
+// storage is unreliable.
+export const persistencePromise = setPersistence(auth, indexedDBLocalPersistence)
+  .catch((error) => {
+    console.warn(
+      "Firebase: IndexedDB persistence failed. Falling back to local storage.",
+      error
+    );
+    return setPersistence(auth, browserLocalPersistence);
+  })
+  .catch((error) => {
+    console.error("Firebase: All auth persistence mechanisms failed.", error);
   });
-});
 export const googleProvider = new GoogleAuthProvider();
 // Use long polling to avoid QUIC/HTTP3 issues on some networks and hosts.
 // Only one of these options may be used at a time; prefer force in production for stability.
