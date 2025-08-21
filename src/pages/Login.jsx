@@ -18,11 +18,28 @@ const Login = () => {
         }
     }, [currentUser, loading, navigate]);
 
+    // Detect iOS standalone (app added to home screen) where popups are blocked
+    const isIOSStandalone = () => {
+        try {
+            // navigator.standalone is true for iOS home-screen webapps
+            // For modern browsers, match display-mode media as an additional check
+            return (window.navigator && window.navigator.standalone) || window.matchMedia('(display-mode: standalone)').matches;
+        } catch (e) {
+            return false;
+        }
+    };
+
     const handleGoogleSignIn = async () => {
         try {
             setSigningIn(true);
-            await signInWithPopup(auth, googleProvider);
-            navigate('/');
+            // Use redirect on iOS standalone or when popups are likely blocked
+            if (isIOSStandalone()) {
+                await signInWithRedirect(auth, googleProvider);
+                // redirect will take over; navigation happens after redirect completes
+            } else {
+                await signInWithPopup(auth, googleProvider);
+                navigate('/');
+            }
         } catch (error) {
             console.error('Popup sign-in failed, falling back to redirect:', error);
             try {

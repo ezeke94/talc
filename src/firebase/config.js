@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence, indexedDBLocalPersistence } from "firebase/auth";
 import { initializeFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -16,9 +16,14 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize and export Firebase services for use throughout the app
 export const auth = getAuth(app);
-// Ensure auth state persists across tabs and reloads
-setPersistence(auth, browserLocalPersistence).catch((e) => {
-  console.warn('Failed to set auth persistence, falling back to default:', e);
+// Ensure auth state persists across tabs and reloads.
+// Prefer IndexedDB-backed persistence (more robust on some Safari/iOS configs).
+setPersistence(auth, indexedDBLocalPersistence).catch((e) => {
+  console.warn('indexedDB persistence failed, falling back to browserLocalPersistence:', e);
+  // Fallback to localStorage-based persistence
+  setPersistence(auth, browserLocalPersistence).catch((e2) => {
+    console.warn('Failed to set auth persistence, falling back to default:', e2);
+  });
 });
 export const googleProvider = new GoogleAuthProvider();
 // Use long polling to avoid QUIC/HTTP3 issues on some networks and hosts.
