@@ -69,21 +69,19 @@ const Login = () => {
                     component="img"
                     src={logo}
                     alt="App Logo"
+                    decoding="async"
+                    loading="lazy"
                     sx={{ height: 60, mb: 3 }}
                 />
                 <Typography component="h1" variant="h5" sx={{ mb: 1 }}>
                     TALC Management Login
-                </Typography>
-                <Typography variant="body2" sx={{ mb: 2 }}>
-                    <a href="https://www.talcworld.com" target="_blank" rel="noopener noreferrer" style={{ color: '#5040cd', textDecoration: 'underline' }}>
-                        Visit TALC Website
-                    </a>
                 </Typography>
                 <Box sx={{ mt: 3, width: '100%' }}>
                     <Button
                         fullWidth
                         variant="contained"
                         startIcon={<GoogleIcon />}
+                        aria-label="Sign in with Google"
                         onClick={handleGoogleSignIn}
                         disabled={signingIn}
                         size="large"
@@ -105,6 +103,17 @@ const Login = () => {
                     <Typography variant="body2" sx={{ mb: 1 }}>
                         <a href="/privacy-policy" style={{ color: '#5040cd', textDecoration: 'underline', marginRight: 16 }}>Privacy Policy</a>
                         <a href="/terms-of-use" style={{ color: '#5040cd', textDecoration: 'underline' }}>Terms of Use</a>
+                    </Typography>
+                    <Typography variant="body2">
+                        Website: {' '}
+                        <a
+                            href="https://www.talcworld.com"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ color: '#5040cd', textDecoration: 'underline' }}
+                        >
+                            www.talcworld.com
+                        </a>
                     </Typography>
                 </Box>
             </Paper>
