@@ -55,9 +55,15 @@ const Dashboard = () => {
         if (loading) return;
 
         try {
-            // Filter mentors by center if centerFilter is set
-            let filteredMentors = centerFilter 
-                ? allMentors.filter(m => m.center === centerFilter) 
+            // Filter mentors by center if centerFilter is set.
+            // Support both the newer `assignedCenters` (array) and legacy `center` (string).
+            let filteredMentors = centerFilter
+                ? allMentors.filter(m => {
+                    const centers = Array.isArray(m.assignedCenters)
+                        ? m.assignedCenters
+                        : (m.center ? [m.center] : []);
+                    return centers.includes(centerFilter);
+                })
                 : allMentors;
 
             const latestScores = filteredMentors.map(mentor => {

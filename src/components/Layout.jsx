@@ -28,6 +28,7 @@ import { signOut } from 'firebase/auth';
 import logo from '../assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 import ProfileSettingsDialog from './ProfileSettingsDialog';
+import AddToHomeScreenPrompt from './AddToHomeScreenPrompt';
 
 const Layout = () => {
     const navigate = useNavigate();
@@ -62,7 +63,10 @@ const Layout = () => {
         await handleLogout();
     };
 
-    console.log('Current user role:', currentUser && currentUser.role);
+    // Only log role in development to avoid noisy repeated logs in production
+    if (import.meta.env.DEV) {
+        console.debug('Current user role:', currentUser && currentUser.role);
+    }
     const normalizedRole = (currentUser && typeof currentUser.role === 'string') ? currentUser.role.trim().toLowerCase() : '';
     const showUserManagement = ['admin', 'quality'].includes(normalizedRole);
     const menuItems = [
@@ -239,6 +243,7 @@ const Layout = () => {
                 }}
             >
                 <Outlet />
+                <AddToHomeScreenPrompt />
             </Container>
 
             <Dialog open={showProfile} onClose={() => setShowProfile(false)} fullWidth maxWidth="sm">

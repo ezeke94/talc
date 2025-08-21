@@ -27,3 +27,21 @@ messaging.onBackgroundMessage(function(payload) {
   self.registration.showNotification(notificationTitle,
     notificationOptions);
 });
+
+// When notification is clicked, focus or open the app
+self.addEventListener('notificationclick', function(event) {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+      for (let i = 0; i < windowClients.length; i++) {
+        const client = windowClients[i];
+        if (client.url && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow('/');
+      }
+    })
+  );
+});

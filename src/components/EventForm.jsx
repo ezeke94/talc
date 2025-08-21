@@ -8,8 +8,36 @@ const EventForm = ({ onSave, eventData = {}, centers = [], mentors = [], users =
   const [centerIds, setCenterIds] = useState(eventData.centers || []);
   const [ownerId, setOwnerId] = useState(eventData.ownerId || '');
   const [ownerType, setOwnerType] = useState(eventData.ownerType || 'user');
-  const [startDateTime, setStartDateTime] = useState(eventData.startDateTime || '');
-  const [endDateTime, setEndDateTime] = useState(eventData.endDateTime || '');
+  // Helper to coerce incoming values (Date, Firestore Timestamp, ISO string) to input-friendly values
+  const formatForInput = (val, preferTime = true) => {
+    if (!val && val !== 0) return '';
+    // Firestore Timestamp
+    if (typeof val?.toDate === 'function') val = val.toDate();
+    if (val instanceof Date) {
+      return preferTime ? val.toISOString().slice(0, 16) : val.toISOString().slice(0, 10);
+    }
+    if (typeof val === 'string') {
+      // If string contains time component, return datetime-local format slice
+      if (val.includes('T')) return val.slice(0, 16);
+      // Otherwise it's date-only
+      return val.slice(0, 10);
+    }
+    return '';
+  };
+
+  // Determine whether incoming values include time (presence of 'T' or Date has time beyond midnight)
+  const detectHasTime = (val) => {
+    if (!val && val !== 0) return false;
+    if (typeof val?.toDate === 'function') val = val.toDate();
+    if (val instanceof Date) return !(val.getHours() === 0 && val.getMinutes() === 0 && val.getSeconds() === 0);
+    if (typeof val === 'string') return val.includes('T') || /T\d{2}:\d{2}/.test(val);
+    return false;
+  };
+
+  const [includeStartTime, setIncludeStartTime] = useState(detectHasTime(eventData.startDateTime));
+  const [includeEndTime, setIncludeEndTime] = useState(detectHasTime(eventData.endDateTime));
+  const [startDateTime, setStartDateTime] = useState(formatForInput(eventData.startDateTime, includeStartTime));
+  const [endDateTime, setEndDateTime] = useState(formatForInput(eventData.endDateTime, includeEndTime));
   const [isRecurring, setIsRecurring] = useState(eventData.isRecurring || false);
   const [recurrenceFrequency, setRecurrenceFrequency] = useState(eventData.recurrenceFrequency || 'weekly');
   const [recurrenceDays, setRecurrenceDays] = useState(eventData.recurrenceDays || []);
@@ -70,6 +98,7 @@ const EventForm = ({ onSave, eventData = {}, centers = [], mentors = [], users =
     // Recurring event creation logic
     if (isRecurring && recurrenceRule && recurrenceEnd) {
       // For demo: create events for each week between startDateTime and recurrenceEnd
+      // If startDateTime is date-only (YYYY-MM-DD), JS Date will treat it as UTC midnight; that's acceptable.
       const start = new Date(startDateTime);
       const end = new Date(recurrenceEnd + 'T23:59');
       let eventsToCreate = [];
@@ -108,14 +137,18 @@ const EventForm = ({ onSave, eventData = {}, centers = [], mentors = [], users =
       return;
     }
     // Non-recurring event
+    // When time is not included, keep date-only string (YYYY-MM-DD); when included, keep datetime-local (YYYY-MM-DDTHH:MM)
+    const finalStart = startDateTime || '';
+    const finalEnd = endDateTime || '';
+
     onSave({
       title,
       description,
       centers: centerIds,
       ownerId,
       ownerType,
-      startDateTime,
-      endDateTime,
+      startDateTime: finalStart,
+      endDateTime: finalEnd,
       isRecurring,
       recurrenceRule,
       recurrenceFrequency,
@@ -159,8 +192,57 @@ const EventForm = ({ onSave, eventData = {}, centers = [], mentors = [], users =
             ))}
           </Select>
         </FormControl>
-        <TextField type="datetime-local" label="Start Date/Time" value={startDateTime} onChange={e => setStartDateTime(e.target.value)} InputLabelProps={{ shrink: true }} fullWidth size={isMobile ? 'small' : 'medium'} />
-        <TextField type="datetime-local" label="End Date/Time" value={endDateTime} onChange={e => setEndDateTime(e.target.value)} InputLabelProps={{ shrink: true }} fullWidth size={isMobile ? 'small' : 'medium'} />
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <TextField
+            type={includeStartTime ? 'datetime-local' : 'date'}
+            label={includeStartTime ? 'Start Date/Time' : 'Start Date'}
+            value={startDateTime}
+            onChange={e => setStartDateTime(e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            fullWidth
+            size={isMobile ? 'small' : 'medium'}
+          />
+          <FormControlLabel
+            control={<Checkbox checked={includeStartTime} onChange={e => {
+              const next = e.target.checked;
+              setIncludeStartTime(next);
+              // If switching from date-only to datetime, append midnight time if needed
+              if (next && startDateTime && !startDateTime.includes('T')) {
+                setStartDateTime(startDateTime + 'T00:00');
+              }
+              // If switching from datetime to date-only, keep only date portion
+              if (!next && startDateTime && startDateTime.includes('T')) {
+                setStartDateTime(startDateTime.slice(0, 10));
+              }
+            }} />}
+            label="Include time"
+          />
+        </Box>
+
+        <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+          <TextField
+            type={includeEndTime ? 'datetime-local' : 'date'}
+            label={includeEndTime ? 'End Date/Time' : 'End Date'}
+            value={endDateTime}
+            onChange={e => setEndDateTime(e.target.value)}
+            InputLabelProps={{ shrink: true }}
+            fullWidth
+            size={isMobile ? 'small' : 'medium'}
+          />
+          <FormControlLabel
+            control={<Checkbox checked={includeEndTime} onChange={e => {
+              const next = e.target.checked;
+              setIncludeEndTime(next);
+              if (next && endDateTime && !endDateTime.includes('T')) {
+                setEndDateTime(endDateTime + 'T00:00');
+              }
+              if (!next && endDateTime && endDateTime.includes('T')) {
+                setEndDateTime(endDateTime.slice(0, 10));
+              }
+            }} />}
+            label="Include time"
+          />
+        </Box>
         <FormControlLabel control={<Checkbox checked={isRecurring} onChange={e => setIsRecurring(e.target.checked)} />} label="Recurring Event" />
         {isRecurring && (
           <Box sx={{ mb: 2 }}>

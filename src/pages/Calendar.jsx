@@ -14,10 +14,9 @@ import {
   Stack,
   InputAdornment,
   IconButton,
+  Tooltip,
   List,
-  ListItem,
-  ListItemText,
-  Divider,
+  
   FormControl,
   InputLabel,
   Select,
@@ -31,6 +30,7 @@ import {
   useMediaQuery,
   Card,
   CardContent,
+  Fab,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import SearchIcon from '@mui/icons-material/Search';
@@ -41,6 +41,7 @@ import EventForm from '../components/EventForm';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { exportEventsToPDF } from '../utils/pdfExport';
 import logo from '../assets/logo.png';
 import { db } from '../firebase/config';
@@ -122,12 +123,18 @@ const Calendar = () => {
   // Reschedule dialog
   // Filter collapse state
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
   // History toggle state
   const [showHistory, setShowHistory] = useState(false);
   const [rescheduleDialogOpen, setRescheduleDialogOpen] = useState(false);
   const [rescheduleEvent, setRescheduleEvent] = useState(null);
   const [newDateTime, setNewDateTime] = useState('');
   const [rescheduleComment, setRescheduleComment] = useState('');
+  // Confirmation dialog for delete/duplicate actions
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null); // 'delete' | 'duplicate'
+  const [confirmEvent, setConfirmEvent] = useState(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
 
   // Helpers
   const centerMap = useMemo(
@@ -158,6 +165,10 @@ const Calendar = () => {
     return isNaN(d.getTime()) ? null : d;
   };
 
+  // Theme breakpoint helper for responsive UI (used to show FAB on mobile)
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
   // Export PDF for upcoming week
   // ...existing code...
 
@@ -177,6 +188,161 @@ const Calendar = () => {
     }
     setRescheduleComment('');
     setRescheduleDialogOpen(true);
+  };
+
+  // Export next week's events (Monday - Sunday)
+  const handleExportNextWeekPdf = async () => {
+    try {
+      setExportingPdf(true);
+      const today = new Date();
+      const day = today.getDay(); // 0 (Sun) - 6 (Sat)
+      const daysUntilNextMonday = ((8 - day) % 7) || 7;
+      const nextMonday = new Date(today);
+      nextMonday.setDate(today.getDate() + daysUntilNextMonday);
+      nextMonday.setHours(0, 0, 0, 0);
+
+      const weekStart = new Date(nextMonday);
+      const weekEnd = new Date(nextMonday);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      weekEnd.setHours(23, 59, 59, 999);
+
+      const eventsForWeek = events.filter(ev => {
+        if (!ev.startDateTime) return false;
+        let d = ev.startDateTime;
+        if (typeof d?.toDate === 'function') d = d.toDate();
+        else d = new Date(d);
+        if (isNaN(d.getTime())) return false;
+        return d >= weekStart && d <= weekEnd;
+      });
+
+      // Build helper maps
+      const centerMapForExport = Object.fromEntries(centers.map(c => [c.id || c.name, c.name || c.id]));
+      const userMapForExport = Object.fromEntries(users.map(u => [u.id || u.uid, u]));
+      const mentorMapForExport = Object.fromEntries(mentors.map(m => [m.id, m]));
+
+      const taskMap = {};
+      eventsForWeek.forEach(ev => {
+        const list = ev.todos || ev.tasks || [];
+        if (Array.isArray(list)) {
+          list.forEach(t => {
+            if (!t) return;
+            if (typeof t === 'object' && t.id && (t.text || t.label)) taskMap[t.id] = t.text || t.label;
+          });
+        }
+      });
+
+      // Format rows into an HTML table and open print preview in a new window
+      const mondayStr = weekStart.toLocaleDateString();
+      const sundayStr = weekEnd.toLocaleDateString();
+      const heading = `TALC Management - Events/Tasks for week ${mondayStr} — ${sundayStr}`;
+
+      const escapeHtml = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+      const formatDateCell = (val) => {
+        const d = toJSDate(val);
+        if (!d) return '';
+        const dayMonth = `${String(d.getDate()).padStart(2, '0')}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        const hasTime = !(d.getHours() === 0 && d.getMinutes() === 0 && d.getSeconds() === 0);
+        if (hasTime) {
+          const hr = d.getHours();
+          const minute = String(d.getMinutes()).padStart(2, '0');
+          const ampm = hr >= 12 ? 'PM' : 'AM';
+          const hour12 = hr % 12 === 0 ? 12 : hr % 12;
+          return `${dayMonth} ${hour12}:${minute}\u00A0${ampm}`;
+        }
+        return dayMonth;
+      };
+
+      const formatTasks = (ev) => {
+        const list = ev.todos || ev.tasks || [];
+        if (!Array.isArray(list) || list.length === 0) return '';
+        return list.map(t => {
+          if (!t && t !== 0) return '';
+          if (typeof t === 'string') return taskMap[t] || t;
+          if (typeof t === 'object') return t.text || t.label || (t.id ? taskMap[t.id] || String(t.id) : '');
+          return String(t);
+        }).filter(Boolean).join(', ');
+      };
+
+      const rowsHtml = eventsForWeek.map(ev => {
+        const dateCell = escapeHtml(formatDateCell(ev.startDateTime));
+        const status = escapeHtml(ev.status || 'pending');
+        const title = escapeHtml(ev.title || '');
+        const owner = escapeHtml(getOwnerName(ev) || '');
+        const centersCell = escapeHtml((ev.centers || []).map(c => centerMapForExport[c] || c).join(', '));
+        const tasks = escapeHtml(formatTasks(ev));
+        return `<tr>
+          <td>${dateCell}</td>
+          <td>${status}</td>
+          <td><strong>${title}</strong></td>
+          <td>${owner}</td>
+          <td>${centersCell}</td>
+          <td>${tasks}</td>
+        </tr>`;
+      }).join('\n');
+
+      const html = `<!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapeHtml(heading)}</title>
+        <style>
+          body { font-family: Helvetica, Arial, sans-serif; color: #222; margin: 20px; }
+          .header { display:flex; align-items:center; gap:16px; margin-bottom:12px }
+          .logo { width: 120px; height: auto; }
+          h1 { font-size:16px; margin:0; }
+          table { width:100%; border-collapse: collapse; font-size:12px; }
+          th, td { border: 1px solid #e0e0e0; padding: 8px; vertical-align: top; }
+          th { background:#f0f8f0; text-align:left; }
+          td { word-break: break-word; }
+          @media print {
+            @page { size: portrait; margin: 12mm; }
+            body { margin: 0; }
+            .header { page-break-after: avoid }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <img src="${logo}" class="logo" alt="logo" />
+          <div><h1>${escapeHtml(heading)}</h1></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Status</th>
+              <th>Title</th>
+              <th>Owner</th>
+              <th>Centers</th>
+              <th>Tasks</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+        <script>
+          window.onload = function() {
+            setTimeout(function() { window.print(); /* keep window open so user can save/print */ }, 300);
+          };
+        </script>
+      </body>
+      </html>`;
+
+      const newWin = window.open('', '_blank');
+      if (!newWin) {
+        alert('Pop-up blocked. Please allow pop-ups for this site to export the PDF.');
+        return;
+      }
+      newWin.document.write(html);
+      newWin.document.close();
+    } catch (err) {
+      console.error('Export failed', err);
+      alert('Failed to prepare print preview for next week.');
+    } finally {
+      setExportingPdf(false);
+    }
   };
 
   // Save reschedule
@@ -355,6 +521,101 @@ const Calendar = () => {
     }
   };
 
+  // Helper to compute duplicate title with incremental numeric suffix (robust startsWith + suffix parse)
+  const getDuplicateTitle = (title) => {
+    const base = (title || 'Untitled').trim();
+    let max = 0;
+    for (const ev of events) {
+      const t = ev?.title;
+      if (!t) continue;
+      if (t === base) {
+        // original title counts as 0
+        if (0 > max) max = 0;
+        continue;
+      }
+      if (t.startsWith(base + ' ')) {
+        const suffix = t.slice(base.length).trim();
+        // suffix should be a number like '1' or '2'
+        const maybeNum = parseInt(suffix, 10);
+        if (!isNaN(maybeNum) && String(maybeNum) === suffix) {
+          if (maybeNum > max) max = maybeNum;
+        }
+      }
+    }
+    const next = max + 1;
+    return `${base} ${next}`;
+  };
+
+  const handleDuplicateEvent = async (event) => {
+    // Default behavior: create duplicate and append to list.
+    // If caller wants to open editor for the new copy, they should call with options { openEdit: true }.
+    try {
+      const newTitle = getDuplicateTitle(event.title);
+      const copy = { ...event };
+      delete copy.id;
+      copy.title = newTitle;
+      copy.createdBy = { userId: currentUser.uid, userName: currentUser.displayName };
+      copy.lastModifiedBy = { userId: currentUser.uid, userName: currentUser.displayName };
+      copy.notificationSent = false;
+      copy.lastNotificationAt = new Date();
+
+      const docRef = await addDoc(collection(db, 'events'), copy);
+      const newEvent = { id: docRef.id, ...copy };
+      // Append to local state
+      setEvents(prev => [...prev, newEvent]);
+      // Send notification for creation
+      await sendNotification({
+        userId: copy.ownerId || currentUser.uid,
+        type: 'event_create',
+        message: `Event/task '${newTitle}' has been created.`,
+        eventId: docRef.id,
+      });
+      return newEvent;
+    } catch (err) {
+      console.error('Failed to duplicate event', err);
+      alert('Failed to duplicate event. Please try again.');
+      throw err;
+    }
+  };
+
+  const openConfirm = (action, event) => {
+    setConfirmAction(action);
+    setConfirmEvent(event);
+    setConfirmOpen(true);
+  };
+
+  const closeConfirm = () => {
+    if (confirmLoading) return; // prevent closing while processing
+    setConfirmOpen(false);
+    setConfirmAction(null);
+    setConfirmEvent(null);
+  };
+
+  const performConfirm = async (opt) => {
+    if (!confirmAction || !confirmEvent) return;
+    setConfirmLoading(true);
+    try {
+      if (confirmAction === 'delete') {
+        await handleDeleteEvent(confirmEvent.id);
+      } else if (confirmAction === 'duplicate') {
+        if (opt === 'edit') {
+          const newEvent = await handleDuplicateEvent(confirmEvent);
+          if (newEvent) {
+            setEditingEvent(newEvent);
+            setShowForm(true);
+          }
+        } else {
+          await handleDuplicateEvent(confirmEvent);
+        }
+      }
+    } catch (err) {
+      // error handled in called functions
+    } finally {
+      setConfirmLoading(false);
+      closeConfirm();
+    }
+  };
+
   // Status options for dropdown
   const statusOptions = useMemo(() => {
     return ['pending', 'in_progress'];
@@ -386,14 +647,19 @@ const Calendar = () => {
   }, [events, filterCenter, filterStatus, filterDateFrom, filterDateTo, searchText, filterOwnerName, showHistory]);
 
   const groupedByDate = useMemo(() => {
+    // Build ordered groups to preserve the sorted order from filteredEvents
     const groups = {};
+    const order = [];
     filteredEvents.forEach(ev => {
       const d = toJSDate(ev.startDateTime);
       const key = d ? d.toLocaleDateString() : 'No Date';
-      groups[key] = groups[key] || [];
+      if (!groups[key]) {
+        groups[key] = [];
+        order.push(key);
+      }
       groups[key].push(ev);
     });
-    return groups;
+    return { groups, order };
   }, [filteredEvents]);
 
   const getCenterNames = (centerIds) => {
@@ -406,20 +672,41 @@ const Calendar = () => {
       <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
         <Box sx={{ mb: 3, background: 'linear-gradient(180deg, rgba(221,238,221,0.7), rgba(221,238,221,0.25))', p: 2, borderRadius: 2 }}>
           <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
-           
-              <IconButton onClick={() => setFiltersOpen(v => !v)} color="primary">
-              <FilterListIcon />
-            </IconButton>
-            <Button variant="contained" color="primary" onClick={() => setShowForm(true)}>
-              Create New Event/Task
-            </Button>
-            <IconButton
-              color={showHistory ? 'primary' : 'default'}
-              onClick={() => setShowHistory(v => !v)}
-              sx={{ ml: 1, border: showHistory ? '2px solid' : undefined, borderColor: showHistory ? 'primary.main' : undefined, bgcolor: showHistory ? 'background.paper' : undefined }}
-            >
-              <HistoryIcon />
-            </IconButton>
+            <Box sx={{ flex: 1 }}>
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>Events and Tasks</Typography>
+            </Box>
+            <Tooltip title="Filters">
+              <IconButton onClick={() => setFiltersOpen(v => !v)} color="primary" aria-label="filters">
+                <FilterListIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Export next week's events (Mon–Sun)">
+              <span>
+                <IconButton
+                  onClick={async () => { await handleExportNextWeekPdf(); }}
+                  color="primary"
+                  aria-label="export-pdf"
+                  disabled={exportingPdf}
+                >
+                  <PictureAsPdfIcon />
+                </IconButton>
+              </span>
+            </Tooltip>
+            {!isMobile && (
+              <Button variant="contained" color="primary" onClick={() => setShowForm(true)}>
+                Create New Event/Task
+              </Button>
+            )}
+            <Tooltip title={showHistory ? 'Showing history (completed items)' : 'Hide history (active items)'}>
+              <IconButton
+                color={showHistory ? 'primary' : 'default'}
+                onClick={() => setShowHistory(v => !v)}
+                sx={{ ml: 1, border: showHistory ? '2px solid' : undefined, borderColor: showHistory ? 'primary.main' : undefined, bgcolor: showHistory ? 'background.paper' : undefined }}
+                aria-label="toggle-history"
+              >
+                <HistoryIcon />
+              </IconButton>
+            </Tooltip>
           </Stack>
         </Box>
 
@@ -537,7 +824,7 @@ const Calendar = () => {
                 <Table sx={{ minWidth: 700 }}>
                   <TableHead>
                     <TableRow>
-                      <TableCell>Date & Time</TableCell>
+                      <TableCell sx={{ width: 220 }}>Date</TableCell>
                       <TableCell>Status</TableCell>
                       <TableCell>Title</TableCell>
                       <TableCell>Owner</TableCell>
@@ -548,98 +835,113 @@ const Calendar = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {filteredEvents.map(event => {
-                      const d = toJSDate(event.startDateTime);
-                      const ownerName = getOwnerName(event);
+                    {groupedByDate.order.map(dateKey => {
+                      const group = groupedByDate.groups[dateKey] || [];
                       return (
-                        <TableRow key={event.id}>
-                            <TableCell>
-                              <Stack direction="column" spacing={0.5}>
-                                <Chip label={d ? d.toLocaleDateString() : 'No Date'} color="primary" variant="outlined" sx={{ fontWeight: 500 }} />
-                                <Typography variant="body2" color="text.secondary">{d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</Typography>
-                              </Stack>
-                            </TableCell>
-                          <TableCell>
-                            <Chip label={event.status || 'pending'} size="small" color={event.status === 'completed' ? 'success' : event.status === 'cancelled' ? 'error' : 'warning'} />
-                          </TableCell>
-                          <TableCell>{event.title}</TableCell>
-                          <TableCell>{ownerName}</TableCell>
-                          {/* Description cell removed from page view */}
-                          <TableCell>
-                            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                              {(event.centers || []).map(center => (
-                                <Chip key={center} label={centerMap[center] || center} size="small" />
-                              ))}
-                            </Stack>
-                          </TableCell>
-                          <TableCell>
-                            <Box sx={{ maxWidth: 420 }}>
-                              <Stack direction="column" spacing={0.5} sx={{ p: 0.5 }}>
-                                {(editingTodos[event.id] || event.todos || []).map(todo => (
-                                  <Box key={todo.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <input
-                                      type="checkbox"
-                                      checked={!!todo.completed}
-                                      onChange={() => handleToggleTodo(event.id, todo.id)}
-                                      style={{ accentColor: todo.completed ? '#388e3c' : undefined }}
-                                    />
-                                    <Typography variant="body2" sx={{ textDecoration: todo.completed ? 'line-through' : 'none', ml: 0.5, wordBreak: 'break-word' }}>{todo.text}</Typography>
+                        <React.Fragment key={dateKey}>
+                          <TableRow sx={{ background: 'background.paper' }}>
+                            <TableCell colSpan={7} sx={{ fontWeight: 700 }}>{dateKey}</TableCell>
+                          </TableRow>
+                          {group.map(event => {
+                            const d = toJSDate(event.startDateTime);
+                            const ownerName = getOwnerName(event);
+                            return (
+                              <TableRow key={event.id}>
+                                <TableCell>
+                                  <Typography variant="body2">{d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</Typography>
+                                </TableCell>
+                                <TableCell>
+                                  <Chip
+                                    label={event.status === 'in_progress' ? 'In progress' : (event.status || 'pending')}
+                                    size="small"
+                                    color={event.status === 'completed' ? 'success' : event.status === 'cancelled' ? 'error' : event.status === 'in_progress' ? 'info' : 'warning'}
+                                  />
+                                </TableCell>
+                                <TableCell><Typography sx={{ fontWeight: 700 }}>{event.title}</Typography></TableCell>
+                                <TableCell>{ownerName}</TableCell>
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                    {(event.centers || []).map(center => (
+                                      <Chip key={center} label={centerMap[center] || center} size="small" />
+                                    ))}
                                   </Box>
-                                ))}
-                              </Stack>
-
-                              <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
-                                {todosChanged[event.id] && (
-                                  <IconButton size="small" color="success" onClick={() => handleSaveTodos(event.id)} title="Save tasks">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#388e3c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                                  </IconButton>
-                                )}
-                              </Stack>
-
-                              {isAdminOrQuality && event.comments && event.comments.length > 0 && (
-                                <Box sx={{ mt: 1 }}>
-                                  <Typography variant="subtitle2">Reschedule Comments</Typography>
-                                  <List dense>
-                                    {event.comments.map((cmt, idx) => {
-                                      const formatDate = (dt) => {
-                                        if (!dt) return '';
-                                        if (typeof dt?.toDate === 'function') return dt.toDate().toLocaleString();
-                                        if (typeof dt === 'object' && dt.seconds) return new Date(dt.seconds * 1000).toLocaleString();
-                                        const d = new Date(dt);
-                                        return isNaN(d.getTime()) ? String(dt) : d.toLocaleString();
-                                      };
-                                      return (
-                                        <ListItem key={idx} sx={{ py: 0 }}>
-                                          <ListItemText
-                                            primary={`On ${formatDate(cmt.oldDateTime)} → ${formatDate(cmt.newDateTime)}: ${cmt.comment}`}
-                                            secondary={`By ${cmt.userName} at ${formatDate(cmt.createdAt)}`}
+                                </TableCell>
+                                <TableCell>
+                                  <Box sx={{ maxWidth: 420 }}>
+                                    <Stack direction="column" spacing={0.5} sx={{ p: 0.5 }}>
+                                      {(editingTodos[event.id] || event.todos || []).map(todo => (
+                                        <Box key={todo.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                          <input
+                                            type="checkbox"
+                                            checked={!!todo.completed}
+                                            onChange={() => handleToggleTodo(event.id, todo.id)}
+                                            style={{ accentColor: todo.completed ? '#388e3c' : undefined }}
                                           />
-                                        </ListItem>
-                                      );
-                                    })}
-                                  </List>
-                                </Box>
-                              )}
-                            </Box>
-                          </TableCell>
-                          <TableCell>
-                            <Stack direction="row" spacing={1}>
-                              {!isEvaluator && (
-                                <IconButton size="large" color="primary" onClick={() => handleEditEvent(event)} sx={{ p: 1.2, border: '2px solid', borderColor: 'primary.main', bgcolor: 'background.paper' }}>
-                                  <EditIcon fontSize="medium" />
-                                </IconButton>
-                              )}
-                              <IconButton size="small" color="secondary" onClick={() => handleOpenReschedule(event)} sx={{ p: 1 }}>
-                                <AutorenewIcon />
-                              </IconButton>
-                              {!isEvaluator && (
-                                <IconButton size="small" color="error" onClick={() => handleDeleteEvent(event.id)}>
-                                  <DeleteIcon />
-                                </IconButton>
-                              )}
-                            </Stack>
-                          </TableCell>
-                        </TableRow>
+                                          <Typography variant="body2" sx={{ textDecoration: todo.completed ? 'line-through' : 'none', ml: 0.5, wordBreak: 'break-word' }}>{todo.text}</Typography>
+                                        </Box>
+                                      ))}
+                                    </Stack>
+
+                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                                      {todosChanged[event.id] && (
+                                        <IconButton size="small" color="success" onClick={() => handleSaveTodos(event.id)} title="Save tasks">
+                                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#388e3c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                        </IconButton>
+                                      )}
+                                    </Stack>
+
+                                    {isAdminOrQuality && event.comments && event.comments.length > 0 && (
+                                      <Box sx={{ mt: 1 }}>
+                                        <Typography variant="subtitle2">Reschedule Comments</Typography>
+                                        <Stack spacing={1} sx={{ mt: 0.5 }}>
+                                          {event.comments.map((cmt, idx) => {
+                                            const parseDate = (dt) => {
+                                              if (!dt) return null;
+                                              if (typeof dt?.toDate === 'function') return dt.toDate();
+                                              if (typeof dt === 'object' && dt.seconds) return new Date(dt.seconds * 1000);
+                                              const d = new Date(dt);
+                                              return isNaN(d.getTime()) ? null : d;
+                                            };
+                                            const target = parseDate(cmt.newDateTime) || parseDate(cmt.oldDateTime) || null;
+                                            const dayMonth = target ? `${String(target.getDate()).padStart(2, '0')}-${String(target.getMonth() + 1).padStart(2, '0')}` : '';
+                                            const time = target ? target.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                                            return (
+                                              <Box key={idx}>
+                                                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Note</Typography>
+                                                <Typography variant="body2">{dayMonth} {time}</Typography>
+                                                <Typography variant="caption">By {cmt.userName}</Typography>
+                                              </Box>
+                                            );
+                                          })}
+                                        </Stack>
+                                      </Box>
+                                    )}
+                                  </Box>
+                                </TableCell>
+                                <TableCell>
+                                  <Stack direction="row" spacing={1}>
+                                    {!isEvaluator && (
+                                      <IconButton size="large" color="primary" onClick={() => handleEditEvent(event)} sx={{ p: 1.2, border: '2px solid', borderColor: 'primary.main', bgcolor: 'background.paper' }}>
+                                        <EditIcon fontSize="medium" />
+                                      </IconButton>
+                                    )}
+                                    <IconButton size="small" color="primary" onClick={() => openConfirm('duplicate', event)} title="Duplicate">
+                                      <ContentCopyIcon />
+                                    </IconButton>
+                                    <IconButton size="small" color="secondary" onClick={() => handleOpenReschedule(event)} sx={{ p: 1 }}>
+                                      <AutorenewIcon />
+                                    </IconButton>
+                                    {!isEvaluator && (
+                                      <IconButton size="small" color="error" onClick={() => openConfirm('delete', event)}>
+                                        <DeleteIcon />
+                                      </IconButton>
+                                    )}
+                                  </Stack>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </React.Fragment>
                       );
                     })}
                   </TableBody>
@@ -647,98 +949,119 @@ const Calendar = () => {
               </TableContainer>
             );
           } else {
-            // Mobile Card view
+            // Mobile Card view grouped by date
             return (
               <List sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 3, p: 0 }}>
-                {filteredEvents.map(event => {
-                  const d = toJSDate(event.startDateTime);
-                  const ownerName = getOwnerName(event);
-                  return (
-                    <Card key={event.id} sx={{ mb: 2, borderRadius: 2, boxShadow: '0 2px 8px rgba(41,45,52,0.04)', background: 'white' }}>
-                      <CardContent>
-                        <Stack direction="row" alignItems="center" spacing={2} sx={{ width: '100%' }}>
-                          <Chip label={d ? d.toLocaleDateString() : 'No Date'} color="primary" variant="outlined" sx={{ fontWeight: 500 }} />
-                          <Divider sx={{ flex: 1 }} />
-                        </Stack>
-                        <Stack direction="row" alignItems="center" spacing={2} sx={{ width: '100%' }}>
-                          <Typography variant="subtitle2" color="text.secondary" sx={{ minWidth: 80 }}>{d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</Typography>
-                          <Chip label={event.status || 'pending'} size="small" color={event.status === 'completed' ? 'success' : event.status === 'cancelled' ? 'error' : 'warning'} />
-                        </Stack>
-                        <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{event.title}</Typography>
-                        {ownerName && (
-                          <Typography variant="caption" color="text.secondary">Owner: {ownerName}</Typography>
-                        )}
-                        {/* Description removed from card view; view/edit it in the Edit dialog */}
-                        <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
-                          {(event.centers || []).map(center => (
-                            <Chip key={center} label={centerMap[center] || center} size="small" />
-                          ))}
-                          {(editingTodos[event.id] || event.todos || []).slice(0, 4).map(todo => (
-                            <Box key={todo.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                              <input
-                                type="checkbox"
-                                checked={!!todo.completed}
-                                onChange={() => handleToggleTodo(event.id, todo.id)}
-                                style={{ accentColor: todo.completed ? '#388e3c' : undefined }}
+                {groupedByDate.order.map(dateKey => (
+                  <Box key={dateKey}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700, mb: 1 }}>{dateKey}</Typography>
+                    {(groupedByDate.groups[dateKey] || []).map(event => {
+                      const d = toJSDate(event.startDateTime);
+                      const ownerName = getOwnerName(event);
+                      return (
+                        <Card key={event.id} sx={{ mb: 2, borderRadius: 2, boxShadow: '0 2px 8px rgba(41,45,52,0.04)', background: 'white' }}>
+                          <CardContent sx={{ p: 2 }}>
+                            <Stack direction="row" alignItems="center" spacing={1} sx={{ width: '100%', justifyContent: 'space-between' }}>
+                              <Typography variant="subtitle2" color="text.secondary" sx={{ minWidth: 72 }}>{d ? d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</Typography>
+                              <Chip
+                                label={event.status === 'in_progress' ? 'In progress' : (event.status || 'pending')}
+                                size="small"
+                                color={event.status === 'completed' ? 'success' : event.status === 'cancelled' ? 'error' : event.status === 'in_progress' ? 'info' : 'warning'}
                               />
-                              <Typography variant="body2" sx={{ textDecoration: todo.completed ? 'line-through' : 'none', ml: 0.5 }}>{todo.text}</Typography>
+                            </Stack>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{event.title}</Typography>
+                            {ownerName && (
+                              <Typography variant="caption" color="text.secondary">Owner: {ownerName}</Typography>
+                            )}
+                            {/* Description removed from card view; view/edit it in the Edit dialog */}
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+                              {(event.centers || []).map(center => (
+                                <Chip key={center} label={centerMap[center] || center} size="small" />
+                              ))}
+                              {(editingTodos[event.id] || event.todos || []).slice(0, 4).map(todo => (
+                                <Box key={todo.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={!!todo.completed}
+                                    onChange={() => handleToggleTodo(event.id, todo.id)}
+                                    style={{ accentColor: todo.completed ? '#388e3c' : undefined }}
+                                  />
+                                  <Typography variant="body2" sx={{ textDecoration: todo.completed ? 'line-through' : 'none', ml: 0.5 }}>{todo.text}</Typography>
+                                </Box>
+                              ))}
+                              {todosChanged[event.id] && (
+                                <IconButton size="small" color="success" onClick={() => handleSaveTodos(event.id)} title="Save tasks">
+                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#388e3c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                </IconButton>
+                              )}
                             </Box>
-                          ))}
-                          {todosChanged[event.id] && (
-                            <IconButton size="small" color="success" onClick={() => handleSaveTodos(event.id)} title="Save tasks">
-                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#388e3c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                            </IconButton>
-                          )}
-                        </Stack>
-                        <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
-                          {!isEvaluator && (
-                            <IconButton size="large" color="primary" onClick={() => handleEditEvent(event)} sx={{ p: 1.2, border: '2px solid', borderColor: 'primary.main', bgcolor: 'background.paper' }}>
-                              <EditIcon fontSize="medium" />
-                            </IconButton>
-                          )}
-                          <IconButton size="small" color="secondary" onClick={() => handleOpenReschedule(event)} sx={{ p: 1 }}>
-                            <AutorenewIcon />
-                          </IconButton>
-                          {!isEvaluator && (
-                            <IconButton size="small" color="error" onClick={() => handleDeleteEvent(event.id)}>
-                              <DeleteIcon />
-                            </IconButton>
-                          )}
-                        </Stack>
-                        {isAdminOrQuality && event.comments && event.comments.length > 0 && (
-                          <Box sx={{ mt: 1 }}>
-                            <Typography variant="subtitle2">Reschedule Comments</Typography>
-                            <List dense>
-                              {event.comments.map((cmt, idx) => {
-                                // Format old/new date
-                                const formatDate = (dt) => {
-                                  if (!dt) return '';
-                                  if (typeof dt?.toDate === 'function') return dt.toDate().toLocaleString();
-                                  if (typeof dt === 'object' && dt.seconds) return new Date(dt.seconds * 1000).toLocaleString();
-                                  const d = new Date(dt);
-                                  return isNaN(d.getTime()) ? String(dt) : d.toLocaleString();
-                                };
-                                return (
-                                  <ListItem key={idx} sx={{ py: 0 }}>
-                                    <ListItemText
-                                      primary={`On ${formatDate(cmt.oldDateTime)} → ${formatDate(cmt.newDateTime)}: ${cmt.comment}`}
-                                      secondary={`By ${cmt.userName} at ${formatDate(cmt.createdAt)}`}
-                                    />
-                                  </ListItem>
-                                );
-                              })}
-                            </List>
-                          </Box>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                            <Stack direction="row" spacing={1} sx={{ mt: 1.5, alignItems: 'center' }}>
+                              {!isEvaluator && (
+                                <IconButton size="small" color="primary" onClick={() => handleEditEvent(event)} sx={{ p: 0.6, border: '1px solid', borderColor: 'primary.main', bgcolor: 'background.paper', borderRadius: 1 }}>
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                              )}
+                              <IconButton size="small" color="primary" onClick={() => openConfirm('duplicate', event)} title="Duplicate">
+                                <ContentCopyIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton size="small" color="secondary" onClick={() => handleOpenReschedule(event)} sx={{ p: 0.6 }}>
+                                <AutorenewIcon fontSize="small" />
+                              </IconButton>
+                              {!isEvaluator && (
+                                <IconButton size="small" color="error" onClick={() => openConfirm('delete', event)}>
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              )}
+                            </Stack>
+                            {isAdminOrQuality && event.comments && event.comments.length > 0 && (
+                              <Box sx={{ mt: 1 }}>
+                                <Typography variant="subtitle2">Reschedule Comments</Typography>
+                                <Stack spacing={1} sx={{ mt: 0.5 }}>
+                                  {event.comments.map((cmt, idx) => {
+                                    const parseDate = (dt) => {
+                                      if (!dt) return null;
+                                      if (typeof dt?.toDate === 'function') return dt.toDate();
+                                      if (typeof dt === 'object' && dt.seconds) return new Date(dt.seconds * 1000);
+                                      const d = new Date(dt);
+                                      return isNaN(d.getTime()) ? null : d;
+                                    };
+                                    const target = parseDate(cmt.newDateTime) || parseDate(cmt.oldDateTime) || null;
+                                    const dayMonth = target ? `${String(target.getDate()).padStart(2, '0')}-${String(target.getMonth() + 1).padStart(2, '0')}` : '';
+                                    const time = target ? target.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+                                    return (
+                                      <Box key={idx}>
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Note</Typography>
+                                        <Typography variant="body2">{dayMonth} {time}</Typography>
+                                        <Typography variant="caption">By {cmt.userName}</Typography>
+                                      </Box>
+                                    );
+                                  })}
+                                </Stack>
+                              </Box>
+                            )}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </Box>
+                ))}
               </List>
             );
           }
         })()}
       </Paper>
+
+      {/* Mobile floating action button for creating a new event/task (matches Mentors page behavior) */}
+      {isMobile && (
+        <Fab
+          color="primary"
+          aria-label="add"
+          onClick={() => { setShowForm(true); setEditingEvent(null); }}
+          sx={{ position: 'fixed', bottom: 32, right: 32, zIndex: 1000 }}
+        >
+          +
+        </Fab>
+      )}
 
       {/* Reschedule dialog at root */}
       <Dialog open={rescheduleDialogOpen} onClose={() => setRescheduleDialogOpen(false)}>
@@ -765,6 +1088,32 @@ const Calendar = () => {
         <DialogActions>
           <Button onClick={() => setRescheduleDialogOpen(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleReschedule} disabled={!newDateTime || !rescheduleComment}>Save</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Confirm dialog for duplicate/delete */}
+      <Dialog open={confirmOpen} onClose={closeConfirm} fullWidth maxWidth="xs">
+        <DialogTitle>
+          {confirmAction === 'delete' ? 'Confirm Delete' : 'Duplicate Event'}
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 1, fontWeight: 600 }}>{confirmEvent?.title}</Typography>
+          {confirmAction === 'delete' ? (
+            <Typography>Are you sure you want to permanently delete this event/task? This action cannot be undone.</Typography>
+          ) : (
+            <Typography>Choose whether to duplicate this event and keep the copy as-is, or open the copy in the editor to make changes.</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeConfirm} disabled={confirmLoading}>Cancel</Button>
+          {confirmAction === 'duplicate' ? (
+            <>
+              <Button onClick={() => performConfirm('create')} disabled={confirmLoading}>Create Copy</Button>
+              <Button variant="contained" onClick={() => performConfirm('edit')} disabled={confirmLoading}>Create & Edit</Button>
+            </>
+          ) : (
+            <Button color="error" variant="contained" onClick={() => performConfirm()} disabled={confirmLoading}>Delete</Button>
+          )}
         </DialogActions>
       </Dialog>
     </Container>

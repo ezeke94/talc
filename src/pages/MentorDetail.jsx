@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase/config';
 import { doc, getDoc, collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
-import { Box, Typography, Button, Paper, CircularProgress, List, ListItem, ListItemText, Divider, Grid, Dialog, DialogTitle, DialogContent, IconButton } from '@mui/material';
+import { Box, Typography, Button, Paper, CircularProgress, List, ListItem, ListItemText, Divider, Grid, Dialog, DialogTitle, DialogContent, IconButton, Card, CardContent, Avatar, useTheme, useMediaQuery, Skeleton, Fade, Collapse, Tabs, Tab } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { useTheme, useMediaQuery } from '@mui/material';
+// ...existing code...
 import KPIScoreScale from '../components/KPIScoreScale';
 
 const MentorDetail = () => {
@@ -14,17 +14,30 @@ const MentorDetail = () => {
     const [mentor, setMentor] = useState(null);
     const [submissions, setSubmissions] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
     const [notesDialogOpen, setNotesDialogOpen] = useState(false);
     const [allNotes, setAllNotes] = useState([]);
     const [notesPage, setNotesPage] = useState(1);
+    const [expandedNotes, setExpandedNotes] = useState({});
+    const [activeKpiTab, setActiveKpiTab] = useState(0);
     const NOTES_PER_PAGE = 10;
+    const theme = useTheme();
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
     useEffect(() => {
+        setLoading(true);
+        setError(null);
         const fetchMentor = async () => {
-            const docRef = doc(db, 'mentors', mentorId);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                setMentor({ id: docSnap.id, ...docSnap.data() });
+            try {
+                const docRef = doc(db, 'mentors', mentorId);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    setMentor({ id: docSnap.id, ...docSnap.data() });
+                } else {
+                    setError('Mentor not found.');
+                }
+            } catch (err) {
+                setError('Failed to load mentor data.');
             }
         };
 
@@ -36,6 +49,9 @@ const MentorDetail = () => {
         const unsubscribe = onSnapshot(q, (snapshot) => {
             const subsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setSubmissions(subsData);
+            setLoading(false);
+        }, (err) => {
+            setError('Failed to load KPI submissions.');
             setLoading(false);
         });
 
@@ -117,8 +133,12 @@ const MentorDetail = () => {
         };
     };
 
-    if (loading) return <CircularProgress />;
-    if (!mentor) return <Typography>Mentor not found.</Typography>;
+    if (loading) return <Box sx={{ p: 3 }}><Skeleton variant="rectangular" height={180} sx={{ mb: 2 }} /><Skeleton height={40} sx={{ mb: 1 }} /><Skeleton height={40} sx={{ mb: 1 }} /><Skeleton height={40} /></Box>;
+    if (error) return <Box sx={{ p: 3 }}><Typography color="error" variant="h6">{error}</Typography></Box>;
+    if (!mentor) return null;
+
+    // Show all assigned centers or fallback to center
+    const centers = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
 
     const intellectData = getKpiData('Intellect');
     const culturalData = getKpiData('Cultural');
@@ -141,7 +161,7 @@ const MentorDetail = () => {
         };
 
         return (
-            <Box sx={{ width: '100%', height: 300, mt: 3, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <Box sx={{ width: '100%', height: isMobile ? 220 : 300, mt: 3, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                 <ResponsiveContainer>
                     <LineChart data={data}>
                         <CartesianGrid strokeDasharray="3 3" />
@@ -183,47 +203,57 @@ const MentorDetail = () => {
         return new Date(year, month - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
     };
 
+    // Responsive KPI section layout with notes expansion
     const KPISection = ({ title, data, formType, kpiType }) => (
-        <Paper sx={{ p: { xs: 2, md: 3 }, mt: 3 }}>
-            <Typography variant="h5">{title}</Typography>
-            <ChartWithLabels data={data.monthlyData} />
-            <Divider sx={{ my: 3 }} />
-            <Grid container spacing={2}>
-                <Grid item xs={12} sm={4}>
-                    <Typography variant="h4" align="center">{data.totalResponses}</Typography>
-                    <Typography variant="body1" align="center">Responses</Typography>
-                    {data.latestScore > 0 && (
-                        <>
-                            <Typography variant="h4" align="center" sx={{ mt: 2 }}>{data.latestScore.toFixed(1)}</Typography>
-                            <Typography variant="body1" align="center" sx={{ wordBreak: 'break-word', whiteSpace: 'normal', maxWidth: 180, mx: 'auto' }}>
-                                Latest Score ({getLatestMonthName(data.monthlyData)})
-                            </Typography>
-                        </>
-                    )}
-                </Grid>
-                <Grid item xs={12} sm={8}>
-                    <Typography variant="h6">Latest Notes (up to 5)</Typography>
-                    <List dense>
-                        {data.notes.length > 0 ? data.notes.map((noteObj, index) => (
-                            <ListItem key={index} disableGutters>
-                                <ListItemText 
-                                    primary={`"${noteObj.note}"`}
-                                    secondary={`By ${noteObj.evaluatorName || 'Unknown'} on ${noteObj.createdAt ? noteObj.createdAt.toLocaleDateString() : ''}`}
-                                />
-                            </ListItem>
-                        )) : <ListItem><ListItemText primary="No recent notes available."/></ListItem>}
-                    </List>
-                    <Button variant="text" sx={{ mt: 1 }} onClick={() => {
-                        setAllNotes(getAllNotes(kpiType));
-                        setNotesDialogOpen(true);
-                        setNotesPage(1);
-                    }}>View More</Button>
-                </Grid>
-            </Grid>
-            <Button variant="contained" onClick={() => navigate(`/mentor/${mentorId}/fill-${formType}-kpi`)} sx={{ mt: 3 }} fullWidth>
-                Fill {title} Form
-            </Button>
-        </Paper>
+        <Fade in timeout={500}>
+            <Paper sx={{ p: { xs: 2, md: 3 }, mt: 3 }}>
+                <Typography variant="h5" sx={{ mb: 2 }}>{title}</Typography>
+                <ChartWithLabels data={data.monthlyData} />
+                <Divider sx={{ my: 3 }} />
+                <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 2 }}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography variant="h4" align="center">{data.totalResponses}</Typography>
+                        <Typography variant="body1" align="center">Responses</Typography>
+                        {data.latestScore > 0 && (
+                            <>
+                                <Typography variant="h4" align="center" sx={{ mt: 2 }}>{data.latestScore.toFixed(1)}</Typography>
+                                <Typography variant="body1" align="center" sx={{ wordBreak: 'break-word', whiteSpace: 'normal', maxWidth: 180, mx: 'auto' }}>
+                                    Latest Score ({getLatestMonthName(data.monthlyData)})
+                                </Typography>
+                            </>
+                        )}
+                    </Box>
+                    <Box sx={{ flex: 2, minWidth: 0 }}>
+                        <Typography variant="h6">Latest Notes (up to 5)</Typography>
+                        <List dense>
+                            {data.notes.length > 0 ? data.notes.map((noteObj, index) => (
+                                <React.Fragment key={index}>
+                                    <ListItem disableGutters>
+                                        <ListItemText 
+                                            primary={<Button variant="text" sx={{ textAlign: 'left', p: 0, minWidth: 0 }} onClick={() => setExpandedNotes(prev => ({ ...prev, [noteObj.field + index]: !prev[noteObj.field + index] }))}>{`"${noteObj.note}"`}</Button>}
+                                            secondary={`By ${noteObj.evaluatorName || 'Unknown'} on ${noteObj.createdAt ? noteObj.createdAt.toLocaleDateString() : ''}`}
+                                        />
+                                    </ListItem>
+                                    <Collapse in={!!expandedNotes[noteObj.field + index]} timeout="auto" unmountOnExit>
+                                        <Box sx={{ pl: 2, pb: 1 }}>
+                                            <Typography variant="body2" color="text.secondary">Field: {noteObj.field}</Typography>
+                                        </Box>
+                                    </Collapse>
+                                </React.Fragment>
+                            )) : <ListItem><ListItemText primary="No recent notes available."/></ListItem>}
+                        </List>
+                        <Button variant="text" sx={{ mt: 1 }} onClick={() => {
+                            setAllNotes(getAllNotes(kpiType));
+                            setNotesDialogOpen(true);
+                            setNotesPage(1);
+                        }}>View More</Button>
+                    </Box>
+                </Box>
+                <Button variant="contained" onClick={() => navigate(`/mentor/${mentorId}/fill-${formType}-kpi`)} sx={{ mt: 3 }} fullWidth>
+                    Fill {title} Form
+                </Button>
+            </Paper>
+        </Fade>
     );
 
     // Notes dialog for viewing all notes
@@ -231,11 +261,31 @@ const MentorDetail = () => {
 
     return (
         <Box>
-            <Typography variant="h4" gutterBottom>{mentor.name}</Typography>
-            <Typography variant="h6" color="text.secondary">{mentor.center}</Typography>
+            {/* Mentor Info Card with fade-in and edit action */}
+            <Fade in timeout={500}>
+                <Card sx={{ mb: 3, boxShadow: 2, borderRadius: 3, display: 'flex', alignItems: 'center', p: 2 }}>
+                    <Avatar sx={{ width: 64, height: 64, bgcolor: 'primary.light', fontWeight: 700, mr: 2 }}>
+                        {mentor.name ? mentor.name.charAt(0).toUpperCase() : '?'}
+                    </Avatar>
+                    <CardContent sx={{ flex: 1, p: 0 }}>
+                        <Typography variant="h4" sx={{ fontWeight: 700 }}>{mentor.name}</Typography>
+                        <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
+                            {centers.length > 0 ? centers.join(', ') : 'No center assigned'}
+                        </Typography>
+                    </CardContent>
+                    <Button variant="outlined" sx={{ ml: 2 }} aria-label="Edit Mentor" onClick={() => navigate(`/mentors?edit=${mentor.id}`)}>Edit</Button>
+                </Card>
+            </Fade>
 
-            <KPISection title="Intellect KPI" data={intellectData} formType="intellect" kpiType="Intellect" />
-            <KPISection title="Cultural KPI" data={culturalData} formType="cultural" kpiType="Cultural" />
+            {/* KPI Section Tabs for mobile, side-by-side for desktop */}
+            {isMobile ? (
+                <Tabs value={activeKpiTab} onChange={(_, v) => setActiveKpiTab(v)} variant="fullWidth" sx={{ mb: 2 }}>
+                    <Tab label="Intellect KPI" />
+                    <Tab label="Cultural KPI" />
+                </Tabs>
+            ) : null}
+            {(!isMobile || activeKpiTab === 0) && <KPISection title="Intellect KPI" data={intellectData} formType="intellect" kpiType="Intellect" />}
+            {(!isMobile || activeKpiTab === 1) && <KPISection title="Cultural KPI" data={culturalData} formType="cultural" kpiType="Cultural" />}
 
             <Dialog open={notesDialogOpen} onClose={() => setNotesDialogOpen(false)} maxWidth="md" fullWidth>
                 <DialogTitle>
@@ -249,9 +299,14 @@ const MentorDetail = () => {
                         {paginatedNotes.length > 0 ? paginatedNotes.map((noteObj, idx) => (
                             <ListItem key={idx} alignItems="flex-start">
                                 <ListItemText 
-                                    primary={`"${noteObj.note}"`}
+                                    primary={<Button variant="text" sx={{ textAlign: 'left', p: 0, minWidth: 0 }} onClick={() => setExpandedNotes(prev => ({ ...prev, [noteObj.field + idx]: !prev[noteObj.field + idx] }))}>{`"${noteObj.note}"`}</Button>}
                                     secondary={`By ${noteObj.evaluatorName || 'Unknown'} on ${noteObj.createdAt ? noteObj.createdAt.toLocaleDateString() : ''} (${noteObj.field})`}
                                 />
+                                <Collapse in={!!expandedNotes[noteObj.field + idx]} timeout="auto" unmountOnExit>
+                                    <Box sx={{ pl: 2, pb: 1 }}>
+                                        <Typography variant="body2" color="text.secondary">Field: {noteObj.field}</Typography>
+                                    </Box>
+                                </Collapse>
                             </ListItem>
                         )) : <ListItem><ListItemText primary="No notes found." /></ListItem>}
                     </List>

@@ -18,7 +18,10 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async user => {
             if (user) {
-                await setupNotifications(user);
+                // Run notifications setup in background so it cannot block auth loading
+                setupNotifications(user).catch(err => {
+                    console.error('Notification setup failed (background):', err);
+                });
                 try {
                     const userRef = doc(db, 'users', user.uid);
                     const snap = await getDoc(userRef);

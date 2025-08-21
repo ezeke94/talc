@@ -1,5 +1,31 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Container, Typography, Paper, Table, TableHead, TableRow, TableCell, TableBody, Select, MenuItem, FormControl, InputLabel, Switch, TextField, CircularProgress, Box, Chip, OutlinedInput } from '@mui/material';
+import {
+  Container,
+  Typography,
+  Paper,
+  Table,
+  TableHead,
+  TableRow,
+  TableCell,
+  TableBody,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Switch,
+  TextField,
+  CircularProgress,
+  Box,
+  Chip,
+  OutlinedInput,
+  useTheme,
+  useMediaQuery,
+  Card,
+  CardContent,
+  CardActions,
+  Stack,
+  Grid,
+} from '@mui/material';
 import { db } from '../firebase/config';
 import { collection, onSnapshot, updateDoc, doc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
@@ -13,6 +39,8 @@ const UserManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [centers, setCenters] = useState([]);
+  const theme = useTheme();
+  const isSmall = useMediaQuery(theme.breakpoints.down('sm'));
 
   // Only admin/quality can manage users in production; allow all authenticated in non-production
   const canManage = (import.meta.env.MODE !== 'production') || (currentUser && ['Admin', 'Quality'].includes(currentUser.role));
@@ -84,6 +112,81 @@ const UserManagement = () => {
           </Box>
         ) : error ? (
           <Typography color="error">{error}</Typography>
+        ) : isSmall ? (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {filteredSortedUsers.map(user => (
+              <Card key={user.id} variant="outlined">
+                <CardContent>
+                  <Stack spacing={1}>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{user.name || user.displayName || user.email || '-'}</Typography>
+                    <Typography variant="body2" color="text.secondary">{user.email || '-'}</Typography>
+
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Role</InputLabel>
+                      {canManage ? (
+                        <Select
+                          value={ROLES.includes(user.role) ? user.role : ''}
+                          label="Role"
+                          onChange={e => handleRoleChange(user.id, e.target.value)}
+                        >
+                          {ROLES.map(role => (
+                            <MenuItem key={role} value={role}>{role}</MenuItem>
+                          ))}
+                        </Select>
+                      ) : (
+                        <Box sx={{ py: 1 }}>{ROLES.includes(user.role) ? user.role : '-'}</Box>
+                      )}
+                    </FormControl>
+
+                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Typography variant="body2">Active</Typography>
+                        {canManage ? (
+                          <Switch
+                            checked={!!user.isActive}
+                            onChange={e => handleActiveChange(user.id, e.target.checked)}
+                            color="primary"
+                          />
+                        ) : (!!user.isActive ? <Typography>Yes</Typography> : <Typography>No</Typography>)}
+                      </Box>
+                    </Box>
+
+                    <FormControl fullWidth size="small">
+                      <InputLabel>Centers</InputLabel>
+                      {canManage ? (
+                        <Select
+                          multiple
+                          value={Array.isArray(user.assignedCenters) ? user.assignedCenters : []}
+                          onChange={async (e) => {
+                            const newVal = e.target.value;
+                            await updateDoc(doc(db, 'users', user.id), { assignedCenters: newVal });
+                          }}
+                          input={<OutlinedInput label="Centers" />}
+                          renderValue={(selected) => (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                              {selected.length > 0
+                                ? selected.map((val) => (
+                                    <Chip key={val} label={(centerOptions.find(c => c.value === val)?.label || val)} size="small" />
+                                  ))
+                                : <Chip label="-" size="small" />}
+                            </Box>
+                          )}
+                        >
+                          {centerOptions.map(opt => (
+                            <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
+                          ))}
+                        </Select>
+                      ) : (
+                        <Box sx={{ py: 1 }}>{Array.isArray(user.assignedCenters) && user.assignedCenters.length > 0
+                          ? user.assignedCenters.map(val => (centerOptions.find(c => c.value === val)?.label || val)).join(', ')
+                          : '-'}</Box>
+                      )}
+                    </FormControl>
+                  </Stack>
+                </CardContent>
+              </Card>
+            ))}
+          </Box>
         ) : (
           <Table>
             <TableHead>
