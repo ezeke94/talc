@@ -35,6 +35,27 @@ export const AuthProvider = ({ children }) => {
                 console.debug('No redirect result or redirect processing failed:', e?.message || e);
             }
 
+            // Log the current URL to confirm OAuth redirect parameters are received
+            console.debug('Current URL:', window.location.href);
+
+            // Ensure auth persistence is configured for standalone PWA mode
+            const isStandalone = () => {
+                try {
+                    return (
+                        window.navigator.standalone ||
+                        window.matchMedia('(display-mode: standalone)').matches
+                    );
+                } catch (e) {
+                    return false;
+                }
+            };
+
+            if (isStandalone()) {
+                console.debug('App is running in standalone mode.');
+            } else {
+                console.debug('App is running in browser mode.');
+            }
+
             // Now subscribe to auth state changes
             unsubscribe = onAuthStateChanged(auth, async (user) => {
                 // Start processing this change
