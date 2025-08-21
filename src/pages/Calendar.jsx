@@ -822,16 +822,16 @@ const Calendar = () => {
             return (
               <TableContainer component={Paper} elevation={0} sx={{ boxShadow: 'none', background: 'transparent' }}>
                 <Table sx={{ minWidth: 700 }}>
-                  <TableHead>
+          <TableHead>
                     <TableRow>
-                      <TableCell sx={{ width: 220 }}>Date</TableCell>
-                      <TableCell>Status</TableCell>
-                      <TableCell>Title</TableCell>
-                      <TableCell>Owner</TableCell>
+            <TableCell sx={{ width: 120, whiteSpace: 'nowrap' }}>Date</TableCell>
+            <TableCell sx={{ width: 120 }}>Status</TableCell>
+            <TableCell sx={{ width: 240 }}>Title</TableCell>
+            <TableCell sx={{ width: 200 }}>Owner</TableCell>
                       {/* Description column removed from page view */}
-                      <TableCell>Centers</TableCell>
-                      <TableCell>Tasks</TableCell>
-                      <TableCell>Actions</TableCell>
+            <TableCell sx={{ width: 180 }}>Centers</TableCell>
+            <TableCell sx={{ width: '50%' }}>Tasks</TableCell>
+            <TableCell sx={{ width: 160 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -859,15 +859,15 @@ const Calendar = () => {
                                 </TableCell>
                                 <TableCell><Typography sx={{ fontWeight: 700 }}>{event.title}</Typography></TableCell>
                                 <TableCell>{ownerName}</TableCell>
-                                <TableCell>
+                                <TableCell sx={{ width: 180, maxWidth: 200 }}>
                                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                                     {(event.centers || []).map(center => (
                                       <Chip key={center} label={centerMap[center] || center} size="small" />
                                     ))}
                                   </Box>
                                 </TableCell>
-                                <TableCell>
-                                  <Box sx={{ maxWidth: 420 }}>
+                                <TableCell sx={{ width: '50%' }}>
+                                  <Box sx={{ maxWidth: '100%' }}>
                                     <Stack direction="column" spacing={0.5} sx={{ p: 0.5 }}>
                                       {(editingTodos[event.id] || event.todos || []).map(todo => (
                                         <Box key={todo.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -907,7 +907,7 @@ const Calendar = () => {
                                             const time = target ? target.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
                                             return (
                                               <Box key={idx}>
-                                                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Note</Typography>
+                                                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{cmt.comment || '(no note)'}</Typography>
                                                 <Typography variant="body2">{dayMonth} {time}</Typography>
                                                 <Typography variant="caption">By {cmt.userName}</Typography>
                                               </Box>
@@ -1030,7 +1030,7 @@ const Calendar = () => {
                                     const time = target ? target.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
                                     return (
                                       <Box key={idx}>
-                                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>Note</Typography>
+                                        <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{cmt.comment || '(no note)'}</Typography>
                                         <Typography variant="body2">{dayMonth} {time}</Typography>
                                         <Typography variant="caption">By {cmt.userName}</Typography>
                                       </Box>
