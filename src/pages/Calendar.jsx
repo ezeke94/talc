@@ -46,7 +46,7 @@ import { exportEventsToPDF } from '../utils/pdfExport';
 import logo from '../assets/logo.png';
 import { db } from '../firebase/config';
 import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
-import { sendNotification } from '../utils/auditNotify';
+// notifications removed
 import { useAuth } from '../context/AuthContext';
 
 const Calendar = () => {
@@ -361,7 +361,7 @@ const Calendar = () => {
           newDateTime,
         },
       ];
-      await updateDoc(eventRef, {
+  await updateDoc(eventRef, {
         startDateTime: newDateTime,
         comments: updatedComments,
         lastModifiedBy: { userId: currentUser.uid, userName: currentUser.displayName },
@@ -369,12 +369,7 @@ const Calendar = () => {
         lastNotificationAt: new Date(),
       });
       setEvents(prev => prev.map(ev => (ev.id === rescheduleEvent.id ? { ...ev, startDateTime: newDateTime, comments: updatedComments } : ev)));
-      await sendNotification({
-        userId: rescheduleEvent.ownerId,
-        type: 'event_reschedule',
-        message: `Event/task '${rescheduleEvent.title}' has been rescheduled.`,
-        eventId: rescheduleEvent.id,
-      });
+  // notification removed: event_reschedule
 
     } catch (err) {
       alert('Error rescheduling event/task. Please try again.');
@@ -453,14 +448,9 @@ const Calendar = () => {
         // Get previous event data for audit comparison
         const prevEventSnap = await getDocs(query(collection(db, 'events'), where('__name__', '==', editingEvent.id)));
         const prevEventData = prevEventSnap.docs.length > 0 ? prevEventSnap.docs[0].data() : {};
-        await updateDoc(eventRef, eventData);
-        setEvents(prev => prev.map(ev => (ev.id === editingEvent.id ? { ...editingEvent, ...eventData } : ev)));
-        await sendNotification({
-          userId: editingEvent.ownerId,
-          type: 'event_update',
-          message: `Event/task '${eventData.title}' has been updated.`,
-          eventId: editingEvent.id,
-        });
+  await updateDoc(eventRef, eventData);
+  setEvents(prev => prev.map(ev => (ev.id === editingEvent.id ? { ...editingEvent, ...eventData } : ev)));
+  // notification removed: event_update
         // Compute changed fields for audit
         const changedFields = {};
         Object.keys(eventData).forEach(key => {
@@ -475,13 +465,8 @@ const Calendar = () => {
           lastModifiedBy: { userId: currentUser.uid, userName: currentUser.displayName },
           createdBy: { userId: currentUser.uid, userName: currentUser.displayName },
         });
-        setEvents(prev => [...prev, { ...eventData, id: docRef.id }]);
-        await sendNotification({
-          userId: eventData.ownerId || currentUser.uid,
-          type: 'event_create',
-          message: `Event/task '${eventData.title}' has been created.`,
-          eventId: docRef.id,
-        });
+  setEvents(prev => [...prev, { ...eventData, id: docRef.id }]);
+  // notification removed: event_create
 
       }
     } catch (err) {
@@ -500,13 +485,8 @@ const Calendar = () => {
   const handleDeleteEvent = async (eventId) => {
     try {
       await deleteDoc(doc(db, 'events', eventId));
-      setEvents(prev => prev.filter(ev => ev.id !== eventId));
-      await sendNotification({
-        userId: currentUser.uid,
-        type: 'event_delete',
-        message: `Event/task has been deleted.`,
-        eventId,
-      });
+  setEvents(prev => prev.filter(ev => ev.id !== eventId));
+  // notification removed: event_delete
 
     } catch (err) {
       alert('Error deleting event/task. Please try again.');
@@ -554,15 +534,9 @@ const Calendar = () => {
 
       const docRef = await addDoc(collection(db, 'events'), copy);
       const newEvent = { id: docRef.id, ...copy };
-      // Append to local state
-      setEvents(prev => [...prev, newEvent]);
-      // Send notification for creation
-      await sendNotification({
-        userId: copy.ownerId || currentUser.uid,
-        type: 'event_create',
-        message: `Event/task '${newTitle}' has been created.`,
-        eventId: docRef.id,
-      });
+  // Append to local state
+  setEvents(prev => [...prev, newEvent]);
+  // notification removed: event_create (duplicate)
       return newEvent;
     } catch (err) {
       console.error('Failed to duplicate event', err);

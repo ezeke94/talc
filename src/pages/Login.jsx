@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, googleProvider } from '../firebase/config';
 import { signInWithPopup, signInWithRedirect } from 'firebase/auth';
-import { Button, Container, Typography, Paper, Box, CircularProgress } from '@mui/material';
+import { Button, Container, Typography, Paper, Box, CircularProgress, Alert } from '@mui/material';
 import GoogleIcon from '@mui/icons-material/Google';
 import logo from '../assets/logo.png'; // <-- Import your logo
 import { useAuth } from '../context/AuthContext';
@@ -11,6 +11,7 @@ const Login = () => {
     const navigate = useNavigate();
     const { currentUser, loading } = useAuth();
     const [signingIn, setSigningIn] = useState(false);
+    const [error, setError] = useState(null);
 
     useEffect(() => {
         if (!loading && currentUser) {
@@ -31,6 +32,7 @@ const Login = () => {
 
     const handleGoogleSignIn = async () => {
         try {
+            setError(null);
             setSigningIn(true);
             // Use redirect on iOS standalone or when popups are likely blocked
             if (isIOSStandalone()) {
@@ -38,14 +40,16 @@ const Login = () => {
                 // redirect will take over; navigation happens after redirect completes
             } else {
                 await signInWithPopup(auth, googleProvider);
-                navigate('/');
+                // Let AuthProvider detect auth state and drive navigation to `/`
             }
-        } catch (error) {
-            console.error('Popup sign-in failed, falling back to redirect:', error);
+        } catch (err) {
+            console.error('Popup sign-in failed, falling back to redirect:', err);
+            setError(err?.message || 'Sign-in failed. Trying redirect fallback.');
             try {
                 await signInWithRedirect(auth, googleProvider);
             } catch (e) {
                 console.error('Redirect sign-in also failed:', e);
+                setError(e?.message || 'Redirect sign-in failed. Check your network or pop-up settings.');
             }
         } finally {
             setSigningIn(false);
@@ -78,10 +82,21 @@ const Login = () => {
                         variant="contained"
                         startIcon={<GoogleIcon />}
                         onClick={handleGoogleSignIn}
+                        disabled={signingIn}
                         size="large"
                     >
                         Sign In with Google
                     </Button>
+                    {signingIn && (
+                        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
+                            <CircularProgress size={20} />
+                        </Box>
+                    )}
+                    {error && (
+                        <Alert severity="error" sx={{ mt: 2 }}>
+                            {error}
+                        </Alert>
+                    )}
                 </Box>
                 <Box sx={{ mt: 4, width: '100%', textAlign: 'center' }}>
                     <Typography variant="body2" sx={{ mb: 1 }}>

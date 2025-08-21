@@ -1,4 +1,3 @@
-import { setupNotifications } from '../utils/notifications';
 import React, { useEffect, useState } from 'react';
 import { Container, Typography, Paper, Box, Button, List, ListItem, ListItemText, TextField, Dialog, DialogTitle, DialogContent, DialogActions, FormControl, InputLabel, Select, MenuItem, Chip, OutlinedInput } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
@@ -24,8 +23,7 @@ const UserProfile = () => {
       setLoading(false);
     };
     fetchUser();
-    // Prompt for notification permission and save token
-    setupNotifications(currentUser);
+  // notifications removed
   }, [currentUser]);
 
   // Centers subscription for selection

@@ -1,8 +1,8 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { auth, db } from '../firebase/config';
+import { auth, db, persistencePromise } from '../firebase/config';
 import { onAuthStateChanged, getRedirectResult } from 'firebase/auth';
 import { CircularProgress, Box } from '@mui/material';
-import { setupNotifications } from '../utils/notifications';
+// notifications removed
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 const AuthContext = createContext({ currentUser: null, loading: true });
@@ -19,6 +19,14 @@ export const AuthProvider = ({ children }) => {
         let unsubscribe = () => {};
 
         const init = async () => {
+            // Ensure auth persistence has been configured before handling redirect or subscribing.
+            try {
+                await (persistencePromise || Promise.resolve());
+            } catch (e) {
+                // If persistence setup failed, continue anyway.
+                console.debug('Auth persistence setup failed or was skipped:', e?.message || e);
+            }
+
             // Keep loading true while we check for any redirect sign-in results
             try {
                 await getRedirectResult(auth);
@@ -28,16 +36,13 @@ export const AuthProvider = ({ children }) => {
             }
 
             // Now subscribe to auth state changes
-            unsubscribe = onAuthStateChanged(auth, async user => {
+            unsubscribe = onAuthStateChanged(auth, async (user) => {
                 // Whenever auth state changes, mark as loading until we finish syncing profile
                 setLoading(true);
                 if (user) {
                     // Set the raw Firebase user immediately so routes can proceed
                     setCurrentUser(prev => prev || user);
-                    // Run notifications setup in background so it cannot block auth loading
-                    setupNotifications(user).catch(err => {
-                        console.error('Notification setup failed (background):', err);
-                    });
+                    // notifications removed
                     try {
                         const userRef = doc(db, 'users', user.uid);
                         const snap = await getDoc(userRef);

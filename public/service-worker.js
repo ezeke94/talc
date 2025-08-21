@@ -20,15 +20,47 @@ self.addEventListener('install', event => {
   self.skipWaiting();
 });
 
+const CACHE_NAME = 'talc-cache-v1';
+
 self.addEventListener('activate', event => {
-  event.waitUntil(self.clients.claim());
+  // Clean up old caches if cache name changes in future releases
+  event.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(
+        keys.map(k => {
+          if (k !== CACHE_NAME) return caches.delete(k);
+          return null;
+        })
+      )
+    ).then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener('fetch', event => {
+  // Navigation requests (page refresh / route entry) should fall back to index.html
+  // to support client-side routing and offline refresh on mobile devices.
+  const isNavigate = event.request.mode === 'navigate' ||
+    (event.request.method === 'GET' && event.request.headers.get('accept')?.includes('text/html'));
+
+  if (isNavigate) {
+    event.respondWith(
+      fetch(event.request)
+        .then(response => {
+          // If we get a valid response, update the cache for index.html so offline works later
+          if (response && response.status === 200) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put('/index.html', copy)).catch(() => {});
+          }
+          return response;
+        })
+        .catch(() => caches.match('/index.html'))
+    );
+    return;
+  }
+
+  // For other requests prefer cache, fallback to network
   event.respondWith(
-    caches.match(event.request).then(response => {
-      return response || fetch(event.request);
-    })
+    caches.match(event.request).then(response => response || fetch(event.request))
   );
 });
 

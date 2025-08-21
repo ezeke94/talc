@@ -18,11 +18,14 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 // Ensure auth state persists across tabs and reloads.
 // Prefer IndexedDB-backed persistence (more robust on some Safari/iOS configs).
-setPersistence(auth, indexedDBLocalPersistence).catch((e) => {
+// Export a promise so callers can await persistence being configured.
+export const persistencePromise = setPersistence(auth, indexedDBLocalPersistence).catch((e) => {
   console.warn('indexedDB persistence failed, falling back to browserLocalPersistence:', e);
   // Fallback to localStorage-based persistence
-  setPersistence(auth, browserLocalPersistence).catch((e2) => {
+  return setPersistence(auth, browserLocalPersistence).catch((e2) => {
     console.warn('Failed to set auth persistence, falling back to default:', e2);
+    // Resolve regardless to avoid blocking app init; return undefined
+    return undefined;
   });
 });
 export const googleProvider = new GoogleAuthProvider();

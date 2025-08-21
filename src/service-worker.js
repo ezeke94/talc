@@ -34,12 +34,4 @@ self.addEventListener('fetch', event => {
 });
 
 // Notification logic placeholder
-self.addEventListener('push', event => {
-  const data = event.data ? event.data.text() : 'New notification';
-  event.waitUntil(
-    self.registration.showNotification('TALC Management', {
-      body: data,
-      icon: '/logo192.png',
-    })
-  );
-});
+// Notifications removed from service worker
