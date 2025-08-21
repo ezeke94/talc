@@ -107,61 +107,18 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 );
 
-// Service worker handling
-// In development, unregister any existing SW to avoid stale caching during HMR.
-// In production, register the SW served from public/ at the site root.
+// Remove PWA service worker: always unregister any existing service workers and clear app caches.
 if ('serviceWorker' in navigator) {
-  if (import.meta.env.PROD) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('/service-worker.js')
-        .then(reg => {
-          console.log('Service worker registered:', reg);
-          // Listen for updates to the service worker.
-          if (reg.waiting) {
-            console.log('A new service worker is waiting. Call window.activateNewSW() to activate.');
-          }
-
-          reg.addEventListener?.('updatefound', () => {
-            const newWorker = reg.installing;
-            if (!newWorker) return;
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed') {
-                if (navigator.serviceWorker.controller) {
-                  // New update available
-                  console.log('New service worker installed and waiting. Call window.activateNewSW() to activate.');
-                } else {
-                  // First install
-                  console.log('Service worker installed for the first time.');
-                }
-              }
-            });
-          });
-
-          // Expose a helper to activate the new SW from the console for testing
-          window.activateNewSW = () => {
-            if (!reg.waiting) return console.log('No waiting service worker');
-            reg.waiting.postMessage('SKIP_WAITING');
-            console.log('Sent SKIP_WAITING to waiting service worker');
-          };
-        })
-        .catch(err => {
-          console.error('Service worker registration failed:', err);
-        });
-    });
-  } else {
-    // Dev mode: make sure any existing SW is removed
-    navigator.serviceWorker.getRegistrations?.().then(regs => {
-      regs.forEach(r => r.unregister());
-    });
-    // Best-effort: clear our app caches to avoid serving stale index.html
-    if (window.caches?.keys) {
-      caches.keys().then(keys => {
-        keys.forEach(k => {
-          if (k.startsWith('talc-cache')) {
-            caches.delete(k);
-          }
-        });
+  navigator.serviceWorker.getRegistrations?.().then(regs => {
+    regs.forEach(r => r.unregister());
+  });
+  if (window.caches?.keys) {
+    caches.keys().then(keys => {
+      keys.forEach(k => {
+        if (k.startsWith('talc-cache')) {
+          caches.delete(k);
+        }
       });
-    }
+    });
   }
 }

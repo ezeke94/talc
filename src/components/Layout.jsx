@@ -28,7 +28,6 @@ import { signOut } from 'firebase/auth';
 import logo from '../assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 import ProfileSettingsDialog from './ProfileSettingsDialog';
-import AddToHomeScreenPrompt from './AddToHomeScreenPrompt';
 
 const Layout = () => {
     const navigate = useNavigate();
@@ -243,7 +242,6 @@ const Layout = () => {
                 }}
             >
                 <Outlet />
-                <AddToHomeScreenPrompt />
             </Container>
 
             <Dialog open={showProfile} onClose={() => setShowProfile(false)} fullWidth maxWidth="sm">

@@ -946,27 +946,12 @@ const Calendar = () => {
                                 <Chip key={center} label={centerMap[center] || center} size="small" />
                               ))}
                               {(editingTodos[event.id] || event.todos || []).slice(0, 4).map(todo => (
-                                <Box key={todo.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, width: '100%', mb: 0.5 }}>
+                                <Box key={todo.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                   <input
                                     type="checkbox"
                                     checked={!!todo.completed}
                                     onChange={() => handleToggleTodo(event.id, todo.id)}
-                                    style={{
-                                      accentColor: todo.completed ? '#388e3c' : undefined,
-                                      background: '#fff',
-                                      border: '1px solid #bbb',
-                                      borderRadius: 4,
-                                      width: 18,
-                                      height: 18,
-                                      marginRight: 6,
-                                      appearance: 'none',
-                                      WebkitAppearance: 'none',
-                                      outline: 'none',
-                                      boxShadow: todo.completed ? '0 0 0 2px #388e3c inset' : '0 0 0 1px #bbb inset',
-                                      position: 'relative',
-                                      cursor: 'pointer',
-                                    }}
-                                    className="mobile-task-checkbox"
+                                    style={{ accentColor: todo.completed ? '#388e3c' : undefined }}
                                   />
                                   <Typography variant="body2" sx={{ textDecoration: todo.completed ? 'line-through' : 'none', ml: 0.5 }}>{todo.text}</Typography>
                                 </Box>
