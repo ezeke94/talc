@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -17,6 +17,11 @@ const app = initializeApp(firebaseConfig);
 // Initialize and export Firebase services for use throughout the app
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
-export const db = getFirestore(app);
+// Use long polling to avoid QUIC/HTTP3 issues on some networks and hosts
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+  experimentalForceLongPolling: true,
+  useFetchStreams: false
+});
 
 export default app;
