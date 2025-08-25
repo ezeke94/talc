@@ -941,26 +941,30 @@ const Calendar = () => {
                               <Typography variant="caption" color="text.secondary">Owner: {ownerName}</Typography>
                             )}
                             {/* Description removed from card view; view/edit it in the Edit dialog */}
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
-                              {(event.centers || []).map(center => (
-                                <Chip key={center} label={centerMap[center] || center} size="small" />
-                              ))}
-                              {(editingTodos[event.id] || event.todos || []).slice(0, 4).map(todo => (
-                                <Box key={todo.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                  <input
-                                    type="checkbox"
-                                    checked={!!todo.completed}
-                                    onChange={() => handleToggleTodo(event.id, todo.id)}
-                                    style={{ accentColor: todo.completed ? '#388e3c' : undefined }}
-                                  />
-                                  <Typography variant="body2" sx={{ textDecoration: todo.completed ? 'line-through' : 'none', ml: 0.5 }}>{todo.text}</Typography>
-                                </Box>
-                              ))}
-                              {todosChanged[event.id] && (
-                                <IconButton size="small" color="success" onClick={() => handleSaveTodos(event.id)} title="Save tasks">
-                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#388e3c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                                </IconButton>
-                              )}
+                            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                {(event.centers || []).map(center => (
+                                  <Chip key={center} label={centerMap[center] || center} size="small" />
+                                ))}
+                              </Box>
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                {(editingTodos[event.id] || event.todos || []).slice(0, 4).map(todo => (
+                                  <Box key={todo.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                    <input
+                                      type="checkbox"
+                                      checked={!!todo.completed}
+                                      onChange={() => handleToggleTodo(event.id, todo.id)}
+                                      style={{ accentColor: todo.completed ? '#388e3c' : undefined }}
+                                    />
+                                    <Typography variant="body2" sx={{ textDecoration: todo.completed ? 'line-through' : 'none', ml: 0.5 }}>{todo.text}</Typography>
+                                  </Box>
+                                ))}
+                                {todosChanged[event.id] && (
+                                  <IconButton size="small" color="success" onClick={() => handleSaveTodos(event.id)} title="Save tasks">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#388e3c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                  </IconButton>
+                                )}
+                              </Box>
                             </Box>
                             <Stack direction="row" spacing={1} sx={{ mt: 1.5, alignItems: 'center' }}>
                               {!isEvaluator && (
