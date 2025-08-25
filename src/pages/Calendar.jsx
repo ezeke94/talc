@@ -954,7 +954,14 @@ const Calendar = () => {
                                       type="checkbox"
                                       checked={!!todo.completed}
                                       onChange={() => handleToggleTodo(event.id, todo.id)}
-                                      style={{ accentColor: todo.completed ? '#388e3c' : undefined }}
+                                      style={{
+                                        accentColor: todo.completed ? '#388e3c' : undefined,
+                                        backgroundColor: '#ffffff',
+                                        border: '1px solid rgba(0,0,0,0.08)',
+                                        borderRadius: 4,
+                                        width: 18,
+                                        height: 18,
+                                      }}
                                     />
                                     <Typography variant="body2" sx={{ textDecoration: todo.completed ? 'line-through' : 'none', ml: 0.5 }}>{todo.text}</Typography>
                                   </Box>
