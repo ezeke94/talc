@@ -342,9 +342,7 @@ const MentorDetail = () => {
                         }}>View All Submissions</Button>
                     </Box>
                 </Box>
-                <Button variant="contained" onClick={() => navigate(`/mentor/${mentorId}/fill-${formType}-kpi`)} sx={{ mt: 3 }} fullWidth>
-                    Fill {title} Form
-                </Button>
+                {/* Inline form buttons removed — use the fixed quick-action buttons instead */}
             </Paper>
         </Fade>
     );
