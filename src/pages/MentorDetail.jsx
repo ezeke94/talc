@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase/config';
 import { doc, getDoc, collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
-import { Box, Typography, Button, Paper, CircularProgress, List, ListItem, ListItemText, Divider, Grid, Dialog, DialogTitle, DialogContent, IconButton, Card, CardContent, Avatar, useTheme, useMediaQuery, Skeleton, Fade, Collapse, Tabs, Tab } from '@mui/material';
+import { Box, Typography, Button, Paper, CircularProgress, List, ListItem, ListItemText, Divider, Grid, Dialog, DialogTitle, DialogContent, IconButton, Card, CardContent, Avatar, useTheme, useMediaQuery, Skeleton, Fade, Collapse, Tabs, Tab, Chip, Stack } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 // ...existing code...
 import KPIScoreScale from '../components/KPIScoreScale';
 
@@ -119,23 +119,36 @@ const MentorDetail = () => {
             academicYearStart.setFullYear(academicYearStart.getFullYear() - 1);
         }
 
-        // Monthly averages
-        const monthlySubmissions = {};
+        // Monthly averages per field (build series for each attribute)
+        const monthlyFieldScores = {}; // { 'YYYY-MM': { fieldKey: [scores...] } }
+        const fieldSet = new Set();
         filteredSubs.forEach(sub => {
-            const submissionDate = sub.createdAt.toDate();
+            const submissionDate = parseDate(sub.createdAt);
+            if (!submissionDate) return;
             if (submissionDate >= academicYearStart) {
                 const monthKey = `${submissionDate.getFullYear()}-${String(submissionDate.getMonth() + 1).padStart(2, '0')}`;
-                if (!monthlySubmissions[monthKey]) monthlySubmissions[monthKey] = [];
-                const scores = Object.values(sub.form).map(item => item.score).filter(score => typeof score === 'number');
-                const avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-                monthlySubmissions[monthKey].push(avgScore);
+                if (!monthlyFieldScores[monthKey]) monthlyFieldScores[monthKey] = {};
+                Object.entries(sub.form || {}).forEach(([field, item]) => {
+                    fieldSet.add(field);
+                    const score = (item && (typeof item.score === 'number' ? item.score : (typeof item === 'number' ? item : null)));
+                    if (score === null || score === undefined) return;
+                    if (!monthlyFieldScores[monthKey][field]) monthlyFieldScores[monthKey][field] = [];
+                    monthlyFieldScores[monthKey][field].push(score);
+                });
             }
         });
-        const monthlyData = Object.entries(monthlySubmissions)
-            .map(([month, scores]) => ({
-                month,
-                average: scores.reduce((a, b) => a + b, 0) / scores.length
-            }))
+
+        const fieldKeys = Array.from(fieldSet);
+        // Build monthlyData array: [{ month: 'YYYY-MM', field1: avg, field2: avg, ... }, ...]
+        const monthlyData = Object.entries(monthlyFieldScores)
+            .map(([month, fieldMap]) => {
+                const entry = { month };
+                fieldKeys.forEach(fk => {
+                    const arr = fieldMap[fk] || [];
+                    entry[fk] = arr.length > 0 ? (arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+                });
+                return entry;
+            })
             .sort((a, b) => a.month.localeCompare(b.month));
 
         // Get notes from latest 5 submissions (for preview)
@@ -153,7 +166,7 @@ const MentorDetail = () => {
             });
         });
 
-        // Build lastForm (entire last submission) to display all attributes and selected scores/values
+    // Build lastForm (entire last submission) to display all attributes and selected scores/values
         const latestSub = filteredSubs[0];
         let lastForm = null;
         if (latestSub && latestSub.form) {
@@ -166,11 +179,20 @@ const MentorDetail = () => {
             }));
         }
 
+        // Compute overall latestScore as the avg across fields in the latest month (if any)
+        let latestScore = 0;
+        if (monthlyData.length > 0) {
+            const last = monthlyData[monthlyData.length - 1];
+            const vals = fieldKeys.map(f => last[f]).filter(v => typeof v === 'number');
+            latestScore = vals.length > 0 ? (vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
+        }
+
         return {
             monthlyData,
+            fieldKeys,
             notes: previewNotes.slice(0, 5),
             totalResponses: filteredSubs.length,
-            latestScore: monthlyData.length > 0 ? monthlyData[monthlyData.length - 1].average : 0,
+            latestScore,
             lastForm,
             latestSubmissionMeta: latestSub ? { evaluatorName: latestSub.evaluatorName || latestSub.assessorName, createdAt: parseDate(latestSub.createdAt) } : null,
         };
@@ -187,7 +209,7 @@ const MentorDetail = () => {
     const culturalData = getKpiData('Cultural');
 
     // Custom chart component to show score labels for desktop only
-    const ChartWithLabels = ({ data }) => {
+    const ChartWithLabels = ({ data, fieldKeys }) => {
         // Custom label renderer for scores, with background for visibility
         const renderScoreLabel = (props) => {
             const { x, y, value, index } = props;
@@ -202,11 +224,13 @@ const MentorDetail = () => {
                 </g>
             );
         };
-
+        const colors = [
+            '#8884d8','#82ca9d','#ff7300','#38761d','#f44336','#2196f3','#9c27b0','#ffca28','#4caf50','#00acc1'
+        ];
         return (
-            <Box sx={{ width: '100%', height: isMobile ? 220 : 300, mt: 3, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            <Box sx={{ width: '100%', height: isMobile ? 300 : 420, mt: 3, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                 <ResponsiveContainer>
-                    <LineChart data={data}>
+                    <BarChart data={data} margin={{ top: 8, right: 24, left: 8, bottom: 8 }} barGap={isMobile ? 4 : 6} barCategoryGap={isMobile ? '40%' : '30%'}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis 
                             dataKey="month" 
@@ -215,24 +239,34 @@ const MentorDetail = () => {
                                 return `${new Date(year, month - 1).toLocaleString('default', { month: 'short' })}`;
                             }}
                         />
-                        <YAxis domain={[0, 5]} />
+                        <YAxis domain={[0, 5]} label={{ value: 'Rating', angle: -90, position: 'insideLeft', offset: 0 }} />
                         <Tooltip 
-                            formatter={(value) => [value.toFixed(2), "Average Score"]}
+                            formatter={(value) => [typeof value === 'number' ? value.toFixed(2) : value, "Rating"]}
                             labelFormatter={(value) => {
                                 const [year, month] = value.split('-');
                                 return `${new Date(year, month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}`;
                             }}
                         />
-                        <Line 
-                            type="monotone" 
-                            dataKey="average" 
-                            stroke="#8884d8" 
-                            strokeWidth={2} 
-                            dot={{ r: 4 }}
-                            label={renderScoreLabel}
-                        />
-                    </LineChart>
+                        {!isMobile && <Legend verticalAlign="top" height={36} />}
+                        {fieldKeys && fieldKeys.map((fk, idx) => (
+                            <Bar key={fk} dataKey={fk} name={kpiFieldLabels[fk] || fk} fill={colors[idx % colors.length]} barSize={isMobile ? 8 : 12} />
+                        ))}
+                    </BarChart>
                 </ResponsiveContainer>
+            </Box>
+        );
+    };
+
+    // Custom legend for mobile: horizontal scrollable chips
+    const MobileLegend = ({ fieldKeys }) => {
+        const colors = ['#8884d8','#82ca9d','#ff7300','#38761d','#f44336','#2196f3','#9c27b0','#ffca28','#4caf50','#00acc1'];
+        return (
+            <Box sx={{ overflowX: 'auto', mt: 1 }}>
+                <Stack direction="row" spacing={1} sx={{ minWidth: 320, px: 1 }}>
+                    {fieldKeys && fieldKeys.map((fk, idx) => (
+                        <Chip key={fk} label={kpiFieldLabels[fk] || fk} size="small" sx={{ bgcolor: colors[idx % colors.length], color: '#fff' }} />
+                    ))}
+                </Stack>
             </Box>
         );
     };
@@ -251,7 +285,8 @@ const MentorDetail = () => {
         <Fade in timeout={500}>
             <Paper sx={{ p: { xs: 2, md: 3 }, mt: 3 }}>
                 <Typography variant="h5" sx={{ mb: 2 }}>{title}</Typography>
-                <ChartWithLabels data={data.monthlyData} />
+                <ChartWithLabels data={data.monthlyData} fieldKeys={data.fieldKeys} />
+                {isMobile && data.fieldKeys && data.fieldKeys.length > 0 && <MobileLegend fieldKeys={data.fieldKeys} />}
                 <Divider sx={{ my: 3 }} />
                 <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 2 }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
