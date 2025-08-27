@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebase/config';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Box, Button, Typography, Paper, Snackbar, Alert, CircularProgress } from '@mui/material';
 import RatingScaleWithNotes from './RatingScaleWithNotes';
+import { culturalFields, kpiFieldLabels, culturalOptionsMap, defaultOptions } from '../constants/kpiFields';
 
 // Helper function for the initial state
 const createInitialState = (fields) => {
@@ -14,29 +15,19 @@ const createInitialState = (fields) => {
     return state;
 };
 
-const culturalFields = [
-    'teamWork', 'professionalismLogin', 'professionalismGrooming', 'childSafetyHazards',
-    'childSafetyEnvironment', 'childCentricityEngagement', 'childCentricityDevelopment',
-    'selfDevelopment', 'ethicsAndConduct', 'documentation', 'accountabilityIndependent', 'accountabilityGoals'
-];
-
-const kpiLabels = {
-    teamWork: 'Team work - Handles disagreements respectfully',
-    professionalismLogin: 'Professionalism - Logs in before 8:10 AM consistently',
-    professionalismGrooming: 'Professionalism - Maintains appropriate and tidy grooming',
-    childSafetyHazards: 'Child Safety - Prevents hazards and addresses safety concerns',
-    childSafetyEnvironment: 'Child Safety - Maintains emotionally safe environment',
-    childCentricityEngagement: 'Child Centricity - Maintains meaningful engagement',
-    childCentricityDevelopment: 'Child Centricity - Plans for emotional, social, and intellectual development',
-    selfDevelopment: 'Self Development - Follows trends, stays updated, and adjusts',
-    ethicsAndConduct: 'Ethics & Conduct - Is accountable, reliable and has integrity',
-    documentation: 'Documentation - Timeliness in updating all child documentation',
-    accountabilityIndependent: 'Accountability - Completes tasks independently',
-    accountabilityGoals: 'Accountability - Sees tasks through to completion'
-};
 
 
 const CulturalKPIForm = () => {
+    // Ensure page is scrolled to top when this form mounts
+    useEffect(() => {
+        try {
+            window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+            document.body.scrollTop = 0;
+            document.documentElement.scrollTop = 0;
+        } catch (e) {
+            // ignore in non-browser environments
+        }
+    }, []);
     const { mentorId } = useParams();
     const navigate = useNavigate();
     const [formData, setFormData] = useState(createInitialState(culturalFields));
@@ -92,7 +83,7 @@ const CulturalKPIForm = () => {
         setNotification({ ...notification, open: false });
     };
     
-    const options = ['Critical', 'Not Up to Expectation', 'As Expected', 'Shows Intention', 'Exceptional'];
+    // options and labels are imported from shared constants
 
     return (
         <>
@@ -101,10 +92,10 @@ const CulturalKPIForm = () => {
                 {culturalFields.map((field, idx) => (
                      <RatingScaleWithNotes 
                         key={field}
-                        label={`${idx + 1}. ${kpiLabels[field]}`}
+                        label={`${idx + 1}. ${kpiFieldLabels[field] || field}`}
                         value={formData[field]} 
                         onChange={handleChange(field)} 
-                        options={options} 
+                        options={culturalOptionsMap[field] || defaultOptions} 
                     />
                 ))}
                 <Box mt={3}>

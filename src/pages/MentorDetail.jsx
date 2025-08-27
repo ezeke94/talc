@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase/config';
 import { doc, getDoc, collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
 import { Box, Typography, Button, Paper, CircularProgress, List, ListItem, ListItemText, Divider, Grid, Dialog, DialogTitle, DialogContent, IconButton, Card, CardContent, Avatar, useTheme, useMediaQuery, Skeleton, Fade, Collapse, Tabs, Tab, Chip, Stack } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList, ResponsiveContainer } from 'recharts';
 // ...existing code...
 import KPIScoreScale from '../components/KPIScoreScale';
+import { kpiFieldLabels } from '../constants/kpiFields';
 
 const MentorDetail = () => {
     const { mentorId } = useParams();
@@ -23,32 +24,32 @@ const MentorDetail = () => {
     const NOTES_PER_PAGE = 10;
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+    const intellectRef = useRef(null);
+    const culturalRef = useRef(null);
+    const [visibleSection, setVisibleSection] = useState('intellect'); // 'intellect' | 'cultural'
 
-    // Friendly labels for KPI form fields (kept in sync with the form components)
-    const kpiFieldLabels = {
-        // Intellect
-        subjectKnowledge: 'Subject knowledge',
-        materialReadiness: 'Material readiness',
-        childCentricTeaching: 'Child-Centric Teaching',
-        differentialMethods: 'Differential Methods / Experiential Learning',
-        lessonPlanImplementation: 'Lesson Plan Implementation',
-        reportQuality: 'Report Quality',
-        learnersEngagement: 'Learners Engagement',
-        percentageOfLearners: 'Percentage of learners engaged',
-        // Cultural
-        teamWork: 'Team work - Handles disagreements respectfully',
-        professionalismLogin: 'Professionalism - Logs in before 8:10 AM consistently',
-        professionalismGrooming: 'Professionalism - Maintains appropriate and tidy grooming',
-        childSafetyHazards: 'Child Safety - Prevents hazards and addresses safety concerns',
-        childSafetyEnvironment: 'Child Safety - Maintains emotionally safe environment',
-        childCentricityEngagement: 'Child Centricity - Maintains meaningful engagement',
-        childCentricityDevelopment: 'Child Centricity - Plans for emotional, social, and intellectual development',
-        selfDevelopment: 'Self Development - Follows trends, stays updated, and adjusts',
-        ethicsAndConduct: 'Ethics & Conduct - Is accountable, reliable and has integrity',
-        documentation: 'Documentation - Timeliness in updating all child documentation',
-        accountabilityIndependent: 'Accountability - Completes tasks independently',
-        accountabilityGoals: 'Accountability - Sees tasks through to completion'
-    };
+    // Intersection observer to detect which KPI section is in view (desktop scrolling)
+    useEffect(() => {
+        if (isMobile) return; // on mobile we rely on tabs
+        const options = { root: null, rootMargin: '0px', threshold: [0.25, 0.5, 0.75] };
+        const obs = new IntersectionObserver((entries) => {
+            let best = null;
+            entries.forEach(e => {
+                if (e.isIntersecting) {
+                    if (!best || e.intersectionRatio > best.intersectionRatio) best = e;
+                }
+            });
+            if (best) {
+                const id = best.target === intellectRef.current ? 'intellect' : (best.target === culturalRef.current ? 'cultural' : null);
+                setVisibleSection(id);
+            }
+        }, options);
+        if (intellectRef.current) obs.observe(intellectRef.current);
+        if (culturalRef.current) obs.observe(culturalRef.current);
+        return () => obs.disconnect();
+    }, [isMobile]);
+
+    // Labels imported from shared constants
 
     useEffect(() => {
         setLoading(true);
@@ -239,17 +240,23 @@ const MentorDetail = () => {
                                 return `${new Date(year, month - 1).toLocaleString('default', { month: 'short' })}`;
                             }}
                         />
-                        <YAxis domain={[0, 5]} label={{ value: 'Rating', angle: -90, position: 'insideLeft', offset: 0 }} />
-                        <Tooltip 
-                            formatter={(value) => [typeof value === 'number' ? value.toFixed(2) : value, "Rating"]}
-                            labelFormatter={(value) => {
-                                const [year, month] = value.split('-');
-                                return `${new Date(year, month - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}`;
-                            }}
-                        />
-                        {!isMobile && <Legend verticalAlign="top" height={36} />}
+                        <YAxis domain={[0, 5]} ticks={[0,1,2,3,4,5]} tickFormatter={(v) => String(v)} tick={{ fontSize: 12 }} label={{ value: 'Rating', angle: -90, position: 'insideLeft', offset: 0 }} />
+                        {/* Hover tooltip disabled; we show values as labels on top of bars instead */}
                         {fieldKeys && fieldKeys.map((fk, idx) => (
-                            <Bar key={fk} dataKey={fk} name={kpiFieldLabels[fk] || fk} fill={colors[idx % colors.length]} barSize={isMobile ? 8 : 12} />
+                            <Bar 
+                                key={fk} 
+                                dataKey={fk} 
+                                name={kpiFieldLabels[fk] || fk} 
+                                fill={colors[idx % colors.length]} 
+                                barSize={isMobile ? 8 : 12}
+                                cursor="default"
+                                onMouseEnter={() => {}} 
+                                onMouseLeave={() => {}}
+                            >
+                                    {!isMobile && (
+                                        <LabelList dataKey={fk} position="top" formatter={(v) => (typeof v === 'number' ? v.toFixed(1) : '')} style={{ fontSize: 10, fill: '#222' }} dy={-6} />
+                                    )}
+                            </Bar>
                         ))}
                     </BarChart>
                 </ResponsiveContainer>
@@ -286,7 +293,7 @@ const MentorDetail = () => {
             <Paper sx={{ p: { xs: 2, md: 3 }, mt: 3 }}>
                 <Typography variant="h5" sx={{ mb: 2 }}>{title}</Typography>
                 <ChartWithLabels data={data.monthlyData} fieldKeys={data.fieldKeys} />
-                {isMobile && data.fieldKeys && data.fieldKeys.length > 0 && <MobileLegend fieldKeys={data.fieldKeys} />}
+                {data.fieldKeys && data.fieldKeys.length > 0 && <MobileLegend fieldKeys={data.fieldKeys} />}
                 <Divider sx={{ my: 3 }} />
                 <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 2 }}>
                     <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -347,20 +354,11 @@ const MentorDetail = () => {
 
     return (
         <Box>
-            {/* Mentor Info Card with fade-in and edit action */}
+            {/* Minimal header: only mentor name */}
             <Fade in timeout={500}>
-                <Card sx={{ mb: 3, boxShadow: 2, borderRadius: 3, display: 'flex', alignItems: 'center', p: 2 }}>
-                    <Avatar sx={{ width: 64, height: 64, bgcolor: 'primary.light', fontWeight: 700, mr: 2 }}>
-                        {mentor.name ? mentor.name.charAt(0).toUpperCase() : '?'}
-                    </Avatar>
-                    <CardContent sx={{ flex: 1, p: 0 }}>
-                        <Typography variant="h4" sx={{ fontWeight: 700 }}>{mentor.name}</Typography>
-                        <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
-                            {centers.length > 0 ? centers.join(', ') : 'No center assigned'}
-                        </Typography>
-                    </CardContent>
-                    <Button variant="outlined" sx={{ ml: 2 }} aria-label="Edit Mentor" onClick={() => navigate(`/mentors?edit=${mentor.id}`)}>Edit</Button>
-                </Card>
+                <Box sx={{ mb: 3 }}>
+                    <Typography variant="h4" sx={{ fontWeight: 700 }}>{mentor.name}</Typography>
+                </Box>
             </Fade>
 
             {/* KPI Section Tabs for mobile, side-by-side for desktop */}
@@ -370,8 +368,19 @@ const MentorDetail = () => {
                     <Tab label="Cultural KPI" />
                 </Tabs>
             ) : null}
-            {(!isMobile || activeKpiTab === 0) && <KPISection title="Intellect KPI" data={intellectData} formType="intellect" kpiType="Intellect" />}
-            {(!isMobile || activeKpiTab === 1) && <KPISection title="Cultural KPI" data={culturalData} formType="cultural" kpiType="Cultural" />}
+            {/* Wrap KPI sections with refs so we can detect which one is visible and show the matching quick action */}
+            {(!isMobile || activeKpiTab === 0) && (
+                <Box ref={intellectRef}>
+                    <KPISection title="Intellect KPI" data={intellectData} formType="intellect" kpiType="Intellect" />
+                </Box>
+            )}
+            {(!isMobile || activeKpiTab === 1) && (
+                <Box ref={culturalRef}>
+                    <KPISection title="Cultural KPI" data={culturalData} formType="cultural" kpiType="Cultural" />
+                </Box>
+            )}
+
+    
 
             <Dialog open={notesDialogOpen} onClose={() => setNotesDialogOpen(false)} maxWidth="md" fullWidth>
                 <DialogTitle>
@@ -416,6 +425,43 @@ const MentorDetail = () => {
                     </Box>
                 </DialogContent>
             </Dialog>
+
+            {/* Fixed quick actions to open forms — show only the button matching the visible section/tab */}
+            {mentor && (() => {
+                const showIntellect = isMobile ? activeKpiTab === 0 : visibleSection === 'intellect';
+                const showCultural = isMobile ? activeKpiTab === 1 : visibleSection === 'cultural';
+                return (
+                    <Box sx={isMobile ? {
+                        position: 'fixed',
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        p: 2,
+                        bgcolor: 'background.paper',
+                        boxShadow: 6,
+                        zIndex: 1200,
+                    } : {
+                        position: 'fixed',
+                        bottom: 16,
+                        right: 16,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 1,
+                        zIndex: 1200,
+                    }}>
+                        {showIntellect && (
+                            <Button variant="contained" color="secondary" onClick={() => navigate(`/mentor/${mentorId}/fill-intellect-kpi`)} fullWidth={isMobile} sx={isMobile ? {} : { minWidth: 160 }}>
+                                Fill Intellect Form
+                            </Button>
+                        )}
+                        {showCultural && (
+                            <Button variant="outlined" onClick={() => navigate(`/mentor/${mentorId}/fill-cultural-kpi`)} fullWidth={isMobile} sx={isMobile ? { mt: 1 } : { minWidth: 160 }}>
+                                Fill Cultural Form
+                            </Button>
+                        )}
+                    </Box>
+                );
+            })()}
         </Box>
     );
 };
