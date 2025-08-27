@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Container,
   Typography,
@@ -41,6 +41,7 @@ import EventForm from '../components/EventForm';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { exportEventsToPDF } from '../utils/pdfExport';
 import logo from '../assets/logo.png';
@@ -192,6 +193,54 @@ const Calendar = () => {
     setRescheduleComment('');
     setRescheduleDialogOpen(true);
   };
+
+  // Centralized data loader so we can call it on page load and when the user clicks Refresh
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Events: show all events to authenticated users (load once)
+      const eventsRef = collection(db, 'events');
+      const q = query(eventsRef);
+      const eventsSnapshot = await getDocs(q);
+      let eventsData = eventsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+      // Auto-mark events as completed if all todos are done and not already completed
+      const toComplete = eventsData.filter(ev =>
+        ev.status !== 'completed' &&
+        Array.isArray(ev.todos) &&
+        ev.todos.length > 0 &&
+        ev.todos.every(td => td.completed)
+      );
+      for (const ev of toComplete) {
+        try {
+          await updateDoc(doc(db, 'events', ev.id), { status: 'completed' });
+          ev.status = 'completed';
+        } catch (e) {
+          // Ignore update errors for now
+        }
+      }
+
+      // Keep a master copy of events and mirror into visible events
+      setAllEvents(eventsData);
+      setEvents(eventsData);
+
+      // Centers, users, mentors, sops
+      const [centersSnapshot, usersSnapshot, mentorsSnapshot, sopsSnapshot] = await Promise.all([
+        getDocs(collection(db, 'centers')),
+        getDocs(collection(db, 'users')),
+        getDocs(collection(db, 'mentors')),
+        getDocs(collection(db, 'sops')),
+      ]);
+      setCenters(centersSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      setUsers(usersSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      setMentors(mentorsSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      setSops(sopsSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+    } catch (error) {
+      console.error('Error fetching data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUser]);
 
   // Export next week's events (Monday - Sunday)
   const handleExportNextWeekPdf = async () => {
@@ -394,58 +443,12 @@ const Calendar = () => {
       fetchedRef.current = false;
       return;
     }
+  // Prevent double fetching in StrictMode / remount scenarios
+  if (fetchedRef.current) return;
+  fetchedRef.current = true;
 
-    // Prevent double fetching in StrictMode / remount scenarios
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
-
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Events: show all events to authenticated users (load once)
-        const eventsRef = collection(db, 'events');
-        const q = query(eventsRef);
-        const eventsSnapshot = await getDocs(q);
-        let eventsData = eventsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-
-        // Auto-mark events as completed if all todos are done and not already completed
-        const toComplete = eventsData.filter(ev =>
-          ev.status !== 'completed' &&
-          Array.isArray(ev.todos) &&
-          ev.todos.length > 0 &&
-          ev.todos.every(td => td.completed)
-        );
-        for (const ev of toComplete) {
-          try {
-            await updateDoc(doc(db, 'events', ev.id), { status: 'completed' });
-            ev.status = 'completed';
-          } catch (e) {
-            // Ignore update errors for now
-          }
-        }
-
-  // Keep a master copy of events and mirror into visible events
-  setAllEvents(eventsData);
-  setEvents(eventsData);
-
-        // Centers, users, mentors, sops
-        const [centersSnapshot, usersSnapshot, mentorsSnapshot, sopsSnapshot] = await Promise.all([
-          getDocs(collection(db, 'centers')),
-          getDocs(collection(db, 'users')),
-          getDocs(collection(db, 'mentors')),
-          getDocs(collection(db, 'sops')),
-        ]);
-        setCenters(centersSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-        setUsers(usersSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-        setMentors(mentorsSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-        setSops(sopsSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
+  // Load initial data
+  loadData();
   }, [currentUser]);
 
   // Keep `events` in sync with `allEvents` when the master list changes (local updates)
@@ -683,6 +686,13 @@ const Calendar = () => {
               <IconButton onClick={() => setFiltersOpen(v => !v)} color="primary" aria-label="filters">
                 <FilterListIcon />
               </IconButton>
+            </Tooltip>
+            <Tooltip title="Reload data">
+              <span>
+                <IconButton onClick={() => loadData()} color="primary" aria-label="refresh" disabled={loading}>
+                  <RefreshIcon />
+                </IconButton>
+              </span>
             </Tooltip>
             <Tooltip title="Export next week's events (Mon–Sun)">
               <span>
