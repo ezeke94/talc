@@ -24,6 +24,32 @@ const MentorDetail = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
+    // Friendly labels for KPI form fields (kept in sync with the form components)
+    const kpiFieldLabels = {
+        // Intellect
+        subjectKnowledge: 'Subject knowledge',
+        materialReadiness: 'Material readiness',
+        childCentricTeaching: 'Child-Centric Teaching',
+        differentialMethods: 'Differential Methods / Experiential Learning',
+        lessonPlanImplementation: 'Lesson Plan Implementation',
+        reportQuality: 'Report Quality',
+        learnersEngagement: 'Learners Engagement',
+        percentageOfLearners: 'Percentage of learners engaged',
+        // Cultural
+        teamWork: 'Team work - Handles disagreements respectfully',
+        professionalismLogin: 'Professionalism - Logs in before 8:10 AM consistently',
+        professionalismGrooming: 'Professionalism - Maintains appropriate and tidy grooming',
+        childSafetyHazards: 'Child Safety - Prevents hazards and addresses safety concerns',
+        childSafetyEnvironment: 'Child Safety - Maintains emotionally safe environment',
+        childCentricityEngagement: 'Child Centricity - Maintains meaningful engagement',
+        childCentricityDevelopment: 'Child Centricity - Plans for emotional, social, and intellectual development',
+        selfDevelopment: 'Self Development - Follows trends, stays updated, and adjusts',
+        ethicsAndConduct: 'Ethics & Conduct - Is accountable, reliable and has integrity',
+        documentation: 'Documentation - Timeliness in updating all child documentation',
+        accountabilityIndependent: 'Accountability - Completes tasks independently',
+        accountabilityGoals: 'Accountability - Sees tasks through to completion'
+    };
+
     useEffect(() => {
         setLoading(true);
         setError(null);
@@ -60,24 +86,26 @@ const MentorDetail = () => {
     }, [mentorId]);
 
     // Helper to extract all notes for a mentor and kpiType, with evaluator name and date
+    const parseDate = (ts) => {
+        if (!ts) return null;
+        if (typeof ts?.toDate === 'function') return ts.toDate();
+        if (typeof ts === 'object' && ts.seconds) return new Date(ts.seconds * 1000);
+        const d = new Date(ts);
+        return isNaN(d.getTime()) ? null : d;
+    };
+
+    // Return full submissions (with parsed createdAt) for a KPI type, newest first
     const getAllNotes = (kpiType) => {
         const filteredSubs = submissions.filter(s => s.kpiType === kpiType);
-        let notesArr = [];
-        filteredSubs.forEach(sub => {
-            Object.entries(sub.form).forEach(([field, item]) => {
-                if (item.note && item.note.trim() !== '') {
-                    notesArr.push({
-                        note: item.note,
-                        field,
-                        evaluatorName: sub.evaluatorName || sub.assessorName,
-                        createdAt: sub.createdAt.toDate(),
-                    });
-                }
-            });
-        });
-        // Sort by date desc
-        notesArr.sort((a, b) => b.createdAt - a.createdAt);
-        return notesArr;
+        const subs = filteredSubs.map(sub => ({
+            id: sub.id,
+            evaluatorName: sub.evaluatorName || sub.assessorName || 'Unknown',
+            createdAt: parseDate(sub.createdAt) || new Date(0),
+            form: sub.form || {},
+            raw: sub,
+        }));
+        subs.sort((a, b) => b.createdAt - a.createdAt);
+        return subs;
     };
 
     const getKpiData = (kpiType) => {
@@ -114,22 +142,37 @@ const MentorDetail = () => {
         const previewNotes = [];
         filteredSubs.slice(0, 5).forEach(sub => {
             Object.entries(sub.form).forEach(([field, item]) => {
-                if (item.note && item.note.trim() !== '') {
+                if (item.note && String(item.note).trim() !== '') {
                     previewNotes.push({
                         note: item.note,
                         field,
                         evaluatorName: sub.evaluatorName || sub.assessorName,
-                        createdAt: sub.createdAt.toDate(),
+                        createdAt: parseDate(sub.createdAt) || new Date(0),
                     });
                 }
             });
         });
 
+        // Build lastForm (entire last submission) to display all attributes and selected scores/values
+        const latestSub = filteredSubs[0];
+        let lastForm = null;
+        if (latestSub && latestSub.form) {
+            lastForm = Object.entries(latestSub.form).map(([field, item]) => ({
+                field,
+                score: item.score !== undefined ? item.score : null,
+                value: item.value !== undefined ? item.value : null,
+                note: item.note || '',
+                raw: item,
+            }));
+        }
+
         return {
             monthlyData,
             notes: previewNotes.slice(0, 5),
             totalResponses: filteredSubs.length,
-            latestScore: monthlyData.length > 0 ? monthlyData[monthlyData.length - 1].average : 0
+            latestScore: monthlyData.length > 0 ? monthlyData[monthlyData.length - 1].average : 0,
+            lastForm,
+            latestSubmissionMeta: latestSub ? { evaluatorName: latestSub.evaluatorName || latestSub.assessorName, createdAt: parseDate(latestSub.createdAt) } : null,
         };
     };
 
@@ -224,29 +267,37 @@ const MentorDetail = () => {
                         )}
                     </Box>
                     <Box sx={{ flex: 2, minWidth: 0 }}>
-                        <Typography variant="h6">Latest Notes (up to 5)</Typography>
-                        <List dense>
-                            {data.notes.length > 0 ? data.notes.map((noteObj, index) => (
-                                <React.Fragment key={index}>
-                                    <ListItem disableGutters>
-                                        <ListItemText 
-                                            primary={<Button variant="text" sx={{ textAlign: 'left', p: 0, minWidth: 0 }} onClick={() => setExpandedNotes(prev => ({ ...prev, [noteObj.field + index]: !prev[noteObj.field + index] }))}>{`"${noteObj.note}"`}</Button>}
-                                            secondary={`By ${noteObj.evaluatorName || 'Unknown'} on ${noteObj.createdAt ? noteObj.createdAt.toLocaleDateString() : ''}`}
-                                        />
-                                    </ListItem>
-                                    <Collapse in={!!expandedNotes[noteObj.field + index]} timeout="auto" unmountOnExit>
-                                        <Box sx={{ pl: 2, pb: 1 }}>
-                                            <Typography variant="body2" color="text.secondary">Field: {noteObj.field}</Typography>
-                                        </Box>
-                                    </Collapse>
-                                </React.Fragment>
-                            )) : <ListItem><ListItemText primary="No recent notes available."/></ListItem>}
-                        </List>
+                        <Typography variant="h6">Latest Submission</Typography>
+                        {data.lastForm ? (
+                            <List dense>
+                                {data.lastForm.map((f, i) => (
+                                    <React.Fragment key={f.field + i}>
+                                        <ListItem disableGutters>
+                                            <ListItemText
+                                                primary={<strong>{kpiFieldLabels[f.field] || f.field}</strong>}
+                                                secondary={
+                                                    <>
+                                                        {f.score !== null && <Typography component="span" sx={{ display: 'block' }}>Rating: <strong>{String(f.score)}</strong></Typography>}
+                                                        {f.value !== null && <Typography component="span" sx={{ display: 'block' }}>Value: <strong>{String(f.value)}</strong></Typography>}
+                                                        {f.note && <Typography component="span" variant="body2" color="text.secondary">Note: {f.note}</Typography>}
+                                                    </>
+                                                }
+                                            />
+                                        </ListItem>
+                                    </React.Fragment>
+                                ))}
+                                <ListItem>
+                                    <ListItemText primary={`By ${data.latestSubmissionMeta?.evaluatorName || 'Unknown'}`} secondary={data.latestSubmissionMeta?.createdAt ? data.latestSubmissionMeta.createdAt.toLocaleDateString() : ''} />
+                                </ListItem>
+                            </List>
+                        ) : (
+                            <Typography>No submissions available.</Typography>
+                        )}
                         <Button variant="text" sx={{ mt: 1 }} onClick={() => {
                             setAllNotes(getAllNotes(kpiType));
                             setNotesDialogOpen(true);
                             setNotesPage(1);
-                        }}>View More</Button>
+                        }}>View All Submissions</Button>
                     </Box>
                 </Box>
                 <Button variant="contained" onClick={() => navigate(`/mentor/${mentorId}/fill-${formType}-kpi`)} sx={{ mt: 3 }} fullWidth>
@@ -295,24 +346,37 @@ const MentorDetail = () => {
                     </IconButton>
                 </DialogTitle>
                 <DialogContent dividers>
-                    <List>
-                        {paginatedNotes.length > 0 ? paginatedNotes.map((noteObj, idx) => (
-                            <ListItem key={idx} alignItems="flex-start">
-                                <ListItemText 
-                                    primary={<Button variant="text" sx={{ textAlign: 'left', p: 0, minWidth: 0 }} onClick={() => setExpandedNotes(prev => ({ ...prev, [noteObj.field + idx]: !prev[noteObj.field + idx] }))}>{`"${noteObj.note}"`}</Button>}
-                                    secondary={`By ${noteObj.evaluatorName || 'Unknown'} on ${noteObj.createdAt ? noteObj.createdAt.toLocaleDateString() : ''} (${noteObj.field})`}
-                                />
-                                <Collapse in={!!expandedNotes[noteObj.field + idx]} timeout="auto" unmountOnExit>
-                                    <Box sx={{ pl: 2, pb: 1 }}>
-                                        <Typography variant="body2" color="text.secondary">Field: {noteObj.field}</Typography>
-                                    </Box>
-                                </Collapse>
-                            </ListItem>
-                        )) : <ListItem><ListItemText primary="No notes found." /></ListItem>}
-                    </List>
+                    {paginatedNotes.length > 0 ? (
+                        paginatedNotes.map((submission, idx) => (
+                            <Paper key={submission.id || idx} sx={{ p: 2, mb: 2 }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                                    <Typography variant="subtitle1">By {submission.evaluatorName}</Typography>
+                                    <Typography variant="caption">{submission.createdAt ? submission.createdAt.toLocaleDateString() : ''}</Typography>
+                                </Box>
+                                <List dense>
+                                    {Object.entries(submission.form || {}).map(([field, item], fi) => (
+                                        <ListItem key={field + fi} alignItems="flex-start">
+                                            <ListItemText
+                                                primary={<strong>{kpiFieldLabels[field] || field}</strong>}
+                                                secondary={
+                                                    <>
+                                                        {item.score !== undefined && <Typography component="span" sx={{ display: 'block' }}>Rating: <strong>{String(item.score)}</strong></Typography>}
+                                                        {item.value !== undefined && <Typography component="span" sx={{ display: 'block' }}>Value: <strong>{String(item.value)}</strong></Typography>}
+                                                        {item.note && <Typography component="span" variant="body2" color="text.secondary">Note: {String(item.note)}</Typography>}
+                                                    </>
+                                                }
+                                            />
+                                        </ListItem>
+                                    ))}
+                                </List>
+                            </Paper>
+                        ))
+                    ) : (
+                        <List><ListItem><ListItemText primary="No submissions found." /></ListItem></List>
+                    )}
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
                         <Button disabled={notesPage === 1} onClick={() => setNotesPage(notesPage - 1)}>Previous</Button>
-                        <Typography>Page {notesPage} / {Math.ceil(allNotes.length / NOTES_PER_PAGE)}</Typography>
+                        <Typography>Page {notesPage} / {Math.max(1, Math.ceil(allNotes.length / NOTES_PER_PAGE))}</Typography>
                         <Button disabled={notesPage * NOTES_PER_PAGE >= allNotes.length} onClick={() => setNotesPage(notesPage + 1)}>Next</Button>
                     </Box>
                 </DialogContent>
