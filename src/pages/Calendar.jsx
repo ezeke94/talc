@@ -631,7 +631,23 @@ const Calendar = () => {
           const db = toJSDate(b.startDateTime)?.getTime() || 0;
           return da - db;
         });
-        return filtered.slice(0, 10);
+        // By default, when not showing history and no explicit "Date To" filter is set,
+        // ensure we include events up to the next 15 days so the page doesn't only show
+        // the current week. Keep this as a minimum window; if the user applies a
+        // filterDateTo, their preference takes precedence.
+        if (!showHistory && !filterDateTo) {
+          const cutoff = new Date();
+          cutoff.setHours(23, 59, 59, 999);
+          cutoff.setDate(cutoff.getDate() + 15);
+          filtered = filtered.filter(ev => {
+            if (!ev.startDateTime) return true; // keep undated items
+            const d = toJSDate(ev.startDateTime);
+            if (!d) return true;
+            return d <= cutoff;
+          });
+        }
+
+        return filtered;
   }, [allEvents, filterCenter, filterStatus, filterDateFrom, filterDateTo, searchText, filterOwnerName, showHistory]);
 
   const groupedByDate = useMemo(() => {
