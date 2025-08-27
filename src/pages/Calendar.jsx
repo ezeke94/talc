@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Container,
   Typography,
@@ -70,8 +70,9 @@ const Calendar = () => {
         status = 'in_progress';
       }
       const eventRef = doc(db, 'events', eventId);
-      await updateDoc(eventRef, { todos, status });
-      setEvents(prev => prev.map(ev => (ev.id === eventId ? { ...ev, todos, status } : ev)));
+  await updateDoc(eventRef, { todos, status });
+  setEvents(prev => prev.map(ev => (ev.id === eventId ? { ...ev, todos, status } : ev)));
+  setAllEvents(prev => prev.map(ev => (ev.id === eventId ? { ...ev, todos, status } : ev)));
       setTodosChanged(prev => ({ ...prev, [eventId]: false }));
       // Always log audit when todos are saved
       // Fetch latest event data after update to ensure audit log is correct
@@ -105,6 +106,8 @@ const Calendar = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
   const [events, setEvents] = useState([]);
+  // Master copy of events loaded once from Firestore; 'events' will mirror this
+  const [allEvents, setAllEvents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [centers, setCenters] = useState([]);
   const [mentors, setMentors] = useState([]);
@@ -361,7 +364,7 @@ const Calendar = () => {
           newDateTime,
         },
       ];
-  await updateDoc(eventRef, {
+      await updateDoc(eventRef, {
         startDateTime: newDateTime,
         comments: updatedComments,
         lastModifiedBy: { userId: currentUser.uid, userName: currentUser.displayName },
@@ -369,6 +372,7 @@ const Calendar = () => {
         lastNotificationAt: new Date(),
       });
       setEvents(prev => prev.map(ev => (ev.id === rescheduleEvent.id ? { ...ev, startDateTime: newDateTime, comments: updatedComments } : ev)));
+      setAllEvents(prev => prev.map(ev => (ev.id === rescheduleEvent.id ? { ...ev, startDateTime: newDateTime, comments: updatedComments } : ev)));
   // notification removed: event_reschedule
 
     } catch (err) {
@@ -382,14 +386,25 @@ const Calendar = () => {
   };
 
   // Load data and auto-complete events
+  const fetchedRef = useRef(false);
+
   useEffect(() => {
-    if (!currentUser) return;
+    // Reset guard when user logs out
+    if (!currentUser) {
+      fetchedRef.current = false;
+      return;
+    }
+
+    // Prevent double fetching in StrictMode / remount scenarios
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
+
     const fetchData = async () => {
       setLoading(true);
       try {
-  // Events: show all events to authenticated users
-  const eventsRef = collection(db, 'events');
-  const q = query(eventsRef);
+        // Events: show all events to authenticated users (load once)
+        const eventsRef = collection(db, 'events');
+        const q = query(eventsRef);
         const eventsSnapshot = await getDocs(q);
         let eventsData = eventsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
 
@@ -409,11 +424,9 @@ const Calendar = () => {
           }
         }
 
-        // By default, hide completed events/tasks
-        if (!showHistory) {
-          eventsData = eventsData.filter(ev => ev.status !== 'completed');
-        }
-        setEvents(eventsData);
+  // Keep a master copy of events and mirror into visible events
+  setAllEvents(eventsData);
+  setEvents(eventsData);
 
         // Centers, users, mentors, sops
         const [centersSnapshot, usersSnapshot, mentorsSnapshot, sopsSnapshot] = await Promise.all([
@@ -433,8 +446,12 @@ const Calendar = () => {
       }
     };
     fetchData();
-    // Only reload events when showHistory changes
-  }, [currentUser, showHistory]);
+  }, [currentUser]);
+
+  // Keep `events` in sync with `allEvents` when the master list changes (local updates)
+  useEffect(() => {
+    setEvents(allEvents);
+  }, [allEvents]);
 
   // Save (create/update)
   const handleSaveEvent = async (eventData) => {
@@ -450,6 +467,7 @@ const Calendar = () => {
         const prevEventData = prevEventSnap.docs.length > 0 ? prevEventSnap.docs[0].data() : {};
   await updateDoc(eventRef, eventData);
   setEvents(prev => prev.map(ev => (ev.id === editingEvent.id ? { ...editingEvent, ...eventData } : ev)));
+  setAllEvents(prev => prev.map(ev => (ev.id === editingEvent.id ? { ...editingEvent, ...eventData } : ev)));
   // notification removed: event_update
         // Compute changed fields for audit
         const changedFields = {};
@@ -466,6 +484,7 @@ const Calendar = () => {
           createdBy: { userId: currentUser.uid, userName: currentUser.displayName },
         });
   setEvents(prev => [...prev, { ...eventData, id: docRef.id }]);
+  setAllEvents(prev => [...prev, { ...eventData, id: docRef.id }]);
   // notification removed: event_create
 
       }
@@ -486,6 +505,7 @@ const Calendar = () => {
     try {
       await deleteDoc(doc(db, 'events', eventId));
   setEvents(prev => prev.filter(ev => ev.id !== eventId));
+  setAllEvents(prev => prev.filter(ev => ev.id !== eventId));
   // notification removed: event_delete
 
     } catch (err) {
@@ -498,7 +518,7 @@ const Calendar = () => {
   const getDuplicateTitle = (title) => {
     const base = (title || 'Untitled').trim();
     let max = 0;
-    for (const ev of events) {
+    for (const ev of allEvents) {
       const t = ev?.title;
       if (!t) continue;
       if (t === base) {
@@ -536,6 +556,7 @@ const Calendar = () => {
       const newEvent = { id: docRef.id, ...copy };
   // Append to local state
   setEvents(prev => [...prev, newEvent]);
+  setAllEvents(prev => [...prev, newEvent]);
   // notification removed: event_create (duplicate)
       return newEvent;
     } catch (err) {
@@ -588,9 +609,9 @@ const Calendar = () => {
     return ['pending', 'in_progress'];
   }, []);
 
-  // Filtered and grouped
+  // Filtered and grouped (derive from master allEvents so toggles/filters don't re-fetch)
   const filteredEvents = useMemo(() => {
-    let filtered = events
+    let filtered = allEvents
           .filter(ev =>
             (!filterCenter || (ev.centers || []).some(c => (c === filterCenter))) &&
             (!filterStatus || ev.status === filterStatus) &&
@@ -611,7 +632,7 @@ const Calendar = () => {
           return da - db;
         });
         return filtered.slice(0, 10);
-  }, [events, filterCenter, filterStatus, filterDateFrom, filterDateTo, searchText, filterOwnerName, showHistory]);
+  }, [allEvents, filterCenter, filterStatus, filterDateFrom, filterDateTo, searchText, filterOwnerName, showHistory]);
 
   const groupedByDate = useMemo(() => {
     // Build ordered groups to preserve the sorted order from filteredEvents
@@ -954,14 +975,7 @@ const Calendar = () => {
                                       type="checkbox"
                                       checked={!!todo.completed}
                                       onChange={() => handleToggleTodo(event.id, todo.id)}
-                                      style={{
-                                        accentColor: todo.completed ? '#388e3c' : undefined,
-                                        backgroundColor: '#ffffff',
-                                        border: '1px solid rgba(0,0,0,0.08)',
-                                        borderRadius: 4,
-                                        width: 18,
-                                        height: 18,
-                                      }}
+                                      style={{ accentColor: todo.completed ? '#388e3c' : undefined }}
                                     />
                                     <Typography variant="body2" sx={{ textDecoration: todo.completed ? 'line-through' : 'none', ml: 0.5 }}>{todo.text}</Typography>
                                   </Box>
