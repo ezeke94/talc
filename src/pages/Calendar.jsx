@@ -589,15 +589,13 @@ const Calendar = () => {
       if (confirmAction === 'delete') {
         await handleDeleteEvent(confirmEvent.id);
       } else if (confirmAction === 'duplicate') {
-        if (opt === 'edit') {
-          const newEvent = await handleDuplicateEvent(confirmEvent);
-          if (newEvent) {
-            setEditingEvent(newEvent);
-            setShowForm(true);
-          }
-        } else {
-          await handleDuplicateEvent(confirmEvent);
+        // Always duplicate, and if 'edit', only edit the new event
+        const newEvent = await handleDuplicateEvent(confirmEvent);
+        if (opt === 'edit' && newEvent) {
+          setEditingEvent(newEvent);
+          setShowForm(true);
         }
+        // Do not open or edit the original event
       }
     } catch (err) {
       // error handled in called functions
@@ -995,7 +993,7 @@ const Calendar = () => {
                                 ))}
                               </Box>
                               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                                {(editingTodos[event.id] || event.todos || []).slice(0, 4).map(todo => (
+                                {(editingTodos[event.id] || event.todos || []).map(todo => (
                                   <Box key={todo.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                     <input
                                       type="checkbox"
