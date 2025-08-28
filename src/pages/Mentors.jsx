@@ -114,7 +114,14 @@ const Mentors = () => {
                     {filteredMentors.map(mentor => {
                         const centers = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
                         return (
-                            <Card key={mentor.id} sx={{ mb: 2, boxShadow: 2, borderRadius: 3 }}>
+                            <Card
+                                key={mentor.id}
+                                onClick={() => navigate(`/mentor/${mentor.id}`)}
+                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') navigate(`/mentor/${mentor.id}`); }}
+                                role="button"
+                                tabIndex={0}
+                                sx={{ mb: 2, boxShadow: 2, borderRadius: 3, cursor: 'pointer' }}
+                            >
                                 <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                     <Avatar sx={{ width: 48, height: 48, bgcolor: 'primary.light', fontWeight: 600 }}>
                                         {mentor.name ? mentor.name.charAt(0).toUpperCase() : '?'}
@@ -125,18 +132,22 @@ const Mentors = () => {
                                     </Box>
                                     <CardActions sx={{ display: 'flex', flexDirection: 'row', gap: 1 }}>
                                         <Tooltip title="View Details">
-                                            <IconButton aria-label="view details" onClick={() => navigate(`/mentor/${mentor.id}`)} sx={{ p: 1 }}>
+                                            <IconButton
+                                                aria-label="view details"
+                                                onClick={(e) => { e.stopPropagation(); navigate(`/mentor/${mentor.id}`); }}
+                                                sx={{ p: 1 }}
+                                            >
                                                 <VisibilityIcon />
                                             </IconButton>
                                         </Tooltip>
                                         <Tooltip title="Edit">
-                                            <IconButton aria-label="edit" onClick={() => handleOpen(mentor)} sx={{ p: 1 }}>
+                                            <IconButton aria-label="edit" onClick={(e) => { e.stopPropagation(); handleOpen(mentor); }} sx={{ p: 1 }}>
                                                 <EditIcon />
                                             </IconButton>
                                         </Tooltip>
                                         {userRole !== 'evaluator' && (
                                             <Tooltip title="Delete">
-                                                <IconButton aria-label="delete" onClick={() => handleDelete(mentor.id)} sx={{ p: 1 }}>
+                                                <IconButton aria-label="delete" onClick={(e) => { e.stopPropagation(); handleDelete(mentor.id); }} sx={{ p: 1 }}>
                                                     <DeleteIcon />
                                                 </IconButton>
                                             </Tooltip>
@@ -157,6 +168,10 @@ const Mentors = () => {
                         return (
                             <Card
                                 key={mentor.id}
+                                onClick={() => navigate(`/mentor/${mentor.id}`)}
+                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') navigate(`/mentor/${mentor.id}`); }}
+                                role="button"
+                                tabIndex={0}
                                 sx={{
                                     width: 240,
                                     minHeight: 180,
@@ -168,6 +183,7 @@ const Mentors = () => {
                                     flexDirection: 'column',
                                     justifyContent: 'space-between',
                                     alignItems: 'stretch',
+                                    cursor: 'pointer',
                                 }}
                             >
                                 <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, minHeight: 90 }}>
@@ -179,25 +195,25 @@ const Mentors = () => {
                                         <Typography variant="body2" color="text.secondary" sx={{ wordBreak: 'break-word' }}>{centers.join(", ")}</Typography>
                                     </Box>
                                 </CardContent>
-                                <CardActions sx={{ justifyContent: 'flex-end', gap: 1, pb: 1 }}>
-                                    <Tooltip title="View Details">
-                                        <IconButton aria-label="view details" onClick={() => navigate(`/mentor/${mentor.id}`)} sx={{ p: 1 }}>
-                                            <VisibilityIcon />
-                                        </IconButton>
-                                    </Tooltip>
-                                    <Tooltip title="Edit">
-                                        <IconButton aria-label="edit" onClick={() => handleOpen(mentor)} sx={{ p: 1 }}>
-                                            <EditIcon />
-                                        </IconButton>
-                                    </Tooltip>
-                                    {userRole !== 'evaluator' && (
-                                        <Tooltip title="Delete">
-                                            <IconButton aria-label="delete" onClick={() => handleDelete(mentor.id)} sx={{ p: 1 }}>
-                                                <DeleteIcon />
-                                            </IconButton>
-                                        </Tooltip>
-                                    )}
-                                </CardActions>
+                                                <CardActions sx={{ justifyContent: 'flex-end', gap: 1, pb: 1 }}>
+                                                    <Tooltip title="View Details">
+                                                        <IconButton aria-label="view details" onClick={(e) => { e.stopPropagation(); navigate(`/mentor/${mentor.id}`); }} sx={{ p: 1 }}>
+                                                            <VisibilityIcon />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                    <Tooltip title="Edit">
+                                                        <IconButton aria-label="edit" onClick={(e) => { e.stopPropagation(); handleOpen(mentor); }} sx={{ p: 1 }}>
+                                                            <EditIcon />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                    {userRole !== 'evaluator' && (
+                                                        <Tooltip title="Delete">
+                                                            <IconButton aria-label="delete" onClick={(e) => { e.stopPropagation(); handleDelete(mentor.id); }} sx={{ p: 1 }}>
+                                                                <DeleteIcon />
+                                                            </IconButton>
+                                                        </Tooltip>
+                                                    )}
+                                                </CardActions>
                             </Card>
                         );
                     })}

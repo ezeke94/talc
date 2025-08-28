@@ -26,28 +26,6 @@ const MentorDetail = () => {
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const intellectRef = useRef(null);
     const culturalRef = useRef(null);
-    const [visibleSection, setVisibleSection] = useState('intellect'); // 'intellect' | 'cultural'
-
-    // Intersection observer to detect which KPI section is in view (desktop scrolling)
-    useEffect(() => {
-        if (isMobile) return; // on mobile we rely on tabs
-        const options = { root: null, rootMargin: '0px', threshold: [0.25, 0.5, 0.75] };
-        const obs = new IntersectionObserver((entries) => {
-            let best = null;
-            entries.forEach(e => {
-                if (e.isIntersecting) {
-                    if (!best || e.intersectionRatio > best.intersectionRatio) best = e;
-                }
-            });
-            if (best) {
-                const id = best.target === intellectRef.current ? 'intellect' : (best.target === culturalRef.current ? 'cultural' : null);
-                setVisibleSection(id);
-            }
-        }, options);
-        if (intellectRef.current) obs.observe(intellectRef.current);
-        if (culturalRef.current) obs.observe(culturalRef.current);
-        return () => obs.disconnect();
-    }, [isMobile]);
 
     // Labels imported from shared constants
 
@@ -269,9 +247,9 @@ const MentorDetail = () => {
         const colors = ['#8884d8','#82ca9d','#ff7300','#38761d','#f44336','#2196f3','#9c27b0','#ffca28','#4caf50','#00acc1'];
         return (
             <Box sx={{ overflowX: 'auto', mt: 1 }}>
-                <Stack direction="row" spacing={1} sx={{ minWidth: 320, px: 1 }}>
+                <Stack direction="row" spacing={1} sx={{ px: 1 }}>
                     {fieldKeys && fieldKeys.map((fk, idx) => (
-                        <Chip key={fk} label={kpiFieldLabels[fk] || fk} size="small" sx={{ bgcolor: colors[idx % colors.length], color: '#fff' }} />
+                        <Chip key={fk} label={kpiFieldLabels[fk] || fk} size="small" sx={{ bgcolor: colors[idx % colors.length], color: '#fff', fontWeight: 700, fontSize: '0.85rem' }} />
                     ))}
                 </Stack>
             </Box>
@@ -351,29 +329,38 @@ const MentorDetail = () => {
     const paginatedNotes = allNotes.slice((notesPage - 1) * NOTES_PER_PAGE, notesPage * NOTES_PER_PAGE);
 
     return (
-        <Box>
+        <Box sx={{ pb: isMobile ? 14 : 4 }}>
             {/* Minimal header: only mentor name */}
             <Fade in timeout={500}>
-                <Box sx={{ mb: 3 }}>
-                    <Typography variant="h4" sx={{ fontWeight: 700 }}>{mentor.name}</Typography>
+                <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'space-between' }}>
+                    <Box>
+                        <Typography variant="h4" sx={{ fontWeight: 700 }}>{mentor.name}</Typography>
+                    </Box>
+                    {!isMobile && (
+                        <Tabs value={activeKpiTab} onChange={(_, v) => setActiveKpiTab(v)} sx={{ ml: 2 }}>
+                            <Tab label="Intellect KPI" />
+                            <Tab label="Cultural KPI" />
+                        </Tabs>
+                    )}
                 </Box>
             </Fade>
 
-            {/* KPI Section Tabs for mobile, side-by-side for desktop */}
-            {isMobile ? (
+            {/* KPI Section Tabs for mobile only (desktop tabs live in the header) */}
+            {isMobile && (
                 <Tabs value={activeKpiTab} onChange={(_, v) => setActiveKpiTab(v)} variant="fullWidth" sx={{ mb: 2 }}>
                     <Tab label="Intellect KPI" />
                     <Tab label="Cultural KPI" />
                 </Tabs>
-            ) : null}
-            {/* Wrap KPI sections with refs so we can detect which one is visible and show the matching quick action */}
-            {(!isMobile || activeKpiTab === 0) && (
-                <Box ref={intellectRef}>
+            )}
+
+            {/* Render only the active tab's section (desktop now matches mobile behavior) */}
+            {activeKpiTab === 0 && (
+                <Box>
                     <KPISection title="Intellect KPI" data={intellectData} formType="intellect" kpiType="Intellect" />
                 </Box>
             )}
-            {(!isMobile || activeKpiTab === 1) && (
-                <Box ref={culturalRef}>
+            {activeKpiTab === 1 && (
+                <Box>
                     <KPISection title="Cultural KPI" data={culturalData} formType="cultural" kpiType="Cultural" />
                 </Box>
             )}
@@ -426,8 +413,9 @@ const MentorDetail = () => {
 
             {/* Fixed quick actions to open forms — show only the button matching the visible section/tab */}
             {mentor && (() => {
-                const showIntellect = isMobile ? activeKpiTab === 0 : visibleSection === 'intellect';
-                const showCultural = isMobile ? activeKpiTab === 1 : visibleSection === 'cultural';
+                const showIntellect = activeKpiTab === 0;
+                const showCultural = activeKpiTab === 1;
+                if (!showIntellect && !showCultural) return null;
                 return (
                     <Box sx={isMobile ? {
                         position: 'fixed',
@@ -448,12 +436,26 @@ const MentorDetail = () => {
                         zIndex: 1200,
                     }}>
                         {showIntellect && (
-                            <Button variant="contained" color="secondary" onClick={() => navigate(`/mentor/${mentorId}/fill-intellect-kpi`)} fullWidth={isMobile} sx={isMobile ? {} : { minWidth: 160 }}>
+                            <Button
+                                aria-label="Fill Intellect Form"
+                                variant="contained"
+                                color="secondary"
+                                onClick={() => navigate(`/mentor/${mentorId}/fill-intellect-kpi`)}
+                                fullWidth={isMobile}
+                                sx={isMobile ? {} : { minWidth: 160, '&:focus-visible': { outline: '3px solid rgba(21,101,192,0.24)', outlineOffset: 2 } }}
+                            >
                                 Fill Intellect Form
                             </Button>
                         )}
                         {showCultural && (
-                            <Button variant="outlined" onClick={() => navigate(`/mentor/${mentorId}/fill-cultural-kpi`)} fullWidth={isMobile} sx={isMobile ? { mt: 1 } : { minWidth: 160 }}>
+                            <Button
+                                aria-label="Fill Cultural Form"
+                                variant="contained"
+                                color="primary"
+                                onClick={() => navigate(`/mentor/${mentorId}/fill-cultural-kpi`)}
+                                fullWidth={isMobile}
+                                sx={isMobile ? { mt: 1 } : { minWidth: 160, '&:focus-visible': { outline: '3px solid rgba(21,101,192,0.16)', outlineOffset: 2 } }}
+                            >
                                 Fill Cultural Form
                             </Button>
                         )}

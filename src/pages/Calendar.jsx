@@ -15,6 +15,7 @@ import {
   InputAdornment,
   IconButton,
   Tooltip,
+  CircularProgress,
   List,
   
   FormControl,
@@ -46,7 +47,7 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { exportEventsToPDF } from '../utils/pdfExport';
 import logo from '../assets/logo.png';
 import { db } from '../firebase/config';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc, onSnapshot } from 'firebase/firestore';
 // notifications removed
 import { useAuth } from '../context/AuthContext';
 
@@ -195,35 +196,10 @@ const Calendar = () => {
   };
 
   // Centralized data loader so we can call it on page load and when the user clicks Refresh
+  // This now only fetches relatively static collections. Events are handled via realtime listener below.
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // Events: show all events to authenticated users (load once)
-      const eventsRef = collection(db, 'events');
-      const q = query(eventsRef);
-      const eventsSnapshot = await getDocs(q);
-      let eventsData = eventsSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
-
-      // Auto-mark events as completed if all todos are done and not already completed
-      const toComplete = eventsData.filter(ev =>
-        ev.status !== 'completed' &&
-        Array.isArray(ev.todos) &&
-        ev.todos.length > 0 &&
-        ev.todos.every(td => td.completed)
-      );
-      for (const ev of toComplete) {
-        try {
-          await updateDoc(doc(db, 'events', ev.id), { status: 'completed' });
-          ev.status = 'completed';
-        } catch (e) {
-          // Ignore update errors for now
-        }
-      }
-
-      // Keep a master copy of events and mirror into visible events
-      setAllEvents(eventsData);
-      setEvents(eventsData);
-
       // Centers, users, mentors, sops
       const [centersSnapshot, usersSnapshot, mentorsSnapshot, sopsSnapshot] = await Promise.all([
         getDocs(collection(db, 'centers')),
@@ -240,6 +216,61 @@ const Calendar = () => {
     } finally {
       setLoading(false);
     }
+  }, [currentUser]);
+
+  // Realtime listener for events limited to a date window (now -30 days .. now +15 days)
+  useEffect(() => {
+    if (!currentUser) return;
+    const eventsRef = collection(db, 'events');
+    const start = new Date();
+    start.setDate(start.getDate() - 30);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date();
+    end.setDate(end.getDate() + 15);
+    end.setHours(23, 59, 59, 999);
+
+    // Use a simple onSnapshot on the whole collection and filter client-side by the date window.
+    // This avoids client-side query creation/index issues and ensures events are visible.
+    const q = query(eventsRef);
+
+    const unsub = onSnapshot(q, async (snapshot) => {
+      try {
+        let eventsData = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+        // Filter to our desired date window on the client side; keep undated events
+        eventsData = eventsData.filter(ev => {
+          if (!ev.startDateTime) return true;
+          const d = toJSDate(ev.startDateTime);
+          if (!d) return true;
+          return d >= start && d <= end;
+        });
+
+        // Auto-mark events as completed if all todos are done and not already completed
+        const toComplete = eventsData.filter(ev =>
+          ev.status !== 'completed' &&
+          Array.isArray(ev.todos) &&
+          ev.todos.length > 0 &&
+          ev.todos.every(td => td.completed)
+        );
+        for (const ev of toComplete) {
+          try {
+            await updateDoc(doc(db, 'events', ev.id), { status: 'completed' });
+            ev.status = 'completed';
+          } catch (err) {
+            // ignore
+          }
+        }
+
+        setAllEvents(eventsData);
+        setEvents(eventsData);
+      } catch (err) {
+        console.error('Error processing events snapshot', err);
+      }
+    }, (err) => {
+      console.error('Events onSnapshot error', err);
+    });
+
+    return () => unsub();
   }, [currentUser]);
 
   // Export next week's events (Monday - Sunday)
@@ -688,7 +719,7 @@ const Calendar = () => {
             <Tooltip title="Reload data">
               <span>
                 <IconButton onClick={() => loadData()} color="primary" aria-label="refresh" disabled={loading}>
-                  <RefreshIcon />
+                  {loading ? <CircularProgress size={20} /> : <RefreshIcon />}
                 </IconButton>
               </span>
             </Tooltip>
@@ -839,11 +870,11 @@ const Calendar = () => {
             <TableCell sx={{ width: 120, whiteSpace: 'nowrap' }}>Date</TableCell>
             <TableCell sx={{ width: 120 }}>Status</TableCell>
             <TableCell sx={{ width: 240 }}>Title</TableCell>
-            <TableCell sx={{ width: 200 }}>Owner</TableCell>
+            <TableCell sx={{ width: 140 }}>Owner</TableCell>
                       {/* Description column removed from page view */}
-            <TableCell sx={{ width: 180 }}>Centers</TableCell>
-            <TableCell sx={{ width: '50%' }}>Tasks</TableCell>
-            <TableCell sx={{ width: 160 }}>Actions</TableCell>
+            <TableCell sx={{ width: 120 }}>Centers</TableCell>
+            <TableCell>Tasks</TableCell>
+            <TableCell sx={{ width: 120 }}>Actions</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -870,15 +901,15 @@ const Calendar = () => {
                                   />
                                 </TableCell>
                                 <TableCell><Typography sx={{ fontWeight: 700 }}>{event.title}</Typography></TableCell>
-                                <TableCell>{ownerName}</TableCell>
-                                <TableCell sx={{ width: 180, maxWidth: 200 }}>
+                                <TableCell sx={{ width: 140 }}>{ownerName}</TableCell>
+                                <TableCell sx={{ width: 120, maxWidth: 160 }}>
                                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                                     {(event.centers || []).map(center => (
                                       <Chip key={center} label={centerMap[center] || center} size="small" />
                                     ))}
                                   </Box>
                                 </TableCell>
-                                <TableCell sx={{ width: '50%' }}>
+                                <TableCell>
                                   <Box sx={{ maxWidth: '100%' }}>
                                     <Stack direction="column" spacing={0.5} sx={{ p: 0.5 }}>
                                       {(editingTodos[event.id] || event.todos || []).map(todo => (
@@ -930,25 +961,25 @@ const Calendar = () => {
                                     )}
                                   </Box>
                                 </TableCell>
-                                <TableCell>
-                                  <Stack direction="row" spacing={1}>
+                                <TableCell sx={{ width: 120 }}>
+                                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
                                     {!isEvaluator && (
-                                      <IconButton size="large" color="primary" onClick={() => handleEditEvent(event)} sx={{ p: 1.2, border: '2px solid', borderColor: 'primary.main', bgcolor: 'background.paper' }}>
-                                        <EditIcon fontSize="medium" />
+                                      <IconButton size="small" color="primary" onClick={() => handleEditEvent(event)} sx={{ p: 0.6, border: '1px solid', borderColor: 'primary.main', bgcolor: 'background.paper', borderRadius: 1 }}>
+                                        <EditIcon fontSize="small" />
                                       </IconButton>
                                     )}
-                                    <IconButton size="small" color="primary" onClick={() => openConfirm('duplicate', event)} title="Duplicate">
-                                      <ContentCopyIcon />
+                                    <IconButton size="small" color="primary" onClick={() => openConfirm('duplicate', event)} title="Duplicate" sx={{ p: 0.5 }}>
+                                      <ContentCopyIcon fontSize="small" />
                                     </IconButton>
-                                    <IconButton size="small" color="secondary" onClick={() => handleOpenReschedule(event)} sx={{ p: 1 }}>
-                                      <AutorenewIcon />
+                                    <IconButton size="small" color="secondary" onClick={() => handleOpenReschedule(event)} sx={{ p: 0.5 }}>
+                                      <AutorenewIcon fontSize="small" />
                                     </IconButton>
                                     {!isEvaluator && (
-                                      <IconButton size="small" color="error" onClick={() => openConfirm('delete', event)}>
-                                        <DeleteIcon />
+                                      <IconButton size="small" color="error" onClick={() => openConfirm('delete', event)} sx={{ p: 0.5 }}>
+                                        <DeleteIcon fontSize="small" />
                                       </IconButton>
                                     )}
-                                  </Stack>
+                                  </Box>
                                 </TableCell>
                               </TableRow>
                             );
