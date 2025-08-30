@@ -703,6 +703,17 @@ const Calendar = () => {
     return centerIds.map(id => centerMap[id] || id);
   };
 
+  // Who can view reschedule comments: admins/quality, the event owner, or any user who authored a comment
+  const canViewComments = (ev) => {
+    if (!ev || !currentUser) return false;
+    if (isAdminOrQuality) return true;
+    // Owner match (user owners use uid, some data may store id)
+    if (ev.ownerId && currentUser.uid && (ev.ownerId === currentUser.uid || ev.ownerId === currentUser.id)) return true;
+    // Comment author
+    if (Array.isArray(ev.comments) && ev.comments.some(c => c && c.userId && c.userId === currentUser.uid)) return true;
+    return false;
+  };
+
   return (
     <Container maxWidth="lg">
       <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
@@ -933,7 +944,7 @@ const Calendar = () => {
                                       )}
                                     </Stack>
 
-                                    {isAdminOrQuality && event.comments && event.comments.length > 0 && (
+                                    {canViewComments(event) && event.comments && event.comments.length > 0 && (
                                       <Box sx={{ mt: 1 }}>
                                         <Typography variant="subtitle2">Reschedule Comments</Typography>
                                         <Stack spacing={1} sx={{ mt: 0.5 }}>
@@ -1060,7 +1071,7 @@ const Calendar = () => {
                                 </IconButton>
                               )}
                             </Stack>
-                            {isAdminOrQuality && event.comments && event.comments.length > 0 && (
+                            {canViewComments(event) && event.comments && event.comments.length > 0 && (
                               <Box sx={{ mt: 1 }}>
                                 <Typography variant="subtitle2">Reschedule Comments</Typography>
                                 <Stack spacing={1} sx={{ mt: 0.5 }}>
