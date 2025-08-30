@@ -703,10 +703,11 @@ const Calendar = () => {
     return centerIds.map(id => centerMap[id] || id);
   };
 
-  // Who can view reschedule comments: admins/quality, the event owner, or any user who authored a comment
+  // Who can view reschedule comments: admins/quality, evaluators, the event owner, or any user who authored a comment
   const canViewComments = (ev) => {
     if (!ev || !currentUser) return false;
-    if (isAdminOrQuality) return true;
+    // Admins, quality team, and evaluators can view comments
+    if (isAdminOrQuality || isEvaluator) return true;
     // Owner match (user owners use uid, some data may store id)
     if (ev.ownerId && currentUser.uid && (ev.ownerId === currentUser.uid || ev.ownerId === currentUser.id)) return true;
     // Comment author
