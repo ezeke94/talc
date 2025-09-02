@@ -517,10 +517,10 @@ const Calendar = () => {
           lastModifiedBy: { userId: currentUser.uid, userName: currentUser.displayName },
           createdBy: { userId: currentUser.uid, userName: currentUser.displayName },
         });
-  setEvents(prev => [...prev, { ...eventData, id: docRef.id }]);
-  setAllEvents(prev => [...prev, { ...eventData, id: docRef.id }]);
-  // notification removed: event_create
-
+        // Do NOT append the created event to local state optimistically.
+        // The realtime onSnapshot listener will include the new document and
+        // update `allEvents`/`events`. This avoids a transient duplicate
+        // showing on create across devices.
       }
     } catch (err) {
       alert('Error saving event/task. Please try again.');
@@ -719,49 +719,51 @@ const Calendar = () => {
     <Container maxWidth="lg">
       <Paper elevation={3} sx={{ p: 3, borderRadius: 2 }}>
         <Box sx={{ mb: 3, background: 'linear-gradient(180deg, rgba(221,238,221,0.7), rgba(221,238,221,0.25))', p: 2, borderRadius: 2 }}>
-          <Stack direction="row" spacing={2} alignItems="center" sx={{ mb: 1 }}>
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="h5" sx={{ fontWeight: 700 }}>Events and Tasks</Typography>
+          <Stack spacing={1} sx={{ mb: 1 }}>
+            <Box>
+              <Typography variant="h5" sx={{ fontWeight: 700, textAlign: { xs: 'center', sm: 'left' } }}>Events and Tasks</Typography>
             </Box>
-            <Tooltip title="Filters">
-              <IconButton onClick={() => setFiltersOpen(v => !v)} color="primary" aria-label="filters">
-                <FilterListIcon />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Reload data">
-              <span>
-                <IconButton onClick={() => loadData()} color="primary" aria-label="refresh" disabled={loading}>
-                  {loading ? <CircularProgress size={20} /> : <RefreshIcon />}
+            <Stack direction="row" spacing={2} alignItems="center" sx={{ flexWrap: 'wrap', justifyContent: { xs: 'center', sm: 'flex-end' }, width: '100%' }}>
+              <Tooltip title="Filters">
+                <IconButton onClick={() => setFiltersOpen(v => !v)} color="primary" aria-label="filters">
+                  <FilterListIcon />
                 </IconButton>
-              </span>
-            </Tooltip>
-            <Tooltip title="Export next week's events (Mon–Sun)">
-              <span>
+              </Tooltip>
+              <Tooltip title="Reload data">
+                <span>
+                  <IconButton onClick={() => loadData()} color="primary" aria-label="refresh" disabled={loading}>
+                    {loading ? <CircularProgress size={20} /> : <RefreshIcon />}
+                  </IconButton>
+                </span>
+              </Tooltip>
+              <Tooltip title="Export next week's events (Mon–Sun)">
+                <span>
+                  <IconButton
+                    onClick={async () => { await handleExportNextWeekPdf(); }}
+                    color="primary"
+                    aria-label="export-pdf"
+                    disabled={exportingPdf}
+                  >
+                    <PictureAsPdfIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+              {!isMobile && (
+                <Button variant="contained" color="primary" onClick={() => setShowForm(true)}>
+                  Create New Event/Task
+                </Button>
+              )}
+              <Tooltip title={showHistory ? 'Showing history (completed items)' : 'Hide history (active items)'}>
                 <IconButton
-                  onClick={async () => { await handleExportNextWeekPdf(); }}
-                  color="primary"
-                  aria-label="export-pdf"
-                  disabled={exportingPdf}
+                  color={showHistory ? 'primary' : 'default'}
+                  onClick={() => setShowHistory(v => !v)}
+                  sx={{ ml: 1, border: showHistory ? '2px solid' : undefined, borderColor: showHistory ? 'primary.main' : undefined, bgcolor: showHistory ? 'background.paper' : undefined }}
+                  aria-label="toggle-history"
                 >
-                  <PictureAsPdfIcon />
+                  <HistoryIcon />
                 </IconButton>
-              </span>
-            </Tooltip>
-            {!isMobile && (
-              <Button variant="contained" color="primary" onClick={() => setShowForm(true)}>
-                Create New Event/Task
-              </Button>
-            )}
-            <Tooltip title={showHistory ? 'Showing history (completed items)' : 'Hide history (active items)'}>
-              <IconButton
-                color={showHistory ? 'primary' : 'default'}
-                onClick={() => setShowHistory(v => !v)}
-                sx={{ ml: 1, border: showHistory ? '2px solid' : undefined, borderColor: showHistory ? 'primary.main' : undefined, bgcolor: showHistory ? 'background.paper' : undefined }}
-                aria-label="toggle-history"
-              >
-                <HistoryIcon />
-              </IconButton>
-            </Tooltip>
+              </Tooltip>
+            </Stack>
           </Stack>
         </Box>
 
