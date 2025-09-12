@@ -9,6 +9,7 @@ node_modules
 # Production
 /dist
 /build
+.vite
 
 # Misc
 .DS_Store

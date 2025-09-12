@@ -58,10 +58,16 @@ const EventForm = ({ onSave, eventData = {}, centers = [], mentors = [], users =
 
   // SOP application
   const applySop = sopId => {
-    const sop = sops.find(s => s.id === sopId);
-    if (sop) {
-      setTodos(sop.todos.map(todo => ({ id: Date.now() + Math.random(), text: todo.text, completed: false })));
-      setSopId(sopId);
+    setSopId(sopId);
+    if (sopId) {
+      // SOP selected - apply SOP tasks
+      const sop = sops.find(s => s.id === sopId);
+      if (sop) {
+        setTodos(sop.todos.map(todo => ({ id: Date.now() + Math.random(), text: todo.text, completed: false })));
+      }
+    } else {
+      // SOP removed - clear all tasks and make them editable again
+      setTodos([]);
     }
   };
 
@@ -286,14 +292,28 @@ const EventForm = ({ onSave, eventData = {}, centers = [], mentors = [], users =
           </Select>
         </FormControl>
         <Typography variant={isMobile ? 'subtitle1' : 'h6'} sx={{ mt: 2 }}>To-Do List</Typography>
+        {sopId && (
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            Tasks are from SOP - modify the SOP to change task text. You can only toggle completion status.
+          </Typography>
+        )}
         {todos.map((todo, idx) => (
           <Box key={todo.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
             <Checkbox checked={todo.completed} onChange={e => updateTodo(idx, 'completed', e.target.checked)} size={isMobile ? 'small' : 'medium'} />
-            <TextField value={todo.text} onChange={e => updateTodo(idx, 'text', e.target.value)} size={isMobile ? 'small' : 'medium'} sx={{ flex: 1 }} />
-            <Button color="error" onClick={() => removeTodo(idx)} size={isMobile ? 'small' : 'medium'}>Delete</Button>
+            <TextField 
+              value={todo.text} 
+              onChange={e => updateTodo(idx, 'text', e.target.value)} 
+              size={isMobile ? 'small' : 'medium'} 
+              sx={{ flex: 1 }} 
+              disabled={!!sopId}
+              InputProps={{
+                readOnly: !!sopId
+              }}
+            />
+            <Button color="error" onClick={() => removeTodo(idx)} size={isMobile ? 'small' : 'medium'} disabled={!!sopId}>Delete</Button>
           </Box>
         ))}
-        <Button variant="outlined" onClick={addTodo} size={isMobile ? 'small' : 'medium'}>+ Add To-Do</Button>
+        <Button variant="outlined" onClick={addTodo} size={isMobile ? 'small' : 'medium'} disabled={!!sopId}>+ Add To-Do</Button>
         <Box sx={{ mt: 2 }}>
           <Button variant="contained" color="primary" onClick={handleSave} size={isMobile ? 'small' : 'medium'}>Save Event/Task</Button>
         </Box>

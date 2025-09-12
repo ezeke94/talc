@@ -38,6 +38,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import HistoryIcon from '@mui/icons-material/History';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import LinkIcon from '@mui/icons-material/Link';
 import EventForm from '../components/EventForm';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -163,6 +164,14 @@ const Calendar = () => {
     const user = users.find(u => (u.id || u.uid) === ev.ownerId);
     return user?.displayName || user?.email || '';
   };
+  
+  // Get SOP URL for an event
+  const getSopUrl = (ev) => {
+    if (!ev.sopId) return null;
+    const sop = sops.find(s => s.id === ev.sopId);
+    return sop?.url || null;
+  };
+  
   const toJSDate = (val) => {
     if (!val) return null;
     if (typeof val?.toDate === 'function') return val.toDate();
@@ -925,6 +934,11 @@ const Calendar = () => {
                                 </TableCell>
                                 <TableCell>
                                   <Box sx={{ maxWidth: '100%' }}>
+                                    {event.sopId && (
+                                      <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', mb: 0.5, display: 'block' }}>
+                                        Tasks from SOP
+                                      </Typography>
+                                    )}
                                     <Stack direction="column" spacing={0.5} sx={{ p: 0.5 }}>
                                       {(editingTodos[event.id] || event.todos || []).map(todo => (
                                         <Box key={todo.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
@@ -977,6 +991,13 @@ const Calendar = () => {
                                 </TableCell>
                                 <TableCell sx={{ width: 120 }}>
                                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+                                    {getSopUrl(event) && (
+                                      <Tooltip title="Open SOP Link">
+                                        <IconButton size="small" color="primary" onClick={() => window.open(getSopUrl(event), '_blank')} sx={{ p: 0.5 }}>
+                                          <LinkIcon fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    )}
                                     {!isEvaluator && (
                                       <IconButton size="small" color="primary" onClick={() => handleEditEvent(event)} sx={{ p: 0.6, border: '1px solid', borderColor: 'primary.main', bgcolor: 'background.paper', borderRadius: 1 }}>
                                         <EditIcon fontSize="small" />
@@ -1038,6 +1059,11 @@ const Calendar = () => {
                                 ))}
                               </Box>
                               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                                {event.sopId && (
+                                  <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', mb: 0.5, display: 'block', width: '100%' }}>
+                                    Tasks from SOP
+                                  </Typography>
+                                )}
                                 {(editingTodos[event.id] || event.todos || []).map(todo => (
                                   <Box key={todo.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                                     <input
@@ -1057,6 +1083,13 @@ const Calendar = () => {
                               </Box>
                             </Box>
                             <Stack direction="row" spacing={1} sx={{ mt: 1.5, alignItems: 'center' }}>
+                              {getSopUrl(event) && (
+                                <Tooltip title="Open SOP Link">
+                                  <IconButton size="small" color="primary" onClick={() => window.open(getSopUrl(event), '_blank')} sx={{ p: 0.6 }}>
+                                    <LinkIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
                               {!isEvaluator && (
                                 <IconButton size="small" color="primary" onClick={() => handleEditEvent(event)} sx={{ p: 0.6, border: '1px solid', borderColor: 'primary.main', bgcolor: 'background.paper', borderRadius: 1 }}>
                                   <EditIcon fontSize="small" />
