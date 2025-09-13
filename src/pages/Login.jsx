@@ -14,8 +14,8 @@ const Login = () => {
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        // Navigate only if currentUser is fully loaded and has a valid uid
-        if (currentUser && currentUser.uid) {
+        // Navigate only if currentUser is fully loaded, has a valid uid, and is active
+        if (currentUser && currentUser.uid && currentUser.isActive) {
             navigate('/');
         }
     }, [currentUser, navigate]);
@@ -132,6 +132,12 @@ const Login = () => {
                     {error && (
                         <Alert severity="error" sx={{ mt: 2 }}>
                             {error}
+                        </Alert>
+                    )}
+                    {/* Show pending approval message if user is logged in but inactive */}
+                    {currentUser && currentUser.uid && !currentUser.isActive && (
+                        <Alert severity="info" sx={{ mt: 2 }}>
+                            Your account is pending admin approval. Please wait for activation.
                         </Alert>
                     )}
                 </Box>
