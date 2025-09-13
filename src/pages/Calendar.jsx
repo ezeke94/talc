@@ -100,8 +100,14 @@ const Calendar = () => {
     setExpandedTodos(prev => ({ ...prev, [eventId]: !prev[eventId] }));
   };
   const { currentUser } = useAuth();
-  // Role helpers
-  const normalizedRole = useMemo(() => (currentUser?.role ? String(currentUser.role).trim().toLowerCase() : ''), [currentUser]);
+  // Role helpers with fallback to cached profile to avoid flicker when context updates lag
+  const normalizedRole = useMemo(() => {
+    if (currentUser?.role) return String(currentUser.role).trim().toLowerCase();
+    try {
+      const cached = JSON.parse(localStorage.getItem('talc_user_profile') || 'null');
+      return (cached?.role ? String(cached.role).trim().toLowerCase() : '');
+    } catch { return ''; }
+  }, [currentUser]);
   const isEvaluator = useMemo(() => normalizedRole === 'evaluator', [normalizedRole]);
   const isAdminOrQuality = useMemo(() => (normalizedRole === 'admin' || normalizedRole === 'quality'), [normalizedRole]);
 

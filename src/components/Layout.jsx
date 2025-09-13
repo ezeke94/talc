@@ -66,7 +66,12 @@ const Layout = () => {
     if (import.meta.env.DEV) {
         console.debug('Current user role:', currentUser && currentUser.role);
     }
-    const normalizedRole = (currentUser && typeof currentUser.role === 'string') ? currentUser.role.trim().toLowerCase() : '';
+    // Be resilient if role temporarily drops from context; fall back to cached profile
+    const roleFromCache = (() => {
+        try { return JSON.parse(localStorage.getItem('talc_user_profile') || 'null')?.role; } catch { return undefined; }
+    })();
+    const roleRaw = (currentUser && currentUser.role) || roleFromCache || '';
+    const normalizedRole = (typeof roleRaw === 'string') ? roleRaw.trim().toLowerCase() : '';
     const showUserManagement = ['admin', 'quality'].includes(normalizedRole);
     const menuItems = [
         { text: 'Calendar', path: '/calendar' },

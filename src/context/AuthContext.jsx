@@ -1,9 +1,9 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import { auth, db, persistencePromise } from '../firebase/config';
 import { onAuthStateChanged, getRedirectResult } from 'firebase/auth';
 import { CircularProgress, Box } from '@mui/material';
 // notifications removed
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 
 const AuthContext = createContext({ currentUser: null, loading: true });
 
@@ -15,6 +15,34 @@ export const AuthProvider = ({ children }) => {
     const [currentUser, setCurrentUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [authInitialized, setAuthInitialized] = useState(false);
+    // Keep a live subscription to the user's Firestore profile so role/centers never flicker
+    const userDocUnsubRef = useRef(null);
+
+    const stopUserDocSubscription = () => {
+        try { if (typeof userDocUnsubRef.current === 'function') userDocUnsubRef.current(); } catch {}
+        userDocUnsubRef.current = null;
+    };
+
+    const startUserDocSubscription = (uid, baseUserObj) => {
+        if (!uid) return;
+        // Avoid duplicate subscriptions
+        stopUserDocSubscription();
+        const userRef = doc(db, 'users', uid);
+        userDocUnsubRef.current = onSnapshot(userRef, (snap) => {
+            const data = snap.exists() ? snap.data() : null;
+            // Merge Firestore profile into current auth user object
+            setCurrentUser((prev) => {
+                const base = baseUserObj || prev || {};
+                const merged = { ...base, ...(data || {}) };
+                return merged;
+            });
+            // Cache for quick restore in PWA visibility changes
+            try { localStorage.setItem('talc_user_profile', JSON.stringify(data || {})); } catch {}
+        }, (e) => {
+            // On error, keep previous state; optionally log
+            console.debug('User doc subscription error:', e?.message || e);
+        });
+    };
 
     useEffect(() => {
         let unsubscribe = () => {};
@@ -109,12 +137,8 @@ export const AuthProvider = ({ children }) => {
                         if (snap.exists()) {
                             // Merge fresh auth data without clobbering role/centers
                             await setDoc(userRef, base, { merge: true });
-                            // Merge Firestore profile fields into currentUser
-                            setCurrentUser(current => {
-                                const merged = { ...user, ...snap.data() };
-                                console.log('AuthContext: Merged currentUser:', merged);
-                                return merged;
-                            });
+                            // Start/refresh live subscription to user profile for stable role/permissions
+                            startUserDocSubscription(user.uid, user);
                         } else {
                             await setDoc(userRef, {
                                 ...base,
@@ -126,15 +150,22 @@ export const AuthProvider = ({ children }) => {
                             const merged = { ...user, ...base, role: 'Evaluator', isActive: false, assignedCenters: [] };
                             console.log('AuthContext: Created new user doc, currentUser:', merged);
                             setCurrentUser(merged);
+                            // Begin subscription so future role updates are reflected immediately
+                            startUserDocSubscription(user.uid, merged);
                         }
                     } catch (e) {
                         console.error('Failed to upsert user profile', e);
+                        // Still ensure we subscribe to user doc to enrich when network recovers
                         setCurrentUser(user);
+                        startUserDocSubscription(user.uid, user);
                     } finally {
                         // Ensure we are not stuck in loading if any of the above throws
                         setLoading(false);
                     }
                 } else {
+                    // Signed out: clear state and any profile subscription/cache
+                    stopUserDocSubscription();
+                    try { localStorage.removeItem('talc_user_profile'); } catch {}
                     setCurrentUser(null);
                     setLoading(false);
                 }
@@ -147,7 +178,12 @@ export const AuthProvider = ({ children }) => {
             // Force a auth state check when PWA becomes visible
             if (auth.currentUser && !currentUser) {
                 console.debug('AuthContext: Found Firebase user but no context user, syncing');
-                setCurrentUser(auth.currentUser);
+                // Try to enrich with cached Firestore profile immediately to avoid role flicker
+                let cached = null;
+                try { cached = JSON.parse(localStorage.getItem('talc_user_profile') || 'null'); } catch {}
+                setCurrentUser({ ...auth.currentUser, ...(cached || {}) });
+                // Ensure live subscription is active
+                startUserDocSubscription(auth.currentUser.uid, auth.currentUser);
                 setLoading(false);
             }
         };
@@ -178,6 +214,8 @@ export const AuthProvider = ({ children }) => {
             } catch (e) {
                 /* ignore */
             }
+            // Clean up user doc subscription
+            stopUserDocSubscription();
             
             // Clean up PWA event listeners
             window.removeEventListener('pwa-app-visible', handlePWAAppVisible);
