@@ -110,12 +110,12 @@ export const AuthProvider = ({ children }) => {
                         } else {
                             await setDoc(userRef, {
                                 ...base,
-                                isActive: true,
+                                isActive: false, // Set inactive by default
                                 role: 'Evaluator',
                                 assignedCenters: [],
                                 createdAt: serverTimestamp(),
                             }, { merge: true });
-                            setCurrentUser({ ...user, ...base, role: 'Evaluator', isActive: true, assignedCenters: [] });
+                            setCurrentUser({ ...user, ...base, role: 'Evaluator', isActive: false, assignedCenters: [] });
                         }
                     } catch (e) {
                         console.error('Failed to upsert user profile', e);
