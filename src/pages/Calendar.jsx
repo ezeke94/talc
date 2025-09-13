@@ -1024,7 +1024,7 @@ const Calendar = () => {
                                         </IconButton>
                                       </Tooltip>
                                     )}
-                                    {!isEvaluator && (
+                                    {isAdminOrQuality && (
                                       <IconButton 
                                         size="small" 
                                         color="primary" 
@@ -1057,7 +1057,7 @@ const Calendar = () => {
                                     >
                                       <AutorenewIcon sx={{ fontSize: { xs: '0.85rem', sm: '1rem' } }} />
                                     </IconButton>
-                                    {!isEvaluator && (
+                                    {isAdminOrQuality && (
                                       <IconButton 
                                         size="small" 
                                         color="error" 
@@ -1148,7 +1148,7 @@ const Calendar = () => {
                                   </IconButton>
                                 </Tooltip>
                               )}
-                              {!isEvaluator && (
+                              {isAdminOrQuality && (
                                 <IconButton 
                                   size="small" 
                                   color="primary" 
@@ -1181,7 +1181,7 @@ const Calendar = () => {
                               >
                                 <AutorenewIcon sx={{ fontSize: { xs: '0.85rem', sm: '1rem' } }} />
                               </IconButton>
-                              {!isEvaluator && (
+                              {isAdminOrQuality && (
                                 <IconButton 
                                   size="small" 
                                   color="error" 
