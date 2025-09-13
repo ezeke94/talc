@@ -14,8 +14,8 @@ const Login = () => {
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        // Navigate only if currentUser is fully loaded, has a valid uid, and is active
-        if (currentUser && currentUser.uid && currentUser.isActive) {
+        // If a user is signed in, navigate to the app; ProtectedRoute will handle inactive accounts.
+        if (currentUser && currentUser.uid) {
             navigate('/');
         }
     }, [currentUser, navigate]);

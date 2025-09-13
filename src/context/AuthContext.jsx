@@ -102,11 +102,16 @@ export const AuthProvider = ({ children }) => {
                             photoURL: user.photoURL || '',
                             lastLoginAt: serverTimestamp(),
                         };
+                        console.log('AuthContext: Firestore user doc data:', snap.exists() ? snap.data() : null);
                         if (snap.exists()) {
                             // Merge fresh auth data without clobbering role/centers
                             await setDoc(userRef, base, { merge: true });
                             // Merge Firestore profile fields into currentUser
-                            setCurrentUser({ ...user, ...snap.data() });
+                            setCurrentUser(current => {
+                                const merged = { ...user, ...snap.data() };
+                                console.log('AuthContext: Merged currentUser:', merged);
+                                return merged;
+                            });
                         } else {
                             await setDoc(userRef, {
                                 ...base,
@@ -115,7 +120,9 @@ export const AuthProvider = ({ children }) => {
                                 assignedCenters: [],
                                 createdAt: serverTimestamp(),
                             }, { merge: true });
-                            setCurrentUser({ ...user, ...base, role: 'Evaluator', isActive: false, assignedCenters: [] });
+                            const merged = { ...user, ...base, role: 'Evaluator', isActive: false, assignedCenters: [] };
+                            console.log('AuthContext: Created new user doc, currentUser:', merged);
+                            setCurrentUser(merged);
                         }
                     } catch (e) {
                         console.error('Failed to upsert user profile', e);
