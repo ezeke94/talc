@@ -14,8 +14,8 @@ const Login = () => {
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        // Navigate as soon as a user exists; don't wait on profile sync
-        if (currentUser) {
+        // Navigate only if currentUser is fully loaded and has a valid uid
+        if (currentUser && currentUser.uid) {
             navigate('/');
         }
     }, [currentUser, navigate]);
