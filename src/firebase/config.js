@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence, indexedDBLocalPersistence } from "firebase/auth";
+import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence, indexedDBLocalPersistence, useDeviceLanguage } from "firebase/auth";
 import { initializeFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -16,6 +16,8 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize and export Firebase services for use throughout the app
 export const auth = getAuth(app);
+// Use the device/browser language for OAuth flows
+try { useDeviceLanguage(auth); } catch { /* noop */ }
 
 // Enhanced auth persistence setup for PWAs with better error handling
 export const persistencePromise = (async () => {
@@ -56,6 +58,8 @@ export const persistencePromise = (async () => {
   }
 })();
 export const googleProvider = new GoogleAuthProvider();
+// Encourage account chooser to avoid silent account reuse issues
+try { googleProvider.setCustomParameters({ prompt: 'select_account' }); } catch { /* noop */ }
 // Use long polling to avoid QUIC/HTTP3 issues on some networks and hosts.
 // Only one of these options may be used at a time; prefer force in production for stability.
 const firestoreSettings = import.meta.env?.PROD

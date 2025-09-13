@@ -12,6 +12,17 @@ const Login = () => {
     const { currentUser } = useAuth();
     const [signingIn, setSigningIn] = useState(false);
     const [error, setError] = useState(null);
+    const [showRedirectHint, setShowRedirectHint] = useState(false);
+
+    const isInAppBrowser = () => {
+        try {
+            const ua = navigator.userAgent || '';
+            // Common in-app browsers: Facebook, Instagram, Twitter, TikTok, Line
+            return /(FBAN|FB_IAB|FBAV|Instagram|Twitter|Line|MiuiBrowser|DuckDuckGo)/i.test(ua);
+        } catch {
+            return false;
+        }
+    };
 
     useEffect(() => {
         // If a user is signed in, navigate to the app; ProtectedRoute will handle inactive accounts.
@@ -20,18 +31,25 @@ const Login = () => {
         }
     }, [currentUser, navigate]);
 
-    // Detect iOS standalone (app added to home screen) where popups are blocked
-    const isIOSStandalone = () => {
+    // Surface redirect errors captured by AuthContext
+    useEffect(() => {
         try {
-            // navigator.standalone is true for iOS home-screen webapps
-            // For modern browsers, match display-mode media as an additional check
-            return (
-                (window.navigator && window.navigator.standalone) || 
-                window.matchMedia('(display-mode: standalone)').matches ||
-                window.location.search.includes('utm_source=homescreen') ||
-                document.referrer === "" ||
-                document.referrer.includes("android-app://")
-            );
+            const redirectErr = sessionStorage.getItem('authRedirectError');
+            if (redirectErr) {
+                console.warn('Login: Found redirect error from previous attempt:', redirectErr);
+                setError('Sign-in via redirect failed. Please try again, or allow popups and retry.');
+                sessionStorage.removeItem('authRedirectError');
+                setShowRedirectHint(true);
+            }
+        } catch {}
+    }, []);
+
+    // Detect true standalone PWA mode only (avoid referrer-based false positives)
+    const isStandalonePWA = () => {
+        try {
+            const isiOSStandalone = typeof window !== 'undefined' && !!window.navigator?.standalone; // iOS only
+            const displayStandalone = typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)')?.matches;
+            return isiOSStandalone || displayStandalone;
         } catch (e) {
             return false;
         }
@@ -42,10 +60,12 @@ const Login = () => {
             setError(null);
             setSigningIn(true);
             
-            console.log('Login: Starting sign-in process', { isStandalone: isIOSStandalone() });
+            const params = new URLSearchParams(window.location.search);
+            const authModeOverride = params.get('authMode'); // 'popup' | 'redirect' | null
+            console.log('Login: Starting sign-in process', { isStandalone: isStandalonePWA(), authModeOverride });
             
-            // Use redirect on iOS standalone or when popups are likely blocked
-            if (isIOSStandalone()) {
+            // Use redirect only in true standalone PWA mode (popups often blocked)
+            if (authModeOverride === 'redirect' || (authModeOverride !== 'popup' && isStandalonePWA())) {
                 console.log('Login: Using redirect sign-in for standalone mode');
                 await signInWithRedirect(auth, googleProvider);
                 // redirect will take over; navigation happens after redirect completes
@@ -59,17 +79,19 @@ const Login = () => {
                         navigate('/');
                         return;
                     }
+                    console.warn('Login: Popup returned no user; falling back to redirect');
+                    await signInWithRedirect(auth, googleProvider);
+                    return;
                 } catch (popupError) {
-                    console.warn('Login: Popup sign-in failed, trying redirect fallback:', popupError);
-                    
-                    if (popupError.code === 'auth/popup-blocked' || 
-                        popupError.code === 'auth/popup-closed-by-user' ||
-                        popupError.code === 'auth/cancelled-popup-request') {
-                        console.log('Login: Using redirect fallback due to popup issues');
+                    console.warn('Login: Popup sign-in failed:', popupError?.code, popupError);
+                    // Fallback to redirect for most errors except explicit user-cancel
+                    if (popupError?.code !== 'auth/popup-closed-by-user' && popupError?.code !== 'auth/cancelled-popup-request') {
+                        console.log('Login: Using redirect fallback after popup error');
                         await signInWithRedirect(auth, googleProvider);
                         return;
                     }
-                    throw popupError;
+                    // If user closed the popup, surface a friendly message
+                    setError('Sign-in popup was closed. Please try again.');
                 }
             }
         } catch (err) {
@@ -89,7 +111,7 @@ const Login = () => {
             setError(errorMessage);
         } finally {
             // Only set loading to false if we're not doing a redirect
-            if (!isIOSStandalone()) {
+            if (!isStandalonePWA()) {
                 setSigningIn(false);
             }
         }
@@ -124,6 +146,26 @@ const Login = () => {
                     >
                         Sign In with Google
                     </Button>
+                    {showRedirectHint && (
+                        <Button
+                            fullWidth
+                            variant="text"
+                            onClick={() => {
+                                try {
+                                    setSigningIn(true);
+                                    setError(null);
+                                    // Force redirect mode explicitly
+                                    signInWithRedirect(auth, googleProvider);
+                                } catch (e) {
+                                    setSigningIn(false);
+                                    setError('Redirect sign-in could not start. Please try again.');
+                                }
+                            }}
+                            sx={{ mt: 1 }}
+                        >
+                            Having trouble? Try redirect sign-in
+                        </Button>
+                    )}
                     {signingIn && (
                         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
                             <CircularProgress size={20} />
@@ -132,6 +174,11 @@ const Login = () => {
                     {error && (
                         <Alert severity="error" sx={{ mt: 2 }}>
                             {error}
+                        </Alert>
+                    )}
+                    {isInAppBrowser() && (
+                        <Alert severity="info" sx={{ mt: 2 }}>
+                            It looks like you are using an in‑app browser. If sign‑in doesn’t complete, open this page in your default browser (Safari/Chrome) and try again.
                         </Alert>
                     )}
                     {/* Show pending approval message if user is logged in but inactive */}

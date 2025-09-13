@@ -34,8 +34,14 @@ export const AuthProvider = ({ children }) => {
                 const redirectResult = await getRedirectResult(auth);
                 if (redirectResult?.user) {
                     console.debug('Redirect sign-in successful:', redirectResult.user.email);
+                    // Clear any previous redirect error markers
+                    try { sessionStorage.removeItem('authRedirectError'); } catch {}
+                } else {
+                    console.debug('No redirect user result present');
                 }
             } catch (e) {
+                // Persist redirect error so UI can surface it on the login screen
+                try { sessionStorage.setItem('authRedirectError', e?.code || e?.message || 'redirect_failed'); } catch {}
                 // No redirect result or failure is okay — continue
                 console.debug('No redirect result or redirect processing failed:', e?.message || e);
             }
@@ -46,13 +52,9 @@ export const AuthProvider = ({ children }) => {
             // Ensure auth persistence is configured for standalone PWA mode
             const isStandalone = () => {
                 try {
-                    return (
-                        window.navigator.standalone ||
-                        window.matchMedia('(display-mode: standalone)').matches ||
-                        window.location.search.includes('utm_source=homescreen') ||
-                        document.referrer === "" ||
-                        document.referrer.includes("android-app://")
-                    );
+                    const isiOSStandalone = !!window.navigator?.standalone;
+                    const displayStandalone = window.matchMedia?.('(display-mode: standalone)')?.matches;
+                    return isiOSStandalone || displayStandalone;
                 } catch (e) {
                     return false;
                 }
@@ -75,6 +77,7 @@ export const AuthProvider = ({ children }) => {
 
             // Now subscribe to auth state changes
             unsubscribe = onAuthStateChanged(auth, async (user) => {
+                console.debug('AuthStateChanged fired. User present?', !!user);
                 // Clear timeout since we got a response
                 if (authStateTimeout) {
                     clearTimeout(authStateTimeout);
