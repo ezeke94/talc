@@ -12,7 +12,6 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
-  Switch,
   TextField,
   CircularProgress,
   Box,
@@ -26,6 +25,8 @@ import {
   Stack,
   Grid,
 } from '@mui/material';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import { db } from '../firebase/config';
 import { collection, onSnapshot, updateDoc, doc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
@@ -39,6 +40,7 @@ const UserManagement = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [centers, setCenters] = useState([]);
+  const [activeLoading, setActiveLoading] = useState({}); // Track loading per user
   const theme = useTheme();
   const isSmall = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -49,7 +51,15 @@ const UserManagement = () => {
     setLoading(true);
     setError('');
     const unsub = onSnapshot(collection(db, 'users'), (snapshot) => {
-      setUsers(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      // Ensure isActive is false for new users if not set
+      setUsers(snapshot.docs.map(d => {
+        const data = d.data();
+        return {
+          id: d.id,
+          ...data,
+          isActive: typeof data.isActive === 'boolean' ? data.isActive : false
+        };
+      }));
       setLoading(false);
     }, (e) => {
       console.error('Failed to subscribe to users', e);
@@ -91,8 +101,13 @@ const UserManagement = () => {
   await updateDoc(doc(db, 'users', userId), { role: newRole });
   };
 
-  const handleActiveChange = async (userId, isActive) => {
-  await updateDoc(doc(db, 'users', userId), { isActive });
+  const handleActiveChange = (userId, isActive) => {
+    setActiveLoading(prev => ({ ...prev, [userId]: true }));
+    updateDoc(doc(db, 'users', userId), { isActive })
+      .catch(() => {})
+      .finally(() => {
+        setActiveLoading(prev => ({ ...prev, [userId]: false }));
+      });
   };
 
   return (
@@ -113,15 +128,15 @@ const UserManagement = () => {
         ) : error ? (
           <Typography color="error">{error}</Typography>
         ) : isSmall ? (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {filteredSortedUsers.map(user => (
-              <Card key={user.id} variant="outlined">
+              <Card key={user.id} variant="outlined" sx={{ boxShadow: 3, borderRadius: 3, bgcolor: 'grey.50', p: 2 }}>
                 <CardContent>
-                  <Stack spacing={1}>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>{user.name || user.displayName || user.email || '-'}</Typography>
+                  <Stack spacing={2}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: 'primary.main' }}>{user.name || user.displayName || user.email || '-'}</Typography>
                     <Typography variant="body2" color="text.secondary">{user.email || '-'}</Typography>
 
-                    <FormControl fullWidth size="small">
+                    <FormControl fullWidth size="medium">
                       <InputLabel>Role</InputLabel>
                       {canManage ? (
                         <Select
@@ -138,39 +153,34 @@ const UserManagement = () => {
                       )}
                     </FormControl>
 
-                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Typography variant="body2">Active</Typography>
-                        {canManage ? (
-                          <Switch
-                            checked={!!user.isActive}
-                            onChange={e => handleActiveChange(user.id, e.target.checked)}
-                            color="primary"
-                          />
-                        ) : (!!user.isActive ? <Typography>Yes</Typography> : <Typography>No</Typography>)}
-                      </Box>
+                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', mt: 1 }}>
+                      <Typography variant="body2">Status:</Typography>
+                      {canManage ? (
+                        <ToggleButtonGroup
+                          value={!!user.isActive ? 'active' : 'inactive'}
+                          exclusive
+                          onChange={(e, val) => {
+                            if (val !== null) handleActiveChange(user.id, val === 'active');
+                          }}
+                          size="medium"
+                          disabled={!!activeLoading[user.id]}
+                        >
+                          <ToggleButton value="active" color="success" sx={{ px: 3 }}>Active</ToggleButton>
+                          <ToggleButton value="inactive" color="error" sx={{ px: 3 }}>Inactive</ToggleButton>
+                        </ToggleButtonGroup>
+                      ) : (!!user.isActive ? <Chip label="Active" color="success" /> : <Chip label="Inactive" color="error" />)}
                     </Box>
 
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Centers</InputLabel>
+                    <FormControl fullWidth size="medium" sx={{ mt: 1 }}>
+                      <InputLabel>Center</InputLabel>
                       {canManage ? (
                         <Select
-                          multiple
-                          value={Array.isArray(user.assignedCenters) ? user.assignedCenters : []}
+                          value={Array.isArray(user.assignedCenters) ? user.assignedCenters[0] || '' : (user.assignedCenters || '')}
                           onChange={async (e) => {
                             const newVal = e.target.value;
-                            await updateDoc(doc(db, 'users', user.id), { assignedCenters: newVal });
+                            await updateDoc(doc(db, 'users', user.id), { assignedCenters: newVal ? [newVal] : [] });
                           }}
-                          input={<OutlinedInput label="Centers" />}
-                          renderValue={(selected) => (
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                              {selected.length > 0
-                                ? selected.map((val) => (
-                                    <Chip key={val} label={(centerOptions.find(c => c.value === val)?.label || val)} size="small" />
-                                  ))
-                                : <Chip label="-" size="small" />}
-                            </Box>
-                          )}
+                          input={<OutlinedInput label="Center" />}
                         >
                           {centerOptions.map(opt => (
                             <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
@@ -178,7 +188,7 @@ const UserManagement = () => {
                         </Select>
                       ) : (
                         <Box sx={{ py: 1 }}>{Array.isArray(user.assignedCenters) && user.assignedCenters.length > 0
-                          ? user.assignedCenters.map(val => (centerOptions.find(c => c.value === val)?.label || val)).join(', ')
+                          ? (centerOptions.find(c => c.value === user.assignedCenters[0])?.label || user.assignedCenters[0])
                           : '-'}</Box>
                       )}
                     </FormControl>
@@ -188,19 +198,19 @@ const UserManagement = () => {
             ))}
           </Box>
         ) : (
-          <Table>
+          <Table size="small" sx={{ bgcolor: 'background.paper', borderRadius: 2, boxShadow: 1 }}>
             <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Email</TableCell>
-                <TableCell>Role</TableCell>
-                <TableCell>Active</TableCell>
-                <TableCell>Centers</TableCell>
+              <TableRow sx={{ bgcolor: 'grey.100' }}>
+                <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Email</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Role</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
+                <TableCell sx={{ fontWeight: 700 }}>Centers</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
-        {filteredSortedUsers.map(user => (
-                <TableRow key={user.id}>
+              {filteredSortedUsers.map(user => (
+                <TableRow key={user.id} hover>
                   <TableCell>{user.name || user.displayName || user.email || '-'}</TableCell>
                   <TableCell>{user.email || '-'}</TableCell>
                   <TableCell>
@@ -221,34 +231,31 @@ const UserManagement = () => {
                   </TableCell>
                   <TableCell>
                     {canManage ? (
-                      <Switch
-                        checked={!!user.isActive}
-                        onChange={e => handleActiveChange(user.id, e.target.checked)}
-                        color="primary"
-                      />
-                    ) : (!!user.isActive ? 'Active' : 'Inactive')}
+                      <ToggleButtonGroup
+                        value={!!user.isActive ? 'active' : 'inactive'}
+                        exclusive
+                        onChange={(e, val) => {
+                          if (val !== null) handleActiveChange(user.id, val === 'active');
+                        }}
+                        size="small"
+                        disabled={!!activeLoading[user.id]}
+                      >
+                        <ToggleButton value="active" color="success" sx={{ px: 2, fontSize: '0.95rem' }}>Active</ToggleButton>
+                        <ToggleButton value="inactive" color="error" sx={{ px: 2, fontSize: '0.95rem' }}>Inactive</ToggleButton>
+                      </ToggleButtonGroup>
+                    ) : (!!user.isActive ? <Chip label="Active" color="success" size="small" /> : <Chip label="Inactive" color="error" size="small" />)}
                   </TableCell>
                   <TableCell>
                     {canManage ? (
-                      <FormControl size="small" sx={{ minWidth: 220 }}>
-                        <InputLabel>Centers</InputLabel>
+                      <FormControl size="small" sx={{ minWidth: 180 }}>
+                        <InputLabel>Center</InputLabel>
                         <Select
-                          multiple
-                          value={Array.isArray(user.assignedCenters) ? user.assignedCenters : []}
+                          value={Array.isArray(user.assignedCenters) ? user.assignedCenters[0] || '' : (user.assignedCenters || '')}
                           onChange={async (e) => {
                             const newVal = e.target.value;
-                            await updateDoc(doc(db, 'users', user.id), { assignedCenters: newVal });
+                            await updateDoc(doc(db, 'users', user.id), { assignedCenters: newVal ? [newVal] : [] });
                           }}
-                          input={<OutlinedInput label="Centers" />}
-                          renderValue={(selected) => (
-                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                              {selected.length > 0
-                                ? selected.map((val) => (
-                                    <Chip key={val} label={(centerOptions.find(c => c.value === val)?.label || val)} size="small" />
-                                  ))
-                                : <Chip label="-" size="small" />}
-                            </Box>
-                          )}
+                          input={<OutlinedInput label="Center" />}
                         >
                           {centerOptions.map(opt => (
                             <MenuItem key={opt.value} value={opt.value}>{opt.label}</MenuItem>
@@ -256,7 +263,7 @@ const UserManagement = () => {
                         </Select>
                       </FormControl>
                     ) : (Array.isArray(user.assignedCenters) && user.assignedCenters.length > 0
-                          ? user.assignedCenters.map(val => (centerOptions.find(c => c.value === val)?.label || val)).join(', ')
+                          ? (centerOptions.find(c => c.value === user.assignedCenters[0])?.label || user.assignedCenters[0])
                           : '-')}
                   </TableCell>
                 </TableRow>

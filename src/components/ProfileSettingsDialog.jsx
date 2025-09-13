@@ -8,7 +8,7 @@ const ProfileSettingsDialog = ({ onClose }) => {
   const { currentUser } = useAuth();
   const [userData, setUserData] = useState(null);
   const [name, setName] = useState('');
-  const [assignedCenters, setAssignedCenters] = useState([]);
+  const [assignedCenter, setAssignedCenter] = useState('');
   const [centers, setCenters] = useState([]);
 
   useEffect(() => {
@@ -18,7 +18,11 @@ const ProfileSettingsDialog = ({ onClose }) => {
       const data = snap.exists() ? snap.data() : null;
       setUserData(data);
       setName(data?.name || data?.displayName || '');
-      setAssignedCenters(data?.assignedCenters || []);
+      if (Array.isArray(data?.assignedCenters)) {
+        setAssignedCenter(data.assignedCenters[0] || '');
+      } else {
+        setAssignedCenter(data?.assignedCenters || '');
+      }
     });
     const unsub = onSnapshot(collection(db, 'centers'), (snap) => {
       setCenters(snap.docs.map(d => ({ id: d.id, ...(d.data() || {}) })));
@@ -30,7 +34,7 @@ const ProfileSettingsDialog = ({ onClose }) => {
     if (!currentUser) return;
     await updateDoc(doc(db, 'users', currentUser.uid), {
       name,
-      assignedCenters,
+      assignedCenters: assignedCenter ? [assignedCenter] : [],
     });
     onClose?.();
   };
@@ -39,19 +43,12 @@ const ProfileSettingsDialog = ({ onClose }) => {
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
       <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} fullWidth />
       <FormControl fullWidth size="small">
-        <InputLabel>Assigned Centers</InputLabel>
+        <InputLabel id="center-select-label">Assigned Center</InputLabel>
         <Select
-          multiple
-          value={assignedCenters}
-          onChange={(e) => setAssignedCenters(e.target.value)}
-          input={<OutlinedInput label="Assigned Centers" />}
-          renderValue={(selected) => (
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-              {selected.map((val) => (
-                <Chip key={val} label={(centers.find(c => (c.id || c.name) === val)?.name) || val} size="small" />
-              ))}
-            </Box>
-          )}
+          labelId="center-select-label"
+          value={assignedCenter}
+          onChange={e => setAssignedCenter(e.target.value)}
+          input={<OutlinedInput label="Assigned Center" />}
         >
           {centers.map(c => (
             <MenuItem key={c.id || c.name} value={c.id || c.name}>{c.name || c.id}</MenuItem>

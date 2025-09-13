@@ -25,7 +25,13 @@ const Login = () => {
         try {
             // navigator.standalone is true for iOS home-screen webapps
             // For modern browsers, match display-mode media as an additional check
-            return (window.navigator && window.navigator.standalone) || window.matchMedia('(display-mode: standalone)').matches;
+            return (
+                (window.navigator && window.navigator.standalone) || 
+                window.matchMedia('(display-mode: standalone)').matches ||
+                window.location.search.includes('utm_source=homescreen') ||
+                document.referrer === "" ||
+                document.referrer.includes("android-app://")
+            );
         } catch (e) {
             return false;
         }
@@ -35,27 +41,57 @@ const Login = () => {
         try {
             setError(null);
             setSigningIn(true);
+            
+            console.log('Login: Starting sign-in process', { isStandalone: isIOSStandalone() });
+            
             // Use redirect on iOS standalone or when popups are likely blocked
             if (isIOSStandalone()) {
+                console.log('Login: Using redirect sign-in for standalone mode');
                 await signInWithRedirect(auth, googleProvider);
                 // redirect will take over; navigation happens after redirect completes
             } else {
-                await signInWithPopup(auth, googleProvider);
-                // Navigate immediately after popup success to avoid waiting on background profile sync
-                navigate('/');
-                return;
+                console.log('Login: Attempting popup sign-in for browser mode');
+                try {
+                    const result = await signInWithPopup(auth, googleProvider);
+                    if (result?.user) {
+                        console.log('Login: Popup sign-in successful');
+                        // Navigate immediately after popup success to avoid waiting on background profile sync
+                        navigate('/');
+                        return;
+                    }
+                } catch (popupError) {
+                    console.warn('Login: Popup sign-in failed, trying redirect fallback:', popupError);
+                    
+                    if (popupError.code === 'auth/popup-blocked' || 
+                        popupError.code === 'auth/popup-closed-by-user' ||
+                        popupError.code === 'auth/cancelled-popup-request') {
+                        console.log('Login: Using redirect fallback due to popup issues');
+                        await signInWithRedirect(auth, googleProvider);
+                        return;
+                    }
+                    throw popupError;
+                }
             }
         } catch (err) {
-            console.error('Popup sign-in failed, falling back to redirect:', err);
-            setError(err?.message || 'Sign-in failed. Trying redirect fallback.');
-            try {
-                await signInWithRedirect(auth, googleProvider);
-            } catch (e) {
-                console.error('Redirect sign-in also failed:', e);
-                setError(e?.message || 'Redirect sign-in failed. Check your network or pop-up settings.');
+            console.error('Login: Sign-in error:', err);
+            let errorMessage = 'Sign-in failed. Please try again.';
+            
+            if (err.code === 'auth/network-request-failed') {
+                errorMessage = 'Network error. Please check your connection and try again.';
+            } else if (err.code === 'auth/popup-blocked') {
+                errorMessage = 'Popup was blocked. Please allow popups and try again.';
+            } else if (err.code === 'auth/web-storage-unsupported') {
+                errorMessage = 'Web storage is not supported. Please enable cookies and local storage.';
+            } else if (err.message) {
+                errorMessage = err.message;
             }
+            
+            setError(errorMessage);
         } finally {
-            setSigningIn(false);
+            // Only set loading to false if we're not doing a redirect
+            if (!isIOSStandalone()) {
+                setSigningIn(false);
+            }
         }
     };
 

@@ -17,7 +17,6 @@ import {
   Tooltip,
   CircularProgress,
   List,
-  
   FormControl,
   InputLabel,
   Select,
@@ -732,16 +731,29 @@ const Calendar = () => {
             <Box>
               <Typography variant="h5" sx={{ fontWeight: 700, textAlign: { xs: 'center', sm: 'left' } }}>Events and Tasks</Typography>
             </Box>
-            <Stack direction="row" spacing={2} alignItems="center" sx={{ flexWrap: 'wrap', justifyContent: { xs: 'center', sm: 'flex-end' }, width: '100%' }}>
+            <Stack direction="row" spacing={{ xs: 1, sm: 2 }} alignItems="center" sx={{ flexWrap: 'wrap', justifyContent: { xs: 'center', sm: 'flex-end' }, width: '100%' }}>
               <Tooltip title="Filters">
-                <IconButton onClick={() => setFiltersOpen(v => !v)} color="primary" aria-label="filters">
-                  <FilterListIcon />
+                <IconButton 
+                  onClick={() => setFiltersOpen(v => !v)} 
+                  color="primary" 
+                  aria-label="filters"
+                  size={isMobile ? "small" : "medium"}
+                  sx={{ p: { xs: 1, sm: 1.5 } }}
+                >
+                  <FilterListIcon sx={{ fontSize: { xs: '1.1rem', sm: '1.5rem' } }} />
                 </IconButton>
               </Tooltip>
               <Tooltip title="Reload data">
                 <span>
-                  <IconButton onClick={() => loadData()} color="primary" aria-label="refresh" disabled={loading}>
-                    {loading ? <CircularProgress size={20} /> : <RefreshIcon />}
+                  <IconButton 
+                    onClick={() => loadData()} 
+                    color="primary" 
+                    aria-label="refresh" 
+                    disabled={loading}
+                    size={isMobile ? "small" : "medium"}
+                    sx={{ p: { xs: 1, sm: 1.5 } }}
+                  >
+                    {loading ? <CircularProgress size={isMobile ? 16 : 20} /> : <RefreshIcon sx={{ fontSize: { xs: '1.1rem', sm: '1.5rem' } }} />}
                   </IconButton>
                 </span>
               </Tooltip>
@@ -752,8 +764,10 @@ const Calendar = () => {
                     color="primary"
                     aria-label="export-pdf"
                     disabled={exportingPdf}
+                    size={isMobile ? "small" : "medium"}
+                    sx={{ p: { xs: 1, sm: 1.5 } }}
                   >
-                    <PictureAsPdfIcon />
+                    <PictureAsPdfIcon sx={{ fontSize: { xs: '1.1rem', sm: '1.5rem' } }} />
                   </IconButton>
                 </span>
               </Tooltip>
@@ -766,10 +780,17 @@ const Calendar = () => {
                 <IconButton
                   color={showHistory ? 'primary' : 'default'}
                   onClick={() => setShowHistory(v => !v)}
-                  sx={{ ml: 1, border: showHistory ? '2px solid' : undefined, borderColor: showHistory ? 'primary.main' : undefined, bgcolor: showHistory ? 'background.paper' : undefined }}
+                  sx={{ 
+                    ml: { xs: 0, sm: 1 }, 
+                    p: { xs: 1, sm: 1.5 },
+                    border: showHistory ? '2px solid' : undefined, 
+                    borderColor: showHistory ? 'primary.main' : undefined, 
+                    bgcolor: showHistory ? 'background.paper' : undefined 
+                  }}
                   aria-label="toggle-history"
+                  size={isMobile ? "small" : "medium"}
                 >
-                  <HistoryIcon />
+                  <HistoryIcon sx={{ fontSize: { xs: '1.1rem', sm: '1.5rem' } }} />
                 </IconButton>
               </Tooltip>
             </Stack>
@@ -990,28 +1011,60 @@ const Calendar = () => {
                                   </Box>
                                 </TableCell>
                                 <TableCell sx={{ width: 120 }}>
-                                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+                                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: { xs: 0.25, sm: 0.5 }, alignItems: 'center' }}>
                                     {getSopUrl(event) && (
                                       <Tooltip title="Open SOP Link">
-                                        <IconButton size="small" color="primary" onClick={() => window.open(getSopUrl(event), '_blank')} sx={{ p: 0.5 }}>
-                                          <LinkIcon fontSize="small" />
+                                        <IconButton 
+                                          size="small" 
+                                          color="primary" 
+                                          onClick={() => window.open(getSopUrl(event), '_blank')} 
+                                          sx={{ p: { xs: 0.15, sm: 0.25 } }}
+                                        >
+                                          <LinkIcon sx={{ fontSize: { xs: '0.85rem', sm: '1rem' } }} />
                                         </IconButton>
                                       </Tooltip>
                                     )}
                                     {!isEvaluator && (
-                                      <IconButton size="small" color="primary" onClick={() => handleEditEvent(event)} sx={{ p: 0.6, border: '1px solid', borderColor: 'primary.main', bgcolor: 'background.paper', borderRadius: 1 }}>
-                                        <EditIcon fontSize="small" />
+                                      <IconButton 
+                                        size="small" 
+                                        color="primary" 
+                                        onClick={() => handleEditEvent(event)} 
+                                        sx={{ 
+                                          p: { xs: 0.15, sm: 0.25 }, 
+                                          border: '1px solid', 
+                                          borderColor: 'primary.main', 
+                                          bgcolor: 'background.paper', 
+                                          borderRadius: 1 
+                                        }}
+                                      >
+                                        <EditIcon sx={{ fontSize: { xs: '0.85rem', sm: '1rem' } }} />
                                       </IconButton>
                                     )}
-                                    <IconButton size="small" color="primary" onClick={() => openConfirm('duplicate', event)} title="Duplicate" sx={{ p: 0.5 }}>
-                                      <ContentCopyIcon fontSize="small" />
+                                    <IconButton 
+                                      size="small" 
+                                      color="primary" 
+                                      onClick={() => openConfirm('duplicate', event)} 
+                                      title="Duplicate" 
+                                      sx={{ p: { xs: 0.15, sm: 0.25 } }}
+                                    >
+                                      <ContentCopyIcon sx={{ fontSize: { xs: '0.85rem', sm: '1rem' } }} />
                                     </IconButton>
-                                    <IconButton size="small" color="secondary" onClick={() => handleOpenReschedule(event)} sx={{ p: 0.5 }}>
-                                      <AutorenewIcon fontSize="small" />
+                                    <IconButton 
+                                      size="small" 
+                                      color="secondary" 
+                                      onClick={() => handleOpenReschedule(event)} 
+                                      sx={{ p: { xs: 0.15, sm: 0.25 } }}
+                                    >
+                                      <AutorenewIcon sx={{ fontSize: { xs: '0.85rem', sm: '1rem' } }} />
                                     </IconButton>
                                     {!isEvaluator && (
-                                      <IconButton size="small" color="error" onClick={() => openConfirm('delete', event)} sx={{ p: 0.5 }}>
-                                        <DeleteIcon fontSize="small" />
+                                      <IconButton 
+                                        size="small" 
+                                        color="error" 
+                                        onClick={() => openConfirm('delete', event)} 
+                                        sx={{ p: { xs: 0.15, sm: 0.25 } }}
+                                      >
+                                        <DeleteIcon sx={{ fontSize: { xs: '0.85rem', sm: '1rem' } }} />
                                       </IconButton>
                                     )}
                                   </Box>
@@ -1082,28 +1135,60 @@ const Calendar = () => {
                                 )}
                               </Box>
                             </Box>
-                            <Stack direction="row" spacing={1} sx={{ mt: 1.5, alignItems: 'center' }}>
+                            <Stack direction="row" spacing={{ xs: 0.25, sm: 0.5 }} sx={{ mt: 1.5, alignItems: 'center' }}>
                               {getSopUrl(event) && (
                                 <Tooltip title="Open SOP Link">
-                                  <IconButton size="small" color="primary" onClick={() => window.open(getSopUrl(event), '_blank')} sx={{ p: 0.6 }}>
-                                    <LinkIcon fontSize="small" />
+                                  <IconButton 
+                                    size="small" 
+                                    color="primary" 
+                                    onClick={() => window.open(getSopUrl(event), '_blank')} 
+                                    sx={{ p: { xs: 0.15, sm: 0.25 } }}
+                                  >
+                                    <LinkIcon sx={{ fontSize: { xs: '0.85rem', sm: '1rem' } }} />
                                   </IconButton>
                                 </Tooltip>
                               )}
                               {!isEvaluator && (
-                                <IconButton size="small" color="primary" onClick={() => handleEditEvent(event)} sx={{ p: 0.6, border: '1px solid', borderColor: 'primary.main', bgcolor: 'background.paper', borderRadius: 1 }}>
-                                  <EditIcon fontSize="small" />
+                                <IconButton 
+                                  size="small" 
+                                  color="primary" 
+                                  onClick={() => handleEditEvent(event)} 
+                                  sx={{ 
+                                    p: { xs: 0.15, sm: 0.25 }, 
+                                    border: '1px solid', 
+                                    borderColor: 'primary.main', 
+                                    bgcolor: 'background.paper', 
+                                    borderRadius: 1 
+                                  }}
+                                >
+                                  <EditIcon sx={{ fontSize: { xs: '0.85rem', sm: '1rem' } }} />
                                 </IconButton>
                               )}
-                              <IconButton size="small" color="primary" onClick={() => openConfirm('duplicate', event)} title="Duplicate">
-                                <ContentCopyIcon fontSize="small" />
+                              <IconButton 
+                                size="small" 
+                                color="primary" 
+                                onClick={() => openConfirm('duplicate', event)} 
+                                title="Duplicate" 
+                                sx={{ p: { xs: 0.15, sm: 0.25 } }}
+                              >
+                                <ContentCopyIcon sx={{ fontSize: { xs: '0.85rem', sm: '1rem' } }} />
                               </IconButton>
-                              <IconButton size="small" color="secondary" onClick={() => handleOpenReschedule(event)} sx={{ p: 0.6 }}>
-                                <AutorenewIcon fontSize="small" />
+                              <IconButton 
+                                size="small" 
+                                color="secondary" 
+                                onClick={() => handleOpenReschedule(event)} 
+                                sx={{ p: { xs: 0.15, sm: 0.25 } }}
+                              >
+                                <AutorenewIcon sx={{ fontSize: { xs: '0.85rem', sm: '1rem' } }} />
                               </IconButton>
                               {!isEvaluator && (
-                                <IconButton size="small" color="error" onClick={() => openConfirm('delete', event)}>
-                                  <DeleteIcon fontSize="small" />
+                                <IconButton 
+                                  size="small" 
+                                  color="error" 
+                                  onClick={() => openConfirm('delete', event)} 
+                                  sx={{ p: { xs: 0.15, sm: 0.25 } }}
+                                >
+                                  <DeleteIcon sx={{ fontSize: { xs: '0.85rem', sm: '1rem' } }} />
                                 </IconButton>
                               )}
                             </Stack>

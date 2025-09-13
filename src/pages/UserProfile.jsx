@@ -10,7 +10,7 @@ const UserProfile = () => {
   const [loading, setLoading] = useState(true);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [editName, setEditName] = useState('');
-  const [editCenters, setEditCenters] = useState('');
+  const [editCenter, setEditCenter] = useState('');
   const [centers, setCenters] = useState([]);
 
   useEffect(() => {
@@ -19,7 +19,12 @@ const UserProfile = () => {
       setLoading(true);
       const userRef = doc(db, 'users', currentUser.uid);
       const userSnap = await getDoc(userRef);
-      setUserData(userSnap.exists() ? userSnap.data() : null);
+      let data = userSnap.exists() ? userSnap.data() : null;
+      // Always keep only the first center
+      if (data && Array.isArray(data.assignedCenters)) {
+        data = { ...data, assignedCenters: data.assignedCenters.length > 0 ? [data.assignedCenters[0]] : [] };
+      }
+      setUserData(data);
       setLoading(false);
     };
     fetchUser();
@@ -37,15 +42,23 @@ const UserProfile = () => {
   // Open edit dialog
   const handleOpenEdit = () => {
     setEditName(userData?.name || '');
-  setEditCenters(userData?.assignedCenters || []);
+    // Always use only the first center for editing
+    let center = '';
+    if (Array.isArray(userData?.assignedCenters)) {
+      center = userData.assignedCenters[0] || '';
+    } else if (userData?.assignedCenters) {
+      center = userData.assignedCenters;
+    }
+    setEditCenter(center);
     setEditDialogOpen(true);
   };
 
   // Save profile edits
   const handleSaveEdit = async () => {
     const userRef = doc(db, 'users', currentUser.uid);
-    await updateDoc(userRef, { name: editName, assignedCenters: editCenters });
-    setUserData({ ...userData, name: editName, assignedCenters: editCenters });
+    // Only save one center
+    await updateDoc(userRef, { name: editName, assignedCenters: editCenter ? [editCenter] : [] });
+    setUserData({ ...userData, name: editName, assignedCenters: editCenter ? [editCenter] : [] });
     setEditDialogOpen(false);
   };
 
@@ -68,7 +81,14 @@ const UserProfile = () => {
                 <ListItemText primary="Role" secondary={userData.role} />
               </ListItem>
               <ListItem>
-                <ListItemText primary="Assigned Centers" secondary={(userData.assignedCenters || []).join(', ')} />
+                <ListItemText
+                  primary="Assigned Center"
+                  secondary={
+                    Array.isArray(userData.assignedCenters) && userData.assignedCenters.length > 0
+                      ? (centers.find(c => (c.id || c.name) === userData.assignedCenters[0])?.name || userData.assignedCenters[0])
+                      : '-'
+                  }
+                />
               </ListItem>
               <ListItem>
                 <ListItemText primary="Account Status" secondary={userData.isActive ? 'Active' : 'Inactive'} />
@@ -82,19 +102,12 @@ const UserProfile = () => {
               <DialogContent>
                 <TextField label="Name" value={editName} onChange={e => setEditName(e.target.value)} fullWidth sx={{ mb: 2 }} />
                 <FormControl fullWidth size="small">
-                  <InputLabel>Assigned Centers</InputLabel>
+                  <InputLabel id="center-select-label">Assigned Center</InputLabel>
                   <Select
-                    multiple
-                    value={editCenters}
-                    onChange={(e) => setEditCenters(e.target.value)}
-                    input={<OutlinedInput label="Assigned Centers" />}
-                    renderValue={(selected) => (
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {selected.map((val) => (
-                          <Chip key={val} label={(centers.find(c => (c.id || c.name) === val)?.name) || val} size="small" />
-                        ))}
-                      </Box>
-                    )}
+                    labelId="center-select-label"
+                    value={editCenter}
+                    onChange={e => setEditCenter(e.target.value)}
+                    input={<OutlinedInput label="Assigned Center" />}
                   >
                     {centers.map(c => (
                       <MenuItem key={c.id || c.name} value={c.id || c.name}>{c.name || c.id}</MenuItem>

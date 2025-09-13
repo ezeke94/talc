@@ -1,12 +1,17 @@
 {
   "short_name": "TALC",
   "name": "TALC Management",
+  "description": "TALC Management - Evaluator Dashboard for Managing Events, Tasks, and KPIs",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
   "start_url": "/",
-  "background_color": "#f6f7fb",
-  "theme_color": "#5040cd",
+  "scope": "/",
+  "background_color": "#DDEEDD",
+  "theme_color": "#7BC678",
   "prefer_related_applications": false,
+  "categories": ["productivity", "business"],
+  "lang": "en",
+  "dir": "ltr",
   "icons": [
     {
       "src": "favicon.ico",
@@ -16,12 +21,50 @@
     {
       "src": "logo192.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
       "src": "logo512.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "apple-touch-icon.png",
+      "type": "image/png",
+      "sizes": "180x180"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "form_factor": "wide"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Quick access to the main dashboard",
+      "url": "/dashboard",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Calendar",
+      "short_name": "Calendar",
+      "description": "View and manage events and tasks",
+      "url": "/calendar",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Mentors",
+      "short_name": "Mentors",
+      "description": "Manage mentor information",
+      "url": "/mentors",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
     }
   ]
 }

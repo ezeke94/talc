@@ -2,13 +2,38 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-  <!-- Use existing app asset for favicon to avoid 404s in dev -->
-  <link rel="icon" type="image/png" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#5040cd" />
-  <meta name="description" content="TALC Management - Evaluator Dashboard" />
-    <!-- Ensure you have a proper apple-touch-icon.png in public/ -->
-  <title>TALC Management</title>
+    <!-- Use existing app asset for favicon to avoid 404s in dev -->
+    <link rel="icon" type="image/png" href="/vite.svg" />
+    
+    <!-- Enhanced mobile viewport settings -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover" />
+    
+    <!-- PWA and mobile app settings -->
+    <meta name="theme-color" content="#7BC678" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="TALC" />
+    
+    <!-- Android PWA settings -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="application-name" content="TALC" />
+    
+    <!-- App description and SEO -->
+    <meta name="description" content="TALC Management - Evaluator Dashboard for Managing Events, Tasks, and KPIs" />
+    <meta name="keywords" content="TALC, management, evaluator, dashboard, events, tasks, KPI" />
+    
+    <!-- Enhanced touch and interaction settings -->
+    <meta name="format-detection" content="telephone=no" />
+    <meta name="msapplication-tap-highlight" content="no" />
+    
+    <!-- iOS specific icons and splash screens -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    
+    <!-- Manifest link -->
+    <link rel="manifest" href="/manifest.json" />
+    
+    <title>TALC Management</title>
   </head>
   <body>
     <div id="root"></div>
