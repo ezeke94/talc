@@ -14,9 +14,11 @@ import MentorDetail from './pages/MentorDetail';
 import SeedData from './pages/SeedData';
 import IntellectKPIForm from './components/IntellectKPIForm';
 import CulturalKPIForm from './components/CulturalKPIForm';
+import DynamicKPIForm from './components/DynamicKPIForm';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfUse from './pages/TermsOfUse';
 import Calendar from './pages/Calendar';
+import FormManagement from './pages/FormManagement';
 
 function App() {
     return (
@@ -33,11 +35,13 @@ function App() {
                         <Route path="kpi-dashboard" element={<Dashboard />} />
                         <Route path="operational-dashboard" element={<OperationalDashboard />} />
                         <Route path="sop-management" element={<SOPManager />} />
+                        <Route path="form-management" element={<FormManagement />} />
                         <Route path="user-management" element={<UserManagement />} />
                         <Route path="profile" element={<UserProfile />} />
                         <Route path="mentor/:mentorId" element={<MentorDetail />} />
                         <Route path="mentor/:mentorId/fill-intellect-kpi" element={<IntellectKPIForm />} />
                         <Route path="mentor/:mentorId/fill-cultural-kpi" element={<CulturalKPIForm />} />
+                        <Route path="mentor/:mentorId/fill/:formId" element={<DynamicKPIForm />} />
                         <Route path="seed-data" element={<SeedData />} />
                     </Route>
                 </Routes>

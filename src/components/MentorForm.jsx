@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Select, MenuItem, FormControl, InputLabel, Chip, Box } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Select, MenuItem, FormControl, InputLabel, Chip, Box, Typography } from '@mui/material';
 import { centers } from '../utils/seedData';
+import { db } from '../firebase/config';
+import { collection, onSnapshot } from 'firebase/firestore';
 
 const MentorForm = ({ open, onClose, onSave, mentor }) => {
     const [name, setName] = useState('');
     const [assignedCenters, setAssignedCenters] = useState([]);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
+    const [forms, setForms] = useState([]);
+    const [assignedFormIds, setAssignedFormIds] = useState([]);
 
     useEffect(() => {
         setErrors({});
@@ -14,11 +18,22 @@ const MentorForm = ({ open, onClose, onSave, mentor }) => {
         if (mentor) {
             setName(mentor.name || '');
             setAssignedCenters(mentor.assignedCenters || (mentor.center ? [mentor.center] : []));
+            setAssignedFormIds(Array.isArray(mentor.assignedFormIds) ? mentor.assignedFormIds : []);
         } else {
             setName('');
             setAssignedCenters([]);
+            setAssignedFormIds([]);
         }
     }, [mentor, open]);
+
+    // Subscribe to available KPI forms
+    useEffect(() => {
+        const unsub = onSnapshot(collection(db, 'kpiForms'), (snap) => {
+            const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            setForms(arr);
+        });
+        return () => unsub();
+    }, []);
 
     const validate = () => {
         const newErrors = {};
@@ -32,9 +47,10 @@ const MentorForm = ({ open, onClose, onSave, mentor }) => {
         if (!validate()) return;
         setSaving(true);
         try {
-            await onSave({ name, assignedCenters });
+            await onSave({ name, assignedCenters, assignedFormIds });
             setName('');
             setAssignedCenters([]);
+            setAssignedFormIds([]);
             setErrors({});
             setSaving(false);
         } catch (err) {
@@ -77,6 +93,34 @@ const MentorForm = ({ open, onClose, onSave, mentor }) => {
                         {centers.map(c => <MenuItem key={c} value={c}>{c}</MenuItem>)}
                     </Select>
                     {errors.assignedCenters && <Box sx={{ color: 'error.main', fontSize: 13, mt: 0.5 }}>{errors.assignedCenters}</Box>}
+                </FormControl>
+                <FormControl fullWidth margin="dense">
+                    <InputLabel>Assigned KPI Forms</InputLabel>
+                    <Select
+                        multiple
+                        value={assignedFormIds}
+                        label="Assigned KPI Forms"
+                        onChange={e => setAssignedFormIds(typeof e.target.value === 'string' ? e.target.value.split(',') : e.target.value)}
+                        renderValue={selected => (
+                            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                {selected.map(id => {
+                                    const f = forms.find(ff => ff.id === id);
+                                    return <Chip key={id} label={f?.name || id} />;
+                                })}
+                            </Box>
+                        )}
+                        inputProps={{ 'aria-label': 'Assigned KPI Forms' }}
+                    >
+                        {forms.length === 0 && (
+                            <MenuItem disabled value="">
+                                <em>No forms yet. Create forms in Form Management.</em>
+                            </MenuItem>
+                        )}
+                        {forms.map(f => <MenuItem key={f.id} value={f.id}>{f.name}</MenuItem>)}
+                    </Select>
+                    {forms.length === 0 && (
+                        <Typography variant="caption" color="text.secondary">Go to Form Management to create forms.</Typography>
+                    )}
                 </FormControl>
                 {errors.form && <Box sx={{ color: 'error.main', fontSize: 13, mt: 1 }}>{errors.form}</Box>}
             </DialogContent>

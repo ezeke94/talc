@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Card, CardContent, CardActions, Avatar, IconButton, Button, Typography, Fab, useTheme, useMediaQuery, Tooltip, TextField } from '@mui/material';
+import { Box, Card, CardContent, CardActions, Avatar, IconButton, Button, Typography, Fab, useTheme, useMediaQuery, Tooltip, TextField, Chip, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper as MuiPaper } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -17,6 +17,7 @@ const Mentors = () => {
     const [currentMentor, setCurrentMentor] = useState(null);
     const [userRole, setUserRole] = useState('');
     const [currentUserFirstName, setCurrentUserFirstName] = useState('');
+    const [forms, setForms] = useState([]);
     const { currentUser: authUser } = useAuth();
     const navigate = useNavigate();
 
@@ -26,6 +27,15 @@ const Mentors = () => {
             setMentors(mentorData);
         });
         return () => unsubscribe();
+    }, []);
+
+    // Load KPI forms to resolve names for assignedFormIds chips
+    useEffect(() => {
+        const unsub = onSnapshot(collection(db, 'kpiForms'), (snap) => {
+            const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            setForms(arr);
+        });
+        return () => unsub();
     }, []);
 
     // Read role and first name from AuthContext (frontend only)
@@ -90,6 +100,12 @@ const Mentors = () => {
         return name.includes(search.toLowerCase()) || centerStr.includes(search.toLowerCase());
     });
 
+    const getFormNames = (mentor) => {
+        const ids = Array.isArray(mentor.assignedFormIds) ? mentor.assignedFormIds : [];
+        const nameMap = new Map(forms.map(f => [f.id, f.name]));
+        return ids.map(id => nameMap.get(id) || id);
+    };
+
     return (
         <Box sx={{ width: '100%' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -113,6 +129,7 @@ const Mentors = () => {
                 <Box>
                     {filteredMentors.map(mentor => {
                         const centers = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
+                        const formNames = getFormNames(mentor);
                         return (
                             <Card
                                 key={mentor.id}
@@ -129,6 +146,15 @@ const Mentors = () => {
                                     <Box sx={{ flex: 1 }}>
                                         <Typography variant="h6" sx={{ fontWeight: 600 }}>{mentor.name}</Typography>
                                         <Typography variant="body2" color="text.secondary">{centers.join(", ")}</Typography>
+                                        {formNames.length > 0 && (
+                                            <Box sx={{ mt: 0.5, overflowX: 'auto' }} onClick={(e) => e.stopPropagation()}>
+                                                <Stack direction="row" spacing={0.5} sx={{ pt: 0.5 }}>
+                                                    {formNames.map((n, idx) => (
+                                                        <Chip key={n + idx} label={n} size="small" />
+                                                    ))}
+                                                </Stack>
+                                            </Box>
+                                        )}
                                     </Box>
                                     <CardActions sx={{ display: 'flex', flexDirection: 'row', gap: 1 }}>
                                         <Tooltip title="View Details">
@@ -162,62 +188,71 @@ const Mentors = () => {
                     </Fab>
                 </Box>
             ) : (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, justifyContent: 'center', alignItems: 'flex-start', mt: 2 }}>
-                    {filteredMentors.map(mentor => {
-                        const centers = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
-                        return (
-                            <Card
-                                key={mentor.id}
-                                onClick={() => navigate(`/mentor/${mentor.id}`)}
-                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') navigate(`/mentor/${mentor.id}`); }}
-                                role="button"
-                                tabIndex={0}
-                                sx={{
-                                    width: 240,
-                                    minHeight: 180,
-                                    boxShadow: 3,
-                                    borderRadius: 3,
-                                    transition: 'box-shadow 0.2s',
-                                    '&:hover': { boxShadow: 6 },
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'stretch',
-                                    cursor: 'pointer',
-                                }}
-                            >
-                                <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2, minHeight: 90 }}>
-                                    <Avatar sx={{ width: 56, height: 56, bgcolor: 'primary.light', fontWeight: 700 }}>
-                                        {mentor.name ? mentor.name.charAt(0).toUpperCase() : '?'}
-                                    </Avatar>
-                                    <Box sx={{ flex: 1 }}>
-                                        <Typography variant="h6" sx={{ fontWeight: 700, wordBreak: 'break-word' }}>{mentor.name}</Typography>
-                                        <Typography variant="body2" color="text.secondary" sx={{ wordBreak: 'break-word' }}>{centers.join(", ")}</Typography>
-                                    </Box>
-                                </CardContent>
-                                                <CardActions sx={{ justifyContent: 'flex-end', gap: 1, pb: 1 }}>
-                                                    <Tooltip title="View Details">
-                                                        <IconButton aria-label="view details" onClick={(e) => { e.stopPropagation(); navigate(`/mentor/${mentor.id}`); }} sx={{ p: 1 }}>
-                                                            <VisibilityIcon />
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                    <Tooltip title="Edit">
-                                                        <IconButton aria-label="edit" onClick={(e) => { e.stopPropagation(); handleOpen(mentor); }} sx={{ p: 1 }}>
-                                                            <EditIcon />
-                                                        </IconButton>
-                                                    </Tooltip>
-                                                    {userRole !== 'evaluator' && (
-                                                        <Tooltip title="Delete">
-                                                            <IconButton aria-label="delete" onClick={(e) => { e.stopPropagation(); handleDelete(mentor.id); }} sx={{ p: 1 }}>
-                                                                <DeleteIcon />
-                                                            </IconButton>
-                                                        </Tooltip>
-                                                    )}
-                                                </CardActions>
-                            </Card>
-                        );
-                    })}
-                </Box>
+                <TableContainer component={MuiPaper} sx={{ mt: 2 }}>
+                    <Table size="small">
+                        <TableHead>
+                            <TableRow>
+                                <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>
+                                <TableCell sx={{ fontWeight: 700 }}>Centers</TableCell>
+                                <TableCell sx={{ fontWeight: 700 }}>Assigned Forms</TableCell>
+                                <TableCell align="right" sx={{ fontWeight: 700, width: 180 }}>Actions</TableCell>
+                            </TableRow>
+                        </TableHead>
+                        <TableBody>
+                            {filteredMentors.map(mentor => {
+                                const centers = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
+                                const formNames = getFormNames(mentor);
+                                return (
+                                    <TableRow hover key={mentor.id} sx={{ cursor: 'pointer' }} onClick={() => navigate(`/mentor/${mentor.id}`)}>
+                                        <TableCell>
+                                            <Stack direction="row" spacing={1.5} alignItems="center">
+                                                <Avatar sx={{ width: 36, height: 36, bgcolor: 'primary.light', fontWeight: 700 }}>
+                                                    {mentor.name ? mentor.name.charAt(0).toUpperCase() : '?'}
+                                                </Avatar>
+                                                <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                                                    {mentor.name}
+                                                </Typography>
+                                            </Stack>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Typography variant="body2" color="text.secondary">{centers.join(', ')}</Typography>
+                                        </TableCell>
+                                        <TableCell>
+                                            {formNames.length === 0 ? (
+                                                <Typography variant="body2" color="text.secondary">—</Typography>
+                                            ) : (
+                                                <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
+                                                    {formNames.map((n, idx) => (
+                                                        <Chip key={n + idx} label={n} size="small" onClick={(e) => { e.stopPropagation(); }} />
+                                                    ))}
+                                                </Stack>
+                                            )}
+                                        </TableCell>
+                                        <TableCell align="right">
+                                            <Tooltip title="View Details">
+                                                <IconButton aria-label="view details" onClick={(e) => { e.stopPropagation(); navigate(`/mentor/${mentor.id}`); }} size="small">
+                                                    <VisibilityIcon fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
+                                            <Tooltip title="Edit">
+                                                <IconButton aria-label="edit" onClick={(e) => { e.stopPropagation(); handleOpen(mentor); }} size="small">
+                                                    <EditIcon fontSize="small" />
+                                                </IconButton>
+                                            </Tooltip>
+                                            {userRole !== 'evaluator' && (
+                                                <Tooltip title="Delete">
+                                                    <IconButton aria-label="delete" onClick={(e) => { e.stopPropagation(); handleDelete(mentor.id); }} size="small" color="error">
+                                                        <DeleteIcon fontSize="small" />
+                                                    </IconButton>
+                                                </Tooltip>
+                                            )}
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
+                </TableContainer>
             )}
             <MentorForm open={open} onClose={handleClose} onSave={handleSave} mentor={currentMentor} />
         </Box>

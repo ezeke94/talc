@@ -8,6 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList, ResponsiveContai
 // ...existing code...
 import KPIScoreScale from '../components/KPIScoreScale';
 import { kpiFieldLabels } from '../constants/kpiFields';
+import { collection as fsCollection, getDocs } from 'firebase/firestore';
 
 const MentorDetail = () => {
     const { mentorId } = useParams();
@@ -21,6 +22,7 @@ const MentorDetail = () => {
     const [notesPage, setNotesPage] = useState(1);
     const [expandedNotes, setExpandedNotes] = useState({});
     const [activeKpiTab, setActiveKpiTab] = useState(0);
+    const [availableForms, setAvailableForms] = useState([]); // all forms from kpiForms
     const NOTES_PER_PAGE = 10;
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -64,6 +66,20 @@ const MentorDetail = () => {
         return () => unsubscribe();
     }, [mentorId]);
 
+    // Load available dynamic forms
+    useEffect(() => {
+        (async () => {
+            try {
+                const snap = await getDocs(fsCollection(db, 'kpiForms'));
+                const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                setAvailableForms(arr);
+            } catch (e) {
+                // ignore if forms collection not present
+                setAvailableForms([]);
+            }
+        })();
+    }, []);
+
     // Helper to extract all notes for a mentor and kpiType, with evaluator name and date
     const parseDate = (ts) => {
         if (!ts) return null;
@@ -75,7 +91,7 @@ const MentorDetail = () => {
 
     // Return full submissions (with parsed createdAt) for a KPI type, newest first
     const getAllNotes = (kpiType) => {
-        const filteredSubs = submissions.filter(s => s.kpiType === kpiType);
+        const filteredSubs = submissions.filter(s => (s.formName || s.kpiType) === kpiType);
         const subs = filteredSubs.map(sub => ({
             id: sub.id,
             evaluatorName: sub.evaluatorName || sub.assessorName || 'Unknown',
@@ -88,7 +104,7 @@ const MentorDetail = () => {
     };
 
     const getKpiData = (kpiType) => {
-        const filteredSubs = submissions.filter(s => s.kpiType === kpiType);
+        const filteredSubs = submissions.filter(s => (s.formName || s.kpiType) === kpiType);
         if (filteredSubs.length === 0) return { monthlyData: [], notes: [], totalResponses: 0 };
 
         // Academic year logic
@@ -184,8 +200,11 @@ const MentorDetail = () => {
     // Show all assigned centers or fallback to center
     const centers = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
 
-    const intellectData = getKpiData('Intellect');
-    const culturalData = getKpiData('Cultural');
+    // Determine which forms to show for this mentor: use Firestore-assigned forms only
+    const assignedFormIds = Array.isArray(mentor?.assignedFormIds) ? mentor.assignedFormIds : [];
+    const dynamicAssignedForms = availableForms.filter(f => assignedFormIds.includes(f.id));
+    const uniqueFormNames = dynamicAssignedForms.map(f => f.name);
+    const dataByFormName = Object.fromEntries(uniqueFormNames.map(n => [n, getKpiData(n)]));
 
     // Custom chart component to show score labels for desktop only
     const ChartWithLabels = ({ data, fieldKeys }) => {
@@ -338,8 +357,9 @@ const MentorDetail = () => {
                     </Box>
                     {!isMobile && (
                         <Tabs value={activeKpiTab} onChange={(_, v) => setActiveKpiTab(v)} sx={{ ml: 2 }}>
-                            <Tab label="Intellect KPI" />
-                            <Tab label="Cultural KPI" />
+                            {uniqueFormNames.map(name => (
+                                <Tab key={name} label={`${name} KPI`} />
+                            ))}
                         </Tabs>
                     )}
                 </Box>
@@ -347,23 +367,26 @@ const MentorDetail = () => {
 
             {/* KPI Section Tabs for mobile only (desktop tabs live in the header) */}
             {isMobile && (
-                <Tabs value={activeKpiTab} onChange={(_, v) => setActiveKpiTab(v)} variant="fullWidth" sx={{ mb: 2 }}>
-                    <Tab label="Intellect KPI" />
-                    <Tab label="Cultural KPI" />
+                <Tabs value={activeKpiTab} onChange={(_, v) => setActiveKpiTab(v)} variant="scrollable" scrollButtons allowScrollButtonsMobile sx={{ mb: 2 }}>
+                    {uniqueFormNames.map(name => (
+                        <Tab key={name} label={`${name} KPI`} />
+                    ))}
                 </Tabs>
             )}
 
             {/* Render only the active tab's section (desktop now matches mobile behavior) */}
-            {activeKpiTab === 0 && (
-                <Box>
-                    <KPISection title="Intellect KPI" data={intellectData} formType="intellect" kpiType="Intellect" />
-                </Box>
+            {uniqueFormNames.length === 0 && (
+                <Paper sx={{ p: 2, mt: 2 }}>
+                    <Typography color="text.secondary">No forms assigned to this mentor.</Typography>
+                </Paper>
             )}
-            {activeKpiTab === 1 && (
-                <Box>
-                    <KPISection title="Cultural KPI" data={culturalData} formType="cultural" kpiType="Cultural" />
-                </Box>
-            )}
+            {uniqueFormNames.map((name, idx) => (
+                activeKpiTab === idx ? (
+                    <Box key={name}>
+                        <KPISection title={`${name} KPI`} data={dataByFormName[name]} formType={name.toLowerCase()} kpiType={name} />
+                    </Box>
+                ) : null
+            ))}
 
     
 
@@ -412,53 +435,32 @@ const MentorDetail = () => {
             </Dialog>
 
             {/* Fixed quick actions to open forms — show only the button matching the visible section/tab */}
-            {mentor && (() => {
-                const showIntellect = activeKpiTab === 0;
-                const showCultural = activeKpiTab === 1;
-                if (!showIntellect && !showCultural) return null;
+            {mentor && uniqueFormNames.length > 0 && (() => {
+                const activeName = uniqueFormNames[activeKpiTab];
+                if (!activeName) return null;
+                const dynamicForm = availableForms.find(f => f.name === activeName);
+                // Always use dynamic route for assigned forms (forms come from Firestore)
+                const onClick = () => {
+                    if (dynamicForm) {
+                        navigate(`/mentor/${mentorId}/fill/${dynamicForm.id}`);
+                    }
+                };
                 return (
                     <Box sx={isMobile ? {
-                        position: 'fixed',
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        p: 2,
-                        bgcolor: 'background.paper',
-                        boxShadow: 6,
-                        zIndex: 1200,
+                        position: 'fixed', left: 0, right: 0, bottom: 0, p: 2, bgcolor: 'background.paper', boxShadow: 6, zIndex: 1200,
                     } : {
-                        position: 'fixed',
-                        bottom: 16,
-                        right: 16,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 1,
-                        zIndex: 1200,
+                        position: 'fixed', bottom: 16, right: 16, display: 'flex', flexDirection: 'column', gap: 1, zIndex: 1200,
                     }}>
-                        {showIntellect && (
-                            <Button
-                                aria-label="Fill Intellect Form"
-                                variant="contained"
-                                color="secondary"
-                                onClick={() => navigate(`/mentor/${mentorId}/fill-intellect-kpi`)}
-                                fullWidth={isMobile}
-                                sx={isMobile ? {} : { minWidth: 160, '&:focus-visible': { outline: '3px solid rgba(21,101,192,0.24)', outlineOffset: 2 } }}
-                            >
-                                Fill Intellect Form
-                            </Button>
-                        )}
-                        {showCultural && (
-                            <Button
-                                aria-label="Fill Cultural Form"
-                                variant="contained"
-                                color="primary"
-                                onClick={() => navigate(`/mentor/${mentorId}/fill-cultural-kpi`)}
-                                fullWidth={isMobile}
-                                sx={isMobile ? { mt: 1 } : { minWidth: 160, '&:focus-visible': { outline: '3px solid rgba(21,101,192,0.16)', outlineOffset: 2 } }}
-                            >
-                                Fill Cultural Form
-                            </Button>
-                        )}
+                        <Button
+                            aria-label={`Fill ${activeName} Form`}
+                            variant="contained"
+                            color={'secondary'}
+                            onClick={onClick}
+                            fullWidth={isMobile}
+                            sx={isMobile ? {} : { minWidth: 200 }}
+                        >
+                            {`Fill ${activeName} Form`}
+                        </Button>
                     </Box>
                 );
             })()}

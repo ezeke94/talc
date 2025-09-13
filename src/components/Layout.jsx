@@ -73,6 +73,7 @@ const Layout = () => {
         { text: 'KPI Dashboard', path: '/kpi-dashboard' },
         { text: 'Operational Dashboard', path: '/operational-dashboard' },
         { text: 'SOP Management', path: '/sop-management' },
+        ...(showUserManagement ? [{ text: 'Form Management', path: '/form-management' }] : []),
         ...(showUserManagement ? [{ text: 'User Management', path: '/user-management' }] : []),
         { text: 'Mentors', path: '/mentors' }
     ];

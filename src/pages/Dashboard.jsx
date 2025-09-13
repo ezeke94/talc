@@ -16,6 +16,7 @@ const scoreToCategory = (score) => {
 
 const Dashboard = () => {
     const [kpiType, setKpiType] = useState('Intellect');
+    const [forms, setForms] = useState([]); // dynamic forms
     const [centerFilter, setCenterFilter] = useState(null);
     const [chartData, setChartData] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -42,6 +43,24 @@ const Dashboard = () => {
                     createdAt: doc.data().createdAt?.toDate() || new Date()
                 }));
                 setAllSubmissions(subsData);
+
+                // Load available KPI forms
+                try {
+                    const formsSnap = await getDocs(collection(db, 'kpiForms'));
+                    const formsData = formsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    setForms(formsData);
+                    // Keep existing default if still available; else fallback to first
+                    if (formsData.length > 0) {
+                        const hasCurrent = formsData.some(f => f.name === kpiType);
+                        if (!hasCurrent) {
+                            // Prefer Intellect/Cultural if present; otherwise first form
+                            const preferred = ['Intellect', 'Cultural'].find(n => formsData.some(f => f.name === n));
+                            setKpiType(preferred || formsData[0].name);
+                        }
+                    }
+                } catch (e) {
+                    // forms collection may not exist yet; ignore
+                }
             } catch (error) {
                 console.error("Error fetching data:", error);
             } finally {
@@ -69,7 +88,13 @@ const Dashboard = () => {
             const latestScores = filteredMentors.map(mentor => {
                 // Filter submissions for this mentor and KPI type
                 const mentorSubs = allSubmissions
-                    .filter(s => s.mentorId === mentor.id && s.kpiType === kpiType)
+                    .filter(s => {
+                        if (s.mentorId !== mentor.id) return false;
+                        // Legacy submissions use s.kpiType === 'Intellect' | 'Cultural'
+                        // New submissions may use s.formName or s.kpiType matching a dynamic form name
+                        const formName = s.formName || s.kpiType;
+                        return formName === kpiType;
+                    })
                     .sort((a, b) => b.createdAt - a.createdAt);
 
                 if (mentorSubs.length === 0) {
@@ -146,16 +171,19 @@ const Dashboard = () => {
         <Box>
             <Typography variant="h4" gutterBottom>KPI Dashboard</Typography>
             <Paper sx={{ p: 2, display: 'flex', flexWrap: 'wrap', gap: 2, justifyContent: 'flex-end', alignItems: 'center', mb: 3 }}>
-                <ToggleButtonGroup
-                    color="primary"
+                <TextField
+                    select
+                    label="KPI Form"
                     value={kpiType}
-                    exclusive
-                    onChange={(e, newType) => newType && setKpiType(newType)}
-                    sx={{ mr: 2 }}
+                    onChange={e => setKpiType(e.target.value)}
+                    SelectProps={{ native: true }}
+                    sx={{ minWidth: 220 }}
+                    InputLabelProps={{ shrink: true }}
                 >
-                    <ToggleButton value="Intellect" button="true">Intellect KPI</ToggleButton>
-                    <ToggleButton value="Cultural" button="true">Cultural KPI</ToggleButton>
-                </ToggleButtonGroup>
+                    {forms.map(f => (
+                        <option key={f.id} value={f.name}>{f.name}</option>
+                    ))}
+                </TextField>
                 <Box sx={{ minWidth: 220 }}>
                     <TextField
                         select

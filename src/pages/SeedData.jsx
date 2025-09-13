@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { db } from '../firebase/config';
-import { collection, writeBatch, addDoc, getDocs, where, query } from 'firebase/firestore';
+import { collection, writeBatch, addDoc, getDocs, where, query, doc, updateDoc } from 'firebase/firestore';
 // ...existing code...
 import { Button, Typography, CircularProgress, Alert, Paper, Stack } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
@@ -374,6 +374,50 @@ const SeedData = () => {
         }
     };
 
+    // Assign default Firestore KPI forms to all mentors
+    // These IDs should correspond to the imported default forms: Intellect and Cultural
+    const DEFAULT_FORM_IDS = [
+        'skLtVI25pe96cChBkIen', // Intellect
+        'z5apuUxnsLyGOAjXpn3F', // Cultural
+    ];
+
+    const assignDefaultFormsToAllMentors = async () => {
+        setLoading(true);
+        setMessage('');
+        try {
+            const mentorsSnap = await getDocs(collection(db, 'mentors'));
+            if (mentorsSnap.empty) {
+                setMessage('No mentors found.');
+                setLoading(false);
+                return;
+            }
+
+            const batch = writeBatch(db);
+            let updatedCount = 0;
+
+            mentorsSnap.docs.forEach(d => {
+                const data = d.data();
+                const existing = Array.isArray(data.assignedFormIds) ? data.assignedFormIds : [];
+                const merged = Array.from(new Set([ ...existing, ...DEFAULT_FORM_IDS ]));
+                // Only write if changed
+                if (merged.length !== existing.length || !existing.every((v, i) => merged.includes(v))) {
+                    batch.update(d.ref, { assignedFormIds: merged });
+                    updatedCount += 1;
+                }
+            });
+
+            if (updatedCount > 0) {
+                await batch.commit();
+            }
+            setMessage(updatedCount > 0 ? `Assigned default forms to ${updatedCount} mentor(s).` : 'All mentors already have the default forms assigned.');
+        } catch (err) {
+            console.error(err);
+            setMessage(`Error: ${err.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <Paper sx={{p: 3}}>
             <Typography variant="h4" gutterBottom>Seed Firestore Data</Typography>
@@ -402,6 +446,9 @@ const SeedData = () => {
                 </Button>
                 <Button variant="outlined" color="secondary" onClick={seedAuditLogs} disabled={loading}>
                     {loading ? <CircularProgress size={24} /> : "Seed Audit Logs"}
+                </Button>
+                <Button variant="contained" color="info" onClick={assignDefaultFormsToAllMentors} disabled={loading}>
+                    {loading ? <CircularProgress size={24} /> : 'Assign Default KPI Forms to All Mentors'}
                 </Button>
                 <Button variant="outlined" color="error" onClick={async () => {
                     setLoading(true);
