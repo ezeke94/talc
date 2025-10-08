@@ -1,4 +1,4 @@
-const { onDocumentUpdated, onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentUpdated, onDocumentCreated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const { initializeApp, getApps } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
@@ -221,6 +221,96 @@ exports.notifyEventCompletion = onDocumentUpdated({
 
   } catch (error) {
     console.error('Error sending completion notifications:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Notify when events are deleted
+exports.notifyEventDelete = onDocumentDeleted({
+  document: "events/{eventId}",
+  region: "us-central1",
+  memory: "256MiB",
+}, async (event) => {
+  try {
+    const deletedData = event.data.data();
+    const eventId = event.params.eventId;
+    const eventTitle = deletedData.title || 'Unnamed Event';
+    const assigneeIds = deletedData.assignees || [];
+
+    const notifications = [];
+    
+    // Notify assignees about the deletion
+    for (const userId of assigneeIds) {
+      try {
+        const userDoc = await db.collection('users').doc(userId).get();
+        const userData = userDoc.data();
+        
+        if (userData?.fcmToken) {
+          const eventDateStr = deletedData.startDateTime?.toDate().toLocaleString() || 'Unknown time';
+          
+          notifications.push({
+            token: userData.fcmToken,
+            notification: {
+              title: `Event Deleted: ${eventTitle}`,
+              body: `Event scheduled for ${eventDateStr} has been removed`,
+              icon: '/favicon.ico'
+            },
+            data: {
+              type: 'event_delete',
+              eventId: eventId,
+              url: '/calendar'
+            },
+            android: {
+              priority: 'high'
+            },
+            apns: {
+              headers: {
+                'apns-priority': '10'
+              }
+            }
+          });
+        }
+      } catch (userError) {
+        console.error(`Error getting user ${userId}:`, userError);
+      }
+    }
+
+    // Also notify supervisors (Admin/Quality roles)
+    const supervisorsSnapshot = await db.collection('users')
+      .where('role', 'in', ['Admin', 'Quality'])
+      .where('fcmToken', '!=', null)
+      .get();
+
+    supervisorsSnapshot.forEach(doc => {
+      const userData = doc.data();
+      if (userData.fcmToken) {
+        const eventDateStr = deletedData.startDateTime?.toDate().toLocaleString() || 'Unknown time';
+        
+        notifications.push({
+          token: userData.fcmToken,
+          notification: {
+            title: `Event Deleted: ${eventTitle}`,
+            body: `Event scheduled for ${eventDateStr} was removed by ${deletedData.lastModifiedBy?.userName || 'a user'}`,
+            icon: '/favicon.ico'
+          },
+          data: {
+            type: 'event_delete',
+            eventId: eventId,
+            url: '/calendar'
+          }
+        });
+      }
+    });
+
+    if (notifications.length > 0) {
+      const results = await messaging.sendEach(notifications);
+      console.log(`Sent ${results.successCount} deletion notifications for event ${eventId}`);
+    }
+
+    return { success: true, notificationsSent: notifications.length };
+
+  } catch (error) {
+    console.error('Error sending deletion notifications:', error);
     return { success: false, error: error.message };
   }
 });

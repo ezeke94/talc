@@ -24,6 +24,7 @@ exports.sendWeeklyKPIReminders = kpiNotifications.sendWeeklyKPIReminders;
 exports.notifyEventReschedule = eventChangeNotifications.notifyEventReschedule;
 exports.notifyEventCancellation = eventChangeNotifications.notifyEventCancellation;
 exports.notifyEventCompletion = eventChangeNotifications.notifyEventCompletion;
+exports.notifyEventDelete = eventChangeNotifications.notifyEventDelete;
 exports.sendMonthlyOperationalSummary = operationalNotifications.sendMonthlyOperationalSummary;
 exports.sendCriticalSystemAlert = operationalNotifications.sendCriticalSystemAlert;
 
