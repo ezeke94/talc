@@ -53,7 +53,18 @@ export async function setupNotifications(currentUser) {
       return null;
     }
 
-    const token = await getToken(msg, { vapidKey });
+    // Ensure the messaging service worker is registered at the root scope
+    let swReg = null;
+    try {
+      swReg = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
+      if (!swReg) {
+        swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+      }
+    } catch (swErr) {
+      console.warn('Service worker registration failed or unavailable:', swErr);
+    }
+
+    const token = await getToken(msg, { vapidKey, serviceWorkerRegistration: swReg || undefined });
     if (!token) {
       console.warn('No FCM token received');
       return null;
