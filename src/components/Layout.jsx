@@ -20,9 +20,15 @@ import {
     Tooltip,
     Dialog,
     DialogTitle,
-    DialogContent
+    DialogContent,
+    Collapse,
+    ListItemIcon
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import SettingsIcon from '@mui/icons-material/Settings';
 import { auth } from '../firebase/config';
 import { signOut } from 'firebase/auth';
 import logo from '../assets/logo.png';
@@ -39,6 +45,16 @@ const Layout = () => {
     const { currentUser } = useAuth();
     const [profileMenuEl, setProfileMenuEl] = useState(null);
     const [showProfile, setShowProfile] = useState(false);
+    
+    // Desktop dropdown states
+    const [dashboardMenuEl, setDashboardMenuEl] = useState(null);
+    const [appSetupMenuEl, setAppSetupMenuEl] = useState(null);
+    
+    // Mobile collapse states
+    const [mobileExpandedSections, setMobileExpandedSections] = useState({
+        dashboards: false,
+        appSetup: false
+    });
 
     const handleDrawerToggle = () => {
         setMobileOpen(!mobileOpen);
@@ -58,6 +74,20 @@ const Layout = () => {
     const openProfileSettings = () => {
         closeProfileMenu();
         setShowProfile(true);
+    };
+    
+    // Desktop dropdown handlers
+    const openDashboardMenu = (e) => setDashboardMenuEl(e.currentTarget);
+    const closeDashboardMenu = () => setDashboardMenuEl(null);
+    const openAppSetupMenu = (e) => setAppSetupMenuEl(e.currentTarget);
+    const closeAppSetupMenu = () => setAppSetupMenuEl(null);
+    
+    // Mobile section toggle
+    const toggleMobileSection = (section) => {
+        setMobileExpandedSections(prev => ({
+            ...prev,
+            [section]: !prev[section]
+        }));
     };
     
     const handleNavigateToNotificationSettings = () => {
@@ -80,28 +110,98 @@ const Layout = () => {
     const roleRaw = (currentUser && currentUser.role) || roleFromCache || '';
     const normalizedRole = (typeof roleRaw === 'string') ? roleRaw.trim().toLowerCase() : '';
     const showUserManagement = ['admin', 'quality'].includes(normalizedRole);
-    const menuItems = [
-        { text: 'Calendar', path: '/calendar' },
+    
+    // Organized menu structure
+    const dashboardItems = [
         { text: 'KPI Dashboard', path: '/kpi-dashboard' },
-        { text: 'Operational Dashboard', path: '/operational-dashboard' },
+        { text: 'Operational Dashboard', path: '/operational-dashboard' }
+    ];
+    
+    const appSetupItems = [
         { text: 'SOP Management', path: '/sop-management' },
-        ...(showUserManagement ? [{ text: 'Form Management', path: '/form-management' }] : []),
-        ...(showUserManagement ? [{ text: 'User Management', path: '/user-management' }] : []),
+        ...(showUserManagement ? [
+            { text: 'Form Management', path: '/form-management' },
+            { text: 'User Management', path: '/user-management' }
+        ] : [])
+    ];
+    
+    const standaloneItems = [
+        { text: 'Calendar', path: '/calendar' },
         { text: 'Mentors', path: '/mentors' }
     ];
 
     const drawer = (
         <List>
-            {menuItems.map((item) => (
+            {/* Standalone items */}
+            {standaloneItems.map((item) => (
                 <ListItem 
                     key={item.text} 
                     component={RouterLink} 
                     to={item.path}
                     onClick={handleDrawerToggle}
+                    sx={{ borderRadius: 1, mx: 1 }}
                 >
                     <ListItemText primary={item.text} />
                 </ListItem>
             ))}
+            
+            {/* Dashboards section */}
+            <ListItem 
+                onClick={() => toggleMobileSection('dashboards')}
+                sx={{ borderRadius: 1, mx: 1, cursor: 'pointer' }}
+            >
+                <ListItemIcon>
+                    <DashboardIcon />
+                </ListItemIcon>
+                <ListItemText primary="Dashboards" />
+                {mobileExpandedSections.dashboards ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            </ListItem>
+            <Collapse in={mobileExpandedSections.dashboards} timeout="auto" unmountOnExit>
+                <List component="div" disablePadding>
+                    {dashboardItems.map((item) => (
+                        <ListItem
+                            key={item.text}
+                            component={RouterLink}
+                            to={item.path}
+                            onClick={handleDrawerToggle}
+                            sx={{ pl: 4, borderRadius: 1, mx: 1 }}
+                        >
+                            <ListItemText primary={item.text} />
+                        </ListItem>
+                    ))}
+                </List>
+            </Collapse>
+            
+            {/* App Setup section (only show if user has access to any setup items) */}
+            {appSetupItems.length > 0 && (
+                <>
+                    <ListItem 
+                        onClick={() => toggleMobileSection('appSetup')}
+                        sx={{ borderRadius: 1, mx: 1, cursor: 'pointer' }}
+                    >
+                        <ListItemIcon>
+                            <SettingsIcon />
+                        </ListItemIcon>
+                        <ListItemText primary="App Setup" />
+                        {mobileExpandedSections.appSetup ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                    </ListItem>
+                    <Collapse in={mobileExpandedSections.appSetup} timeout="auto" unmountOnExit>
+                        <List component="div" disablePadding>
+                            {appSetupItems.map((item) => (
+                                <ListItem
+                                    key={item.text}
+                                    component={RouterLink}
+                                    to={item.path}
+                                    onClick={handleDrawerToggle}
+                                    sx={{ pl: 4, borderRadius: 1, mx: 1 }}
+                                >
+                                    <ListItemText primary={item.text} />
+                                </ListItem>
+                            ))}
+                        </List>
+                    </Collapse>
+                </>
+            )}
         </List>
     );
 
@@ -139,7 +239,8 @@ const Layout = () => {
                     </Typography>
                     {!isMobile && (
                         <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-                            {menuItems.map((item) => (
+                            {/* Standalone menu items */}
+                            {standaloneItems.map((item) => (
                                 <Button 
                                     key={item.text}
                                     color="inherit" 
@@ -150,6 +251,67 @@ const Layout = () => {
                                     {item.text}
                                 </Button>
                             ))}
+                            
+                            {/* Dashboards dropdown */}
+                            <Button
+                                color="inherit"
+                                onClick={openDashboardMenu}
+                                endIcon={<ExpandMoreIcon />}
+                                sx={{ borderRadius: 2, fontWeight: 500, '&:hover': { bgcolor: 'rgba(123,198,120,0.15)' } }}
+                            >
+                                Dashboards
+                            </Button>
+                            <Menu
+                                anchorEl={dashboardMenuEl}
+                                open={Boolean(dashboardMenuEl)}
+                                onClose={closeDashboardMenu}
+                                anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                            >
+                                {dashboardItems.map((item) => (
+                                    <MenuItem
+                                        key={item.text}
+                                        component={RouterLink}
+                                        to={item.path}
+                                        onClick={closeDashboardMenu}
+                                    >
+                                        {item.text}
+                                    </MenuItem>
+                                ))}
+                            </Menu>
+                            
+                            {/* App Setup dropdown (only show if user has access to setup items) */}
+                            {appSetupItems.length > 0 && (
+                                <>
+                                    <Button
+                                        color="inherit"
+                                        onClick={openAppSetupMenu}
+                                        endIcon={<ExpandMoreIcon />}
+                                        sx={{ borderRadius: 2, fontWeight: 500, '&:hover': { bgcolor: 'rgba(123,198,120,0.15)' } }}
+                                    >
+                                        App Setup
+                                    </Button>
+                                    <Menu
+                                        anchorEl={appSetupMenuEl}
+                                        open={Boolean(appSetupMenuEl)}
+                                        onClose={closeAppSetupMenu}
+                                        anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                                        transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                                    >
+                                        {appSetupItems.map((item) => (
+                                            <MenuItem
+                                                key={item.text}
+                                                component={RouterLink}
+                                                to={item.path}
+                                                onClick={closeAppSetupMenu}
+                                            >
+                                                {item.text}
+                                            </MenuItem>
+                                        ))}
+                                    </Menu>
+                                </>
+                            )}
+                            
                             {currentUser && (
                                 <>
                                     <Tooltip title={currentUser.displayName || currentUser.email || 'Profile'}>
