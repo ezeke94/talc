@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Select, MenuItem, FormControl, InputLabel, Chip, Box, Typography } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, TextField, Select, MenuItem, FormControl, InputLabel, Chip, Box, Typography, Autocomplete } from '@mui/material';
 import { centers } from '../utils/seedData';
 import { db } from '../firebase/config';
-import { collection, onSnapshot } from 'firebase/firestore';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
 
 const MentorForm = ({ open, onClose, onSave, mentor }) => {
     const [name, setName] = useState('');
     const [assignedCenters, setAssignedCenters] = useState([]);
+    const [assignedEvaluator, setAssignedEvaluator] = useState(null);
     const [errors, setErrors] = useState({});
     const [saving, setSaving] = useState(false);
     const [forms, setForms] = useState([]);
     const [assignedFormIds, setAssignedFormIds] = useState([]);
+    const [evaluators, setEvaluators] = useState([]);
 
     useEffect(() => {
         setErrors({});
@@ -19,10 +21,12 @@ const MentorForm = ({ open, onClose, onSave, mentor }) => {
             setName(mentor.name || '');
             setAssignedCenters(mentor.assignedCenters || (mentor.center ? [mentor.center] : []));
             setAssignedFormIds(Array.isArray(mentor.assignedFormIds) ? mentor.assignedFormIds : []);
+            setAssignedEvaluator(mentor.assignedEvaluator || null);
         } else {
             setName('');
             setAssignedCenters([]);
             setAssignedFormIds([]);
+            setAssignedEvaluator(null);
         }
     }, [mentor, open]);
 
@@ -32,6 +36,23 @@ const MentorForm = ({ open, onClose, onSave, mentor }) => {
             const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
             setForms(arr);
         });
+        return () => unsub();
+    }, []);
+
+    // Subscribe to available evaluators (users with role Admin, Quality, or Evaluator)
+    useEffect(() => {
+        const unsub = onSnapshot(
+            query(collection(db, 'users'), where('role', 'in', ['Admin', 'Quality', 'Evaluator'])),
+            (snap) => {
+                const evaluatorList = snap.docs.map(d => ({
+                    id: d.id,
+                    ...d.data(),
+                    label: `${d.data().name || d.data().email} (${d.data().role})`,
+                    name: d.data().name || d.data().email
+                }));
+                setEvaluators(evaluatorList);
+            }
+        );
         return () => unsub();
     }, []);
 
@@ -47,10 +68,16 @@ const MentorForm = ({ open, onClose, onSave, mentor }) => {
         if (!validate()) return;
         setSaving(true);
         try {
-            await onSave({ name, assignedCenters, assignedFormIds });
+            await onSave({ 
+                name, 
+                assignedCenters, 
+                assignedFormIds,
+                assignedEvaluator
+            });
             setName('');
             setAssignedCenters([]);
             setAssignedFormIds([]);
+            setAssignedEvaluator(null);
             setErrors({});
             setSaving(false);
         } catch (err) {
@@ -122,6 +149,36 @@ const MentorForm = ({ open, onClose, onSave, mentor }) => {
                         <Typography variant="caption" color="text.secondary">Go to Form Management to create forms.</Typography>
                     )}
                 </FormControl>
+
+                {/* Assigned Evaluator Field */}
+                <Autocomplete
+                    options={evaluators}
+                    value={assignedEvaluator}
+                    onChange={(event, newValue) => setAssignedEvaluator(newValue)}
+                    getOptionLabel={(option) => option.label || ''}
+                    isOptionEqualToValue={(option, value) => option?.id === value?.id}
+                    renderInput={(params) => (
+                        <TextField
+                            {...params}
+                            label="Assigned Evaluator"
+                            margin="dense"
+                            fullWidth
+                            variant="outlined"
+                            helperText="Select a user who will receive KPI reminder notifications for this mentor"
+                        />
+                    )}
+                    renderOption={(props, option) => (
+                        <Box component="li" {...props}>
+                            <Box>
+                                <Typography variant="body2">{option.name}</Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                    {option.role} • {option.email}
+                                </Typography>
+                            </Box>
+                        </Box>
+                    )}
+                />
+
                 {errors.form && <Box sx={{ color: 'error.main', fontSize: 13, mt: 1 }}>{errors.form}</Box>}
             </DialogContent>
             <DialogActions>

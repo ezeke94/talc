@@ -2,7 +2,7 @@ import React, { createContext, useState, useEffect, useContext, useRef } from 'r
 import { auth, db, persistencePromise } from '../firebase/config';
 import { onAuthStateChanged, getRedirectResult } from 'firebase/auth';
 import { CircularProgress, Box } from '@mui/material';
-// notifications removed
+import { setupNotifications } from '../utils/notifications';
 import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 
 const AuthContext = createContext({ currentUser: null, loading: true });
@@ -121,7 +121,14 @@ export const AuthProvider = ({ children }) => {
                     // Stop blocking UI immediately; profile sync continues in background
                     setLoading(false);
 
-                    // notifications removed
+                    // Setup notifications for authenticated user (async)
+                    setupNotifications(user).then(token => {
+                        if (token) {
+                            console.log('Notifications setup completed for user');
+                        }
+                    }).catch(err => {
+                        console.warn('Notification setup failed:', err);
+                    });
                     try {
                         const userRef = doc(db, 'users', user.uid);
                         const snap = await getDoc(userRef);

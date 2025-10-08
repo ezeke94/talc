@@ -28,6 +28,8 @@ import { signOut } from 'firebase/auth';
 import logo from '../assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 import ProfileSettingsDialog from './ProfileSettingsDialog';
+import NotificationPrompt from './NotificationPrompt';
+import AddToHomeScreenPrompt from './AddToHomeScreenPrompt';
 
 const Layout = () => {
     const navigate = useNavigate();
@@ -55,6 +57,11 @@ const Layout = () => {
     const closeProfileMenu = () => setProfileMenuEl(null);
     const openProfileSettings = () => {
         closeProfileMenu();
+        setShowProfile(true);
+    };
+    
+    const handleNavigateToNotificationSettings = () => {
+        // Open the profile settings dialog instead of navigating to a page
         setShowProfile(true);
     };
     const logoutFromMenu = async () => {
@@ -247,12 +254,23 @@ const Layout = () => {
                     flexDirection: 'column'
                 }}
             >
+                <NotificationPrompt onNavigateToSettings={handleNavigateToNotificationSettings} />
+                <AddToHomeScreenPrompt />
                 <Outlet />
             </Container>
 
-            <Dialog open={showProfile} onClose={() => setShowProfile(false)} fullWidth maxWidth="sm">
+            <Dialog 
+                open={showProfile} 
+                onClose={() => setShowProfile(false)} 
+                fullWidth 
+                maxWidth="sm"
+                scroll="body"
+                PaperProps={{
+                    sx: { maxHeight: '90vh' }
+                }}
+            >
                 <DialogTitle>Profile Settings</DialogTitle>
-                <DialogContent>
+                <DialogContent sx={{ minHeight: 200 }}>
                     <ProfileSettingsDialog onClose={() => setShowProfile(false)} />
                 </DialogContent>
             </Dialog>

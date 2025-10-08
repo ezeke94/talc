@@ -5,6 +5,8 @@ export const isPWA = () => {
     return (
       window.navigator.standalone ||
       window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: fullscreen)').matches ||
+      window.matchMedia('(display-mode: minimal-ui)').matches ||
       window.location.search.includes('utm_source=homescreen') ||
       document.referrer === "" ||
       document.referrer.includes("android-app://")
@@ -28,6 +30,36 @@ export const isAndroid = () => {
   } catch (e) {
     return false;
   }
+};
+
+export const isMobile = () => {
+  try {
+    return isIOS() || isAndroid() || /Mobile|Tablet/.test(navigator.userAgent);
+  } catch (e) {
+    return false;
+  }
+};
+
+export const canInstallPWA = () => {
+  try {
+    // Check if browser supports PWA installation
+    return 'serviceWorker' in navigator && 
+           'PushManager' in window &&
+           'Notification' in window;
+  } catch (e) {
+    return false;
+  }
+};
+
+export const getInstallationStatus = () => {
+  return {
+    isPWA: isPWA(),
+    isIOS: isIOS(),
+    isAndroid: isAndroid(),
+    isMobile: isMobile(),
+    canInstall: canInstallPWA(),
+    isStandalone: isPWA()
+  };
 };
 
 export const getDeviceInfo = () => {

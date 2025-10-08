@@ -5,7 +5,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import AddIcon from '@mui/icons-material/Add';
 import { db } from '../firebase/config';
-import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
 import MentorForm from '../components/MentorForm';
 import { useAuth } from '../context/AuthContext';
@@ -18,6 +18,7 @@ const Mentors = () => {
     const [userRole, setUserRole] = useState('');
     const [currentUserFirstName, setCurrentUserFirstName] = useState('');
     const [forms, setForms] = useState([]);
+    const [kpiSubmissions, setKpiSubmissions] = useState([]);
     const { currentUser: authUser } = useAuth();
     const navigate = useNavigate();
 
@@ -36,6 +37,36 @@ const Mentors = () => {
             setForms(arr);
         });
         return () => unsub();
+    }, []);
+
+    // Load KPI submissions to check form completion status
+    useEffect(() => {
+        const loadSubmissions = async () => {
+            try {
+                const now = new Date();
+                const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                
+                // Get submissions from current month
+                const submissionsSnapshot = await getDocs(
+                    query(
+                        collection(db, 'kpiSubmissions'),
+                        where('createdAt', '>=', startOfMonth)
+                    )
+                );
+                
+                const submissions = submissionsSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data(),
+                    createdAt: doc.data().createdAt?.toDate() || new Date()
+                }));
+                
+                setKpiSubmissions(submissions);
+            } catch (error) {
+                console.error('Error loading KPI submissions:', error);
+            }
+        };
+        
+        loadSubmissions();
     }, []);
 
     // Read role and first name from AuthContext (frontend only)
@@ -106,6 +137,52 @@ const Mentors = () => {
         return ids.map(id => nameMap.get(id) || id);
     };
 
+    // Check if a form has been submitted this month for a mentor
+    const isFormSubmittedThisMonth = (mentorId, formId) => {
+        return kpiSubmissions.some(submission => 
+            submission.mentorId === mentorId && 
+            (submission.formId === formId || submission.kpiType === forms.find(f => f.id === formId)?.name)
+        );
+    };
+
+    // Get form chips with color coding
+    const getFormChips = (mentor, isDesktop = false) => {
+        const ids = Array.isArray(mentor.assignedFormIds) ? mentor.assignedFormIds : [];
+        const nameMap = new Map(forms.map(f => [f.id, f.name]));
+        
+        return ids.map(id => {
+            const formName = nameMap.get(id) || id;
+            const isSubmitted = isFormSubmittedThisMonth(mentor.id, id);
+            
+            return (
+                <Tooltip 
+                    key={id} 
+                    title={isSubmitted ? 'Submitted this month' : 'Not submitted this month'}
+                    arrow
+                >
+                    <Chip 
+                        label={formName} 
+                        size="small"
+                        color={isSubmitted ? 'success' : 'default'}
+                        variant={isSubmitted ? 'filled' : 'outlined'}
+                        onClick={(e) => e.stopPropagation()}
+                        sx={{
+                            bgcolor: isSubmitted ? 'success.main' : 'grey.300',
+                            color: isSubmitted ? 'success.contrastText' : 'text.primary',
+                            '&:hover': {
+                                bgcolor: isSubmitted ? 'success.dark' : 'grey.400',
+                            },
+                            ...(isDesktop && {
+                                fontSize: '0.75rem',
+                                height: '24px'
+                            })
+                        }}
+                    />
+                </Tooltip>
+            );
+        });
+    };
+
     return (
         <Box sx={{ width: '100%' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
@@ -125,11 +202,12 @@ const Mentors = () => {
                     onChange={e => setSearch(e.target.value)}
                 />
             </Box>
+
             {isMobile ? (
                 <Box>
                     {filteredMentors.map(mentor => {
                         const centers = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
-                        const formNames = getFormNames(mentor);
+                        const formChips = getFormChips(mentor, false);
                         return (
                             <Card
                                 key={mentor.id}
@@ -146,12 +224,15 @@ const Mentors = () => {
                                     <Box sx={{ flex: 1 }}>
                                         <Typography variant="h6" sx={{ fontWeight: 600 }}>{mentor.name}</Typography>
                                         <Typography variant="body2" color="text.secondary">{centers.join(", ")}</Typography>
-                                        {formNames.length > 0 && (
+                                        {mentor.assignedEvaluator && (
+                                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                                                Evaluator: {mentor.assignedEvaluator.name}
+                                            </Typography>
+                                        )}
+                                        {formChips.length > 0 && (
                                             <Box sx={{ mt: 0.5, overflowX: 'auto' }} onClick={(e) => e.stopPropagation()}>
                                                 <Stack direction="row" spacing={0.5} sx={{ pt: 0.5 }}>
-                                                    {formNames.map((n, idx) => (
-                                                        <Chip key={n + idx} label={n} size="small" />
-                                                    ))}
+                                                    {formChips}
                                                 </Stack>
                                             </Box>
                                         )}
@@ -194,6 +275,7 @@ const Mentors = () => {
                             <TableRow>
                                 <TableCell sx={{ fontWeight: 700 }}>Name</TableCell>
                                 <TableCell sx={{ fontWeight: 700 }}>Centers</TableCell>
+                                <TableCell sx={{ fontWeight: 700 }}>Evaluator</TableCell>
                                 <TableCell sx={{ fontWeight: 700 }}>Assigned Forms</TableCell>
                                 <TableCell align="right" sx={{ fontWeight: 700, width: 180 }}>Actions</TableCell>
                             </TableRow>
@@ -201,7 +283,7 @@ const Mentors = () => {
                         <TableBody>
                             {filteredMentors.map(mentor => {
                                 const centers = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
-                                const formNames = getFormNames(mentor);
+                                const formChips = getFormChips(mentor, true);
                                 return (
                                     <TableRow hover key={mentor.id} sx={{ cursor: 'pointer' }} onClick={() => navigate(`/mentor/${mentor.id}`)}>
                                         <TableCell>
@@ -218,13 +300,27 @@ const Mentors = () => {
                                             <Typography variant="body2" color="text.secondary">{centers.join(', ')}</Typography>
                                         </TableCell>
                                         <TableCell>
-                                            {formNames.length === 0 ? (
+                                            {mentor.assignedEvaluator ? (
+                                                <Box>
+                                                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                                        {mentor.assignedEvaluator.name}
+                                                    </Typography>
+                                                    <Typography variant="caption" color="text.secondary">
+                                                        {mentor.assignedEvaluator.role}
+                                                    </Typography>
+                                                </Box>
+                                            ) : (
+                                                <Typography variant="body2" color="warning.main" sx={{ fontStyle: 'italic' }}>
+                                                    No evaluator assigned
+                                                </Typography>
+                                            )}
+                                        </TableCell>
+                                        <TableCell>
+                                            {formChips.length === 0 ? (
                                                 <Typography variant="body2" color="text.secondary">—</Typography>
                                             ) : (
-                                                <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap' }}>
-                                                    {formNames.map((n, idx) => (
-                                                        <Chip key={n + idx} label={n} size="small" onClick={(e) => { e.stopPropagation(); }} />
-                                                    ))}
+                                                <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', gap: 0.5 }}>
+                                                    {formChips}
                                                 </Stack>
                                             )}
                                         </TableCell>

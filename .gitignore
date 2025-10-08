@@ -38,3 +38,9 @@ yarn-error.log*
 
 # Firebase schema documentation
 firebase-schema.md
+
+# Generated / temporary public files
+public/sw-version.js
+public/fcm-test.html
+/public/vite.svg
+src/assets/react.svg

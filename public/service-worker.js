@@ -10,7 +10,7 @@ self.addEventListener('install', event => {
         '/manifest.json',
         '/favicon.ico',
         '/apple-touch-icon.png',
-        '/vite.svg',
+        '/logo192.png',
       ];
       return cache.addAll(filesToCache).catch(err => {
         console.error('Cache addAll failed:', err);

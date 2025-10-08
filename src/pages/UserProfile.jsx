@@ -3,6 +3,8 @@ import { Container, Typography, Paper, Box, Button, List, ListItem, ListItemText
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase/config';
 import { doc, getDoc, updateDoc, collection, onSnapshot } from 'firebase/firestore';
+import NotificationSettings from '../components/NotificationSettings';
+import PWAInstallationStatus from '../components/PWAInstallationStatus';
 
 const UserProfile = () => {
   const { currentUser } = useAuth();
@@ -124,6 +126,17 @@ const UserProfile = () => {
         ) : (
           <Typography>No profile data found.</Typography>
         )}
+        
+        {/* PWA Installation Section */}
+        <Box sx={{ mt: 4 }}>
+          <PWAInstallationStatus />
+        </Box>
+        
+        {/* Notification Settings Section */}
+        <Box sx={{ mt: 4 }}>
+          <NotificationSettings />
+        </Box>
+        
         <Box sx={{ mt: 3, textAlign: 'center' }}>
           <Button href="/privacy-policy" target="_blank" sx={{ mr: 2 }}>Privacy Policy</Button>
           <Button href="/terms-of-use" target="_blank">Terms of Use</Button>

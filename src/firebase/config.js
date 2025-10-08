@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, setPersistence, browserLocalPersistence, indexedDBLocalPersistence, useDeviceLanguage } from "firebase/auth";
 import { initializeFirestore } from "firebase/firestore";
+import { getMessaging } from "firebase/messaging";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -68,4 +69,16 @@ const firestoreSettings = import.meta.env?.PROD
 
 export const db = initializeFirestore(app, firestoreSettings);
 
+// Initialize Firebase Messaging for notifications
+let messaging = null;
+try {
+  // Only initialize messaging in supported environments
+  if (typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window) {
+    messaging = getMessaging(app);
+  }
+} catch (error) {
+  console.warn('Firebase Messaging not supported in this environment:', error);
+}
+
+export { messaging };
 export default app;
