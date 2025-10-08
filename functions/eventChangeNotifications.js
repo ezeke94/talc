@@ -225,6 +225,19 @@ exports.notifyEventCompletion = onDocumentUpdated({
   }
 });
 
+// Helper: safe date formatting for Firestore Timestamp, string, or Date
+function formatEventDate(val) {
+  try {
+    if (!val) return 'Unknown time';
+    if (typeof val?.toDate === 'function') {
+      return val.toDate().toLocaleString();
+    }
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) return d.toLocaleString();
+  } catch {}
+  return 'Unknown time';
+}
+
 // Notify when events are deleted
 exports.notifyEventDelete = onDocumentDeleted({
   document: "events/{eventId}",
@@ -235,79 +248,105 @@ exports.notifyEventDelete = onDocumentDeleted({
     const deletedData = event.data.data();
     const eventId = event.params.eventId;
     const eventTitle = deletedData.title || 'Unnamed Event';
-    const assigneeIds = deletedData.assignees || [];
 
-    const notifications = [];
-    
-    // Notify assignees about the deletion
-    for (const userId of assigneeIds) {
+    // Build recipient list: assignees + owner + creator
+    const recipients = new Set();
+    (deletedData.assignees || []).forEach((id) => id && recipients.add(id));
+    if (deletedData.ownerId) recipients.add(deletedData.ownerId);
+    if (deletedData.createdBy?.userId) recipients.add(deletedData.createdBy.userId);
+
+    const messages = [];
+    const recipientIds = []; // parallel array for error mapping
+    const eventDateStr = formatEventDate(deletedData.startDateTime);
+
+    // Notify direct recipients
+    for (const userId of recipients) {
       try {
         const userDoc = await db.collection('users').doc(userId).get();
         const userData = userDoc.data();
-        
         if (userData?.fcmToken) {
-          const eventDateStr = deletedData.startDateTime?.toDate().toLocaleString() || 'Unknown time';
-          
-          notifications.push({
+          messages.push({
             token: userData.fcmToken,
             notification: {
               title: `Event Deleted: ${eventTitle}`,
               body: `Event scheduled for ${eventDateStr} has been removed`,
-              icon: '/favicon.ico'
+              icon: '/favicon.ico',
             },
             data: {
               type: 'event_delete',
-              eventId: eventId,
-              url: '/calendar'
+              eventId,
+              url: '/calendar',
             },
-            android: {
-              priority: 'high'
+            webpush: {
+              fcmOptions: {
+                link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`,
+              },
             },
-            apns: {
-              headers: {
-                'apns-priority': '10'
-              }
-            }
+            android: { priority: 'high' },
+            apns: { headers: { 'apns-priority': '10' } },
           });
+          recipientIds.push(userId);
         }
       } catch (userError) {
         console.error(`Error getting user ${userId}:`, userError);
       }
     }
 
-    // Also notify supervisors (Admin/Quality roles)
-    const supervisorsSnapshot = await db.collection('users')
-      .where('role', 'in', ['Admin', 'Quality'])
+    // Also notify supervisors (Admin/Quality roles) - handle role case variants
+    const supervisorRoles = ['Admin', 'Quality', 'admin', 'quality'];
+    const supervisorsSnapshot = await db
+      .collection('users')
+      .where('role', 'in', supervisorRoles)
       .where('fcmToken', '!=', null)
       .get();
 
-    supervisorsSnapshot.forEach(doc => {
-      const userData = doc.data();
+    supervisorsSnapshot.forEach((docSnap) => {
+      const userData = docSnap.data();
       if (userData.fcmToken) {
-        const eventDateStr = deletedData.startDateTime?.toDate().toLocaleString() || 'Unknown time';
-        
-        notifications.push({
+        messages.push({
           token: userData.fcmToken,
           notification: {
             title: `Event Deleted: ${eventTitle}`,
             body: `Event scheduled for ${eventDateStr} was removed by ${deletedData.lastModifiedBy?.userName || 'a user'}`,
-            icon: '/favicon.ico'
+            icon: '/favicon.ico',
           },
           data: {
             type: 'event_delete',
-            eventId: eventId,
-            url: '/calendar'
-          }
+            eventId,
+            url: '/calendar',
+          },
+          webpush: {
+            fcmOptions: {
+              link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`,
+            },
+          },
         });
+        recipientIds.push(docSnap.id);
       }
     });
 
-    if (notifications.length > 0) {
-      const results = await messaging.sendEach(notifications);
-      console.log(`Sent ${results.successCount} deletion notifications for event ${eventId}`);
+    if (messages.length > 0) {
+      const results = await messaging.sendEach(messages);
+      console.log(`Sent ${results.successCount}/${messages.length} deletion notifications for event ${eventId}`);
+      // Clean up invalid tokens
+      results.responses.forEach(async (res, idx) => {
+        if (!res.success) {
+          const code = res.error?.code || res.error?.errorInfo?.code;
+          const recipientId = recipientIds[idx];
+          console.warn(`Notification send failed for user ${recipientId}:`, code, res.error?.message);
+          if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-argument') {
+            try {
+              await db.collection('users').doc(recipientId).update({ fcmToken: null, notificationsEnabled: false });
+              console.log(`Cleared invalid FCM token for user ${recipientId}`);
+            } catch (clearErr) {
+              console.error(`Failed to clear FCM token for user ${recipientId}:`, clearErr);
+            }
+          }
+        }
+      });
     }
 
-    return { success: true, notificationsSent: notifications.length };
+    return { success: true, notificationsSent: messages.length };
 
   } catch (error) {
     console.error('Error sending deletion notifications:', error);

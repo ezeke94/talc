@@ -4,7 +4,23 @@ service cloud.firestore {
 
     // Users collection: Only Admins can read/write user management data
     match /users/{userId} {
+      // Admins have full access
       allow read, write: if isAdmin();
+
+      // A signed-in user can read their own profile
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      // A signed-in user can create their own profile with safe defaults
+      allow create: if request.auth != null && request.auth.uid == userId && isSafeSelfCreate();
+
+      // A signed-in user can update only notification-related fields on their own doc
+      allow update: if request.auth != null && request.auth.uid == userId && isSelfNotificationUpdate();
+
+      // Per-user devices subcollection for multi-device FCM tokens
+      match /devices/{deviceId} {
+        // Owner can manage their own device tokens
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // Events collection
@@ -26,12 +42,26 @@ service cloud.firestore {
 
     // Other collections: allow authenticated users
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      // Default to read-only for authenticated users; writes must be explicitly allowed above
+      allow read: if request.auth != null;
     }
 
     function isAdmin() {
       return request.auth != null &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Admin";
+    }
+    function isSafeSelfCreate() {
+      // Allow creating basic profile with Evaluator role only
+      return request.resource.data.role == "Evaluator";
+    }
+    function isSelfNotificationUpdate() {
+      // Only allow changing notification-related fields
+      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
+        'fcmToken',
+        'notificationsEnabled',
+        'lastTokenUpdate',
+        'notificationPreferences'
+      ]);
     }
     function isEvaluator() {
       return request.auth != null &&

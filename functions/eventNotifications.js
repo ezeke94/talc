@@ -11,6 +11,55 @@ if (!getApps().length) {
 const db = getFirestore();
 const messaging = getMessaging();
 
+// Helper: fetch all device tokens for a user (main fcmToken + devices subcollection)
+async function getAllUserTokens(userId) {
+  const tokens = new Set();
+  try {
+    const userDoc = await db.collection('users').doc(userId).get();
+    const userData = userDoc.data();
+    if (userData?.fcmToken) tokens.add(userData.fcmToken);
+  } catch (e) {
+    console.error(`getAllUserTokens: failed to read user ${userId}`, e);
+  }
+  try {
+    const devicesSnap = await db.collection('users').doc(userId).collection('devices').get();
+    devicesSnap.forEach((d) => {
+      const token = d.id;
+      const enabled = d.data()?.enabled !== false; // default true
+      if (token && enabled) tokens.add(token);
+    });
+  } catch (e) {
+    // subcollection may not exist
+  }
+  return Array.from(tokens);
+}
+
+// Helper: after sending, clean invalid tokens from user profile/devices
+async function handleSendResults(results, recipientsMeta) {
+  const responses = results.responses || [];
+  for (let i = 0; i < responses.length; i++) {
+    const res = responses[i];
+    if (res.success) continue;
+    const meta = recipientsMeta[i];
+    const code = res.error?.code || res.error?.errorInfo?.code;
+    console.warn('FCM send failure', code, res.error?.message, meta);
+    if (!meta || !meta.userId || !meta.token) continue;
+    if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-argument') {
+      // Try to clear from devices subcollection and main fcmToken if matching
+      try {
+        await db.collection('users').doc(meta.userId).collection('devices').doc(meta.token).delete();
+      } catch {}
+      try {
+        const userRef = db.collection('users').doc(meta.userId);
+        const userDoc = await userRef.get();
+        if (userDoc.exists && userDoc.data()?.fcmToken === meta.token) {
+          await userRef.update({ fcmToken: null, notificationsEnabled: false });
+        }
+      } catch {}
+    }
+  }
+}
+
 // Owner reminders - one day before at 4 PM UTC
 exports.sendOwnerEventReminders = onSchedule({
   schedule: "0 16 * * *", // Daily at 4 PM UTC
@@ -33,8 +82,8 @@ exports.sendOwnerEventReminders = onSchedule({
       .where('status', 'in', ['pending', 'in_progress'])
       .get();
 
-    const notifications = [];
-    const ownerTokens = new Map();
+  const notifications = [];
+  const recipientsMeta = [];
 
     // Process events and notify owners
     for (const eventDoc of eventsSnapshot.docs) {
@@ -56,19 +105,10 @@ exports.sendOwnerEventReminders = onSchedule({
       const uniqueOwnerIds = [...new Set(ownerIds)];
       
       for (const userId of uniqueOwnerIds) {
-        // Cache user tokens and verify they exist as users
-        if (!ownerTokens.has(userId)) {
-          const userDoc = await db.collection('users').doc(userId).get();
-          const userData = userDoc.data();
-          if (userData?.fcmToken) {
-            ownerTokens.set(userId, userData.fcmToken);
-          }
-        }
-
-        const fcmToken = ownerTokens.get(userId);
-        if (fcmToken) {
+        const tokens = await getAllUserTokens(userId);
+        for (const token of tokens) {
           notifications.push({
-            token: fcmToken,
+            token,
             notification: {
               title: `Event Tomorrow: ${event.title}`,
               body: `Due tomorrow at ${new Date(event.startDateTime.toDate()).toLocaleTimeString()}`,
@@ -86,6 +126,7 @@ exports.sendOwnerEventReminders = onSchedule({
               }
             }
           });
+          recipientsMeta.push({ userId, token });
         }
       }
     }
@@ -94,8 +135,10 @@ exports.sendOwnerEventReminders = onSchedule({
     const batchSize = 500;
     for (let i = 0; i < notifications.length; i += batchSize) {
       const batch = notifications.slice(i, i + batchSize);
+      const metaBatch = recipientsMeta.slice(i, i + batchSize);
       if (batch.length > 0) {
-        await messaging.sendEach(batch);
+        const results = await messaging.sendEach(batch);
+        await handleSendResults(results, metaBatch);
       }
     }
 
@@ -129,25 +172,24 @@ exports.sendQualityTeamEventReminders = onSchedule({
       .where('status', 'in', ['pending', 'in_progress'])
       .get();
 
-    const notifications = [];
-    const qualityUserTokens = new Map();
+  const notifications = [];
+  const recipientsMeta = [];
 
     // Get all Quality team members
     const qualityUsersSnapshot = await db.collection('users')
-      .where('role', '==', 'Quality')
-      .where('fcmToken', '!=', null)
+      .where('role', 'in', ['Quality', 'quality'])
       .get();
 
-    // Cache quality team tokens
-    qualityUsersSnapshot.forEach(doc => {
-      const userData = doc.data();
-      if (userData.fcmToken) {
-        qualityUserTokens.set(doc.id, {
-          token: userData.fcmToken,
-          centers: userData.assignedCenters || []
-        });
+    // Build quality members with centers and tokens (multi-device)
+    const qualityMembers = [];
+    for (const docSnap of qualityUsersSnapshot.docs) {
+      const data = docSnap.data();
+      const centers = data.assignedCenters || [];
+      const tokens = await getAllUserTokens(docSnap.id);
+      if (tokens.length) {
+        qualityMembers.push({ userId: docSnap.id, centers, tokens });
       }
-    });
+    }
 
     // Process events for same-day reminders
     for (const eventDoc of eventsSnapshot.docs) {
@@ -160,15 +202,14 @@ exports.sendQualityTeamEventReminders = onSchedule({
       }
 
       // Notify Quality team members
-      for (const [userId, userData] of qualityUserTokens) {
-        // Check if quality member should be notified (center assignment)
-        const shouldNotify = userData.centers.length === 0 || 
-          (event.center && userData.centers.includes(event.center)) ||
-          (event.assignedCenters && event.assignedCenters.some(center => userData.centers.includes(center)));
-
-        if (shouldNotify) {
+      for (const member of qualityMembers) {
+        const shouldNotify = member.centers.length === 0 ||
+          (event.center && member.centers.includes(event.center)) ||
+          (event.assignedCenters && event.assignedCenters.some(center => member.centers.includes(center)));
+        if (!shouldNotify) continue;
+        for (const token of member.tokens) {
           notifications.push({
-            token: userData.token,
+            token,
             notification: {
               title: `Event Today: ${event.title}`,
               body: `Due today at ${eventTime.toLocaleTimeString()}`,
@@ -186,6 +227,7 @@ exports.sendQualityTeamEventReminders = onSchedule({
               }
             }
           });
+          recipientsMeta.push({ userId: member.userId, token });
         }
       }
 
@@ -198,12 +240,10 @@ exports.sendQualityTeamEventReminders = onSchedule({
       const uniqueOwnerIds = [...new Set(ownerIds)];
 
       for (const userId of uniqueOwnerIds) {
-        const userDoc = await db.collection('users').doc(userId).get();
-        const userData = userDoc.data();
-        
-        if (userData?.fcmToken) {
+        const tokens = await getAllUserTokens(userId);
+        for (const token of tokens) {
           notifications.push({
-            token: userData.fcmToken,
+            token,
             notification: {
               title: `Event Today: ${event.title}`,
               body: `Due today at ${eventTime.toLocaleTimeString()}`,
@@ -216,6 +256,7 @@ exports.sendQualityTeamEventReminders = onSchedule({
               timing: 'same_day'
             }
           });
+          recipientsMeta.push({ userId, token });
         }
       }
     }
@@ -224,8 +265,10 @@ exports.sendQualityTeamEventReminders = onSchedule({
     const batchSize = 500;
     for (let i = 0; i < notifications.length; i += batchSize) {
       const batch = notifications.slice(i, i + batchSize);
+      const metaBatch = recipientsMeta.slice(i, i + batchSize);
       if (batch.length > 0) {
-        await messaging.sendEach(batch);
+        const results = await messaging.sendEach(batch);
+        await handleSendResults(results, metaBatch);
       }
     }
 
@@ -254,27 +297,19 @@ exports.sendWeeklyOverdueTaskReminders = onSchedule({
       .where('status', 'in', ['pending', 'in_progress'])
       .get();
 
-    const notifications = [];
-    const userTokens = new Map();
+  const notifications = [];
+  const recipientsMeta = [];
 
     for (const eventDoc of overdueEventsSnapshot.docs) {
       const event = eventDoc.data();
       const assigneeIds = event.assignees || [];
       
       for (const userId of assigneeIds) {
-        if (!userTokens.has(userId)) {
-          const userDoc = await db.collection('users').doc(userId).get();
-          const userData = userDoc.data();
-          if (userData?.fcmToken) {
-            userTokens.set(userId, userData.fcmToken);
-          }
-        }
-
-        const fcmToken = userTokens.get(userId);
-        if (fcmToken) {
+        const tokens = await getAllUserTokens(userId);
+        for (const token of tokens) {
           const daysOverdue = Math.ceil((now - event.startDateTime.toDate()) / (1000 * 60 * 60 * 24));
           notifications.push({
-            token: fcmToken,
+            token,
             notification: {
               title: `Overdue Task: ${event.title}`,
               body: `This task is ${daysOverdue} days overdue`,
@@ -287,6 +322,7 @@ exports.sendWeeklyOverdueTaskReminders = onSchedule({
               url: '/calendar'
             }
           });
+          recipientsMeta.push({ userId, token });
         }
       }
     }
@@ -294,8 +330,10 @@ exports.sendWeeklyOverdueTaskReminders = onSchedule({
     const batchSize = 500;
     for (let i = 0; i < notifications.length; i += batchSize) {
       const batch = notifications.slice(i, i + batchSize);
+      const metaBatch = recipientsMeta.slice(i, i + batchSize);
       if (batch.length > 0) {
-        await messaging.sendEach(batch);
+        const results = await messaging.sendEach(batch);
+        await handleSendResults(results, metaBatch);
       }
     }
 

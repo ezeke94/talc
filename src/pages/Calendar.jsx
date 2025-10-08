@@ -35,7 +35,7 @@ import {
 import { useTheme } from '@mui/material/styles';
 import SearchIcon from '@mui/icons-material/Search';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
-import HistoryIcon from '@mui/icons-material/History';
+import CloseIcon from '@mui/icons-material/Close';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import LinkIcon from '@mui/icons-material/Link';
 import EventForm from '../components/EventForm';
@@ -782,22 +782,25 @@ const Calendar = () => {
                   Create New Event/Task
                 </Button>
               )}
-              <Tooltip title={showHistory ? 'Showing history (completed items)' : 'Hide history (active items)'}>
-                <IconButton
-                  color={showHistory ? 'primary' : 'default'}
-                  onClick={() => setShowHistory(v => !v)}
-                  sx={{ 
-                    ml: { xs: 0, sm: 1 }, 
-                    p: { xs: 1, sm: 1.5 },
-                    border: showHistory ? '2px solid' : undefined, 
-                    borderColor: showHistory ? 'primary.main' : undefined, 
-                    bgcolor: showHistory ? 'background.paper' : undefined 
-                  }}
-                  aria-label="toggle-history"
-                  size={isMobile ? "small" : "medium"}
-                >
-                  <HistoryIcon sx={{ fontSize: { xs: '1.1rem', sm: '1.5rem' } }} />
-                </IconButton>
+              <Tooltip title={showHistory ? 'History view on (completed items)' : 'Show history (completed items)'}>
+                <span>
+                  <Chip
+                    label="History"
+                    color={showHistory ? 'primary' : 'default'}
+                    variant={showHistory ? 'filled' : 'outlined'}
+                    clickable
+                    onClick={() => setShowHistory(v => !v)}
+                    onDelete={showHistory ? () => setShowHistory(false) : undefined}
+                    deleteIcon={showHistory ? <CloseIcon sx={{ fontSize: { xs: '0.9rem', sm: '1rem' } }} /> : undefined}
+                    sx={{
+                      ml: { xs: 0, sm: 1 },
+                      height: { xs: 28, sm: 32 },
+                      '& .MuiChip-label': { px: 1.25, fontWeight: 600 }
+                    }}
+                    aria-label="toggle-history"
+                    size={isMobile ? 'small' : 'medium'}
+                  />
+                </span>
               </Tooltip>
             </Stack>
           </Stack>

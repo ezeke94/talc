@@ -1,6 +1,6 @@
 // Enhanced notification utilities for TALC Management Application
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 
 let messaging = null;
@@ -61,13 +61,28 @@ export async function setupNotifications(currentUser) {
 
     console.log('FCM registration token obtained:', token);
 
-    // Save token to user document
+    // Save token to user document (merge ensures doc is created if missing)
     const userRef = doc(db, 'users', currentUser.uid);
-    await updateDoc(userRef, {
+    await setDoc(userRef, {
       fcmToken: token,
       notificationsEnabled: true,
       lastTokenUpdate: new Date()
-    });
+    }, { merge: true });
+
+    // Additionally, record this device token in a subcollection for multi-device support
+    try {
+      const deviceRef = doc(db, 'users', currentUser.uid, 'devices', token);
+      await setDoc(deviceRef, {
+        token,
+        platform: navigator?.platform || 'web',
+        userAgent: navigator?.userAgent || '',
+        createdAt: serverTimestamp(),
+        lastSeenAt: serverTimestamp(),
+        enabled: true
+      }, { merge: true });
+    } catch (e) {
+      console.warn('Failed to record device token subdoc (non-fatal):', e);
+    }
 
     // Setup foreground message handler
     onMessage(msg, (payload) => {
@@ -160,11 +175,11 @@ export async function disableNotifications(currentUser) {
 
   try {
     const userRef = doc(db, 'users', currentUser.uid);
-    await updateDoc(userRef, {
+    await setDoc(userRef, {
       fcmToken: null,
       notificationsEnabled: false,
       lastTokenUpdate: new Date()
-    });
+    }, { merge: true });
 
     console.log('Notifications disabled for user');
     return true;
