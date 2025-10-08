@@ -900,10 +900,10 @@ const Calendar = () => {
           </Box>
         )}
 
-        {/* Responsive: Table for desktop, Cards for mobile */}
+        {/* Responsive: Table for desktop, Cards for mobile/tablet */}
         {(() => {
           const theme = useTheme();
-          const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+          const isMobile = useMediaQuery('(max-width:1300px)');
           if (loading) {
             return <Typography>Loading events/tasks...</Typography>;
           }
