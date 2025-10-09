@@ -292,16 +292,16 @@ exports.notifyEventDelete = onDocumentDeleted({
       }
     }
 
-    // Also notify supervisors (Admin/Quality roles) - handle role case variants
+    // Also notify supervisors (Admin/Quality roles) - query by role only, filter fcmToken in memory
     const supervisorRoles = ['Admin', 'Quality', 'admin', 'quality'];
     const supervisorsSnapshot = await db
       .collection('users')
       .where('role', 'in', supervisorRoles)
-      .where('fcmToken', '!=', null)
       .get();
 
     supervisorsSnapshot.forEach((docSnap) => {
       const userData = docSnap.data();
+      // Filter for valid FCM tokens in memory to avoid composite index requirement
       if (userData.fcmToken) {
         messages.push({
           token: userData.fcmToken,
