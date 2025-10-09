@@ -304,14 +304,7 @@ exports.notifyEventDelete = onDocumentDeleted({
           const code = res.error?.code || res.error?.errorInfo?.code;
           const recipientId = recipientIds[idx];
           console.warn(`Notification send failed for user ${recipientId}:`, code, res.error?.message);
-          if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-argument') {
-            try {
-              await db.collection('users').doc(recipientId).update({ fcmToken: null, notificationsEnabled: false });
-              console.log(`Cleared invalid FCM token for user ${recipientId}`);
-            } catch (clearErr) {
-              console.error(`Failed to clear FCM token for user ${recipientId}:`, clearErr);
-            }
-          }
+          // No token removal
         }
       });
     }

@@ -34,7 +34,7 @@ async function getAllUserTokens(userId) {
   return Array.from(tokens);
 }
 
-// Helper: after sending, clean invalid tokens from user profile/devices
+// Helper: after sending, log FCM send failures (do not clear tokens)
 async function handleSendResults(results, recipientsMeta) {
   const responses = results.responses || [];
   for (let i = 0; i < responses.length; i++) {
@@ -43,20 +43,7 @@ async function handleSendResults(results, recipientsMeta) {
     const meta = recipientsMeta[i];
     const code = res.error?.code || res.error?.errorInfo?.code;
     console.warn('FCM send failure', code, res.error?.message, meta);
-    if (!meta || !meta.userId || !meta.token) continue;
-    if (code === 'messaging/registration-token-not-registered' || code === 'messaging/invalid-argument') {
-      // Try to clear from devices subcollection and main fcmToken if matching
-      try {
-        await db.collection('users').doc(meta.userId).collection('devices').doc(meta.token).delete();
-      } catch {}
-      try {
-        const userRef = db.collection('users').doc(meta.userId);
-        const userDoc = await userRef.get();
-        if (userDoc.exists && userDoc.data()?.fcmToken === meta.token) {
-          await userRef.update({ fcmToken: null, notificationsEnabled: false });
-        }
-      } catch {}
-    }
+    // No token removal
   }
 }
 

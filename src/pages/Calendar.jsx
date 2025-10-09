@@ -188,7 +188,7 @@ const Calendar = () => {
 
   // Theme breakpoint helper for responsive UI (used to show FAB on mobile)
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const isMobile = useMediaQuery(theme.breakpoints.down('900px'));
 
   // Export PDF for upcoming week
   // ...existing code...
@@ -894,7 +894,7 @@ const Calendar = () => {
         {/* Responsive: Table for desktop, Cards for mobile/tablet */}
         {(() => {
           const theme = useTheme();
-          const isMobile = useMediaQuery('(max-width:1300px)');
+          const isMobile = useMediaQuery('(max-width:900px)');
           if (loading) {
             return <Typography>Loading events/tasks...</Typography>;
           }
