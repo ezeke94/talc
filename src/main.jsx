@@ -15,10 +15,25 @@ const ensureFirebaseMessagingServiceWorker = () => {
 
   const registerIfNeeded = async () => {
     try {
-      const existing = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
-      if (!existing) {
-        await navigator.serviceWorker.register('/firebase-messaging-sw.js');
-        console.log('Firebase messaging service worker registered proactively');
+      // Check if we already have the firebase messaging service worker registered
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      const firebaseSwRegistered = registrations.some(reg => {
+        const scriptUrl = reg.active?.scriptURL || reg.installing?.scriptURL || reg.waiting?.scriptURL;
+        return scriptUrl && scriptUrl.includes('firebase-messaging-sw.js');
+      });
+
+      if (!firebaseSwRegistered) {
+        // Register with explicit scope at root
+        const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+          scope: '/'
+        });
+        console.log('Firebase messaging service worker registered proactively:', registration.scope);
+        
+        // Wait for it to become active
+        await navigator.serviceWorker.ready;
+        console.log('Firebase messaging service worker is ready');
+      } else {
+        console.log('Firebase messaging service worker already registered');
       }
     } catch (err) {
       console.warn('Unable to register firebase messaging service worker upfront:', err);

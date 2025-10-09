@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Android Notification Test - TALC</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #7BC678;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #4F9B4E;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        pre {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            overflow-x: auto;
+        }
+        #log {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔔 Android Notification Test</h1>
+    
+    <div class="card">
+        <h2>Service Worker Status</h2>
+        <div id="sw-status"></div>
+        <button onclick="checkServiceWorker()">Check Service Worker</button>
+        <button onclick="registerServiceWorker()">Register SW</button>
+        <button onclick="unregisterAllSW()">Unregister All SW</button>
+    </div>
+
+    <div class="card">
+        <h2>Notification Permission</h2>
+        <div id="permission-status"></div>
+        <button onclick="requestPermission()">Request Permission</button>
+    </div>
+
+    <div class="card">
+        <h2>Test Notifications</h2>
+        <button onclick="showTestNotification()">Show System Notification</button>
+        <button onclick="sendMessageToSW()">Send Message to SW</button>
+    </div>
+
+    <div class="card">
+        <h2>Device Info</h2>
+        <pre id="device-info"></pre>
+    </div>
+
+    <div class="card">
+        <h2>Log</h2>
+        <button onclick="clearLog()">Clear Log</button>
+        <div id="log"></div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = 'status ' + type;
+            entry.textContent = new Date().toLocaleTimeString() + ' - ' + message;
+            logDiv.insertBefore(entry, logDiv.firstChild);
+            console.log(message);
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        async function checkServiceWorker() {
+            if (!('serviceWorker' in navigator)) {
+                log('Service workers not supported', 'error');
+                return;
+            }
+
+            try {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                log(`Found ${registrations.length} service worker(s)`, 'success');
+                
+                let html = `<div class="status info">Total: ${registrations.length} registration(s)</div>`;
+                
+                registrations.forEach((reg, index) => {
+                    const scriptUrl = reg.active?.scriptURL || reg.installing?.scriptURL || reg.waiting?.scriptURL || 'unknown';
+                    const scope = reg.scope;
+                    const state = reg.active ? 'active' : reg.installing ? 'installing' : reg.waiting ? 'waiting' : 'unknown';
+                    
+                    html += `<div class="status ${scriptUrl.includes('firebase-messaging') ? 'success' : 'info'}">
+                        <strong>SW ${index + 1}:</strong><br/>
+                        Script: ${scriptUrl}<br/>
+                        Scope: ${scope}<br/>
+                        State: ${state}
+                    </div>`;
+                    
+                    log(`SW ${index + 1}: ${scriptUrl} (${state})`, scriptUrl.includes('firebase-messaging') ? 'success' : 'info');
+                });
+                
+                document.getElementById('sw-status').innerHTML = html;
+            } catch (err) {
+                log('Error checking service workers: ' + err.message, 'error');
+            }
+        }
+
+        async function registerServiceWorker() {
+            if (!('serviceWorker' in navigator)) {
+                log('Service workers not supported', 'error');
+                return;
+            }
+
+            try {
+                const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+                    scope: '/'
+                });
+                log('Service worker registered successfully! Scope: ' + registration.scope, 'success');
+                
+                await navigator.serviceWorker.ready;
+                log('Service worker is ready', 'success');
+                
+                checkServiceWorker();
+            } catch (err) {
+                log('Error registering service worker: ' + err.message, 'error');
+            }
+        }
+
+        async function unregisterAllSW() {
+            if (!('serviceWorker' in navigator)) {
+                log('Service workers not supported', 'error');
+                return;
+            }
+
+            try {
+                const registrations = await navigator.serviceWorker.getRegistrations();
+                for (const reg of registrations) {
+                    await reg.unregister();
+                    log('Unregistered: ' + (reg.active?.scriptURL || 'unknown'), 'success');
+                }
+                checkServiceWorker();
+            } catch (err) {
+                log('Error unregistering service workers: ' + err.message, 'error');
+            }
+        }
+
+        async function requestPermission() {
+            if (!('Notification' in window)) {
+                log('Notifications not supported', 'error');
+                return;
+            }
+
+            try {
+                const permission = await Notification.requestPermission();
+                log('Notification permission: ' + permission, permission === 'granted' ? 'success' : 'error');
+                updatePermissionStatus();
+            } catch (err) {
+                log('Error requesting permission: ' + err.message, 'error');
+            }
+        }
+
+        function updatePermissionStatus() {
+            const status = document.getElementById('permission-status');
+            const permission = 'Notification' in window ? Notification.permission : 'not supported';
+            const className = permission === 'granted' ? 'success' : permission === 'denied' ? 'error' : 'info';
+            status.innerHTML = `<div class="status ${className}">Permission: ${permission}</div>`;
+        }
+
+        async function showTestNotification() {
+            if (!('serviceWorker' in navigator)) {
+                log('Service workers not supported', 'error');
+                return;
+            }
+
+            if (Notification.permission !== 'granted') {
+                log('Notification permission not granted', 'error');
+                return;
+            }
+
+            try {
+                const registration = await navigator.serviceWorker.ready;
+                
+                await registration.showNotification('Test Notification', {
+                    body: 'This is a system notification from the service worker',
+                    icon: '/favicon.ico',
+                    badge: '/favicon.ico',
+                    tag: 'test-notification',
+                    requireInteraction: false,
+                    data: {
+                        url: '/test-android-notifications.html',
+                        type: 'test',
+                        timestamp: Date.now()
+                    }
+                });
+                
+                log('System notification shown via service worker', 'success');
+            } catch (err) {
+                log('Error showing notification: ' + err.message, 'error');
+            }
+        }
+
+        async function sendMessageToSW() {
+            if (!navigator.serviceWorker.controller) {
+                log('No service worker controller active', 'error');
+                return;
+            }
+
+            const payload = {
+                notification: {
+                    title: 'Test Foreground Message',
+                    body: 'This simulates a foreground FCM message',
+                    icon: '/favicon.ico'
+                },
+                data: {
+                    type: 'test',
+                    url: '/test-android-notifications.html'
+                }
+            };
+
+            navigator.serviceWorker.controller.postMessage({
+                type: 'NOTIFICATION_RECEIVED',
+                payload: payload
+            });
+
+            log('Message sent to service worker', 'success');
+        }
+
+        function updateDeviceInfo() {
+            const info = {
+                userAgent: navigator.userAgent,
+                platform: navigator.platform,
+                isAndroid: /Android/.test(navigator.userAgent),
+                isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent),
+                isPWA: window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches,
+                hasServiceWorker: 'serviceWorker' in navigator,
+                hasPushManager: 'PushManager' in window,
+                hasNotification: 'Notification' in window,
+                notificationPermission: 'Notification' in window ? Notification.permission : 'N/A',
+                viewport: {
+                    width: window.innerWidth,
+                    height: window.innerHeight,
+                    devicePixelRatio: window.devicePixelRatio
+                }
+            };
+            
+            document.getElementById('device-info').textContent = JSON.stringify(info, null, 2);
+        }
+
+        // Initialize on load
+        window.addEventListener('load', () => {
+            log('Page loaded', 'success');
+            updatePermissionStatus();
+            updateDeviceInfo();
+            checkServiceWorker();
+        });
+
+        // Listen for messages from service worker
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.addEventListener('message', (event) => {
+                log('Message from SW: ' + JSON.stringify(event.data), 'info');
+            });
+        }
+    </script>
+</body>
+</html>

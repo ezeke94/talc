@@ -67,9 +67,23 @@ export async function setupNotifications(currentUser) {
     // Ensure the messaging service worker is registered at the root scope
     let swReg = null;
     try {
-      swReg = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
+      // First check all registrations to find firebase messaging SW
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      swReg = registrations.find(reg => {
+        const scriptUrl = reg.active?.scriptURL || reg.installing?.scriptURL || reg.waiting?.scriptURL;
+        return scriptUrl && scriptUrl.includes('firebase-messaging-sw.js');
+      });
+
       if (!swReg) {
-        swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        // Register it if not found, with explicit root scope
+        swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
+          scope: '/'
+        });
+        console.log('Registered firebase-messaging-sw.js with scope:', swReg.scope);
+        // Wait for it to be ready
+        await navigator.serviceWorker.ready;
+      } else {
+        console.log('Found existing firebase-messaging-sw.js registration:', swReg.scope);
       }
     } catch (swErr) {
       console.warn('Service worker registration failed or unavailable:', swErr);
@@ -107,13 +121,24 @@ export async function setupNotifications(currentUser) {
     }
 
     // Setup foreground message handler
+    // NOTE: On Android, we want the service worker to handle notifications even when the app is open
+    // so they appear as system notifications. Only show custom in-app UI for iOS in certain cases.
     onMessage(msg, (payload) => {
       console.log('Foreground message received:', payload);
       
-      // Show custom notification for foreground messages
-      const { title, body, icon } = payload.notification || {};
-      if (title) {
-        showCustomNotification(title, body, icon, payload.data);
+      // Let service worker handle it for system notifications on Android
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        // Forward to service worker to display as system notification
+        navigator.serviceWorker.controller.postMessage({
+          type: 'NOTIFICATION_RECEIVED',
+          payload: payload
+        });
+      } else {
+        // Fallback: show custom notification if no service worker
+        const { title, body, icon } = payload.notification || {};
+        if (title) {
+          showCustomNotification(title, body, icon, payload.data);
+        }
       }
     });
 

@@ -134,3 +134,86 @@ self.addEventListener('notificationclick', (event) => {
 self.addEventListener('notificationclose', (event) => {
   console.log('[firebase-messaging-sw.js] Notification closed:', event.notification.data?.type);
 });
+
+// Handle messages from the main app (for foreground notifications)
+self.addEventListener('message', (event) => {
+  console.log('[firebase-messaging-sw.js] Message received from app:', event.data);
+  
+  if (event.data && event.data.type === 'NOTIFICATION_RECEIVED') {
+    const payload = event.data.payload;
+    const { title, body, icon } = payload.notification || {};
+    const { type, url } = payload.data || {};
+
+    // Show notification using the same logic as background messages
+    let notificationTitle = title || 'TALC Notification';
+    let notificationOptions = {
+      body: body || 'You have a new notification',
+      icon: icon || '/favicon.ico',
+      badge: '/favicon.ico',
+      tag: type || 'general',
+      data: {
+        url: url || '/',
+        type: type,
+        timestamp: Date.now()
+      },
+      requireInteraction: false,
+      silent: false
+    };
+
+    // Customize based on notification type (same as background handler)
+    switch (type) {
+      case 'event_reminder':
+      case 'event_reminder_owner':
+      case 'event_reminder_quality':
+      case 'event_reminder_owner_same_day':
+        notificationOptions.requireInteraction = true;
+        notificationOptions.actions = [
+          { action: 'view', title: 'View Event', icon: '/favicon.ico' },
+          { action: 'dismiss', title: 'Dismiss' }
+        ];
+        if (type === 'event_reminder_owner') {
+          notificationOptions.tag = 'event_reminder_tomorrow';
+        } else if (type.includes('same_day')) {
+          notificationOptions.tag = 'event_reminder_today';
+          notificationOptions.requireInteraction = true;
+        }
+        break;
+        
+      case 'event_reschedule':
+      case 'event_cancellation':
+        notificationOptions.requireInteraction = true;
+        notificationOptions.tag = 'event_change';
+        break;
+        
+      case 'task_overdue':
+        notificationOptions.requireInteraction = true;
+        notificationOptions.actions = [
+          { action: 'view', title: 'View Tasks', icon: '/favicon.ico' },
+          { action: 'snooze', title: 'Remind Later' }
+        ];
+        break;
+        
+      case 'kpi_reminder':
+        notificationOptions.actions = [
+          { action: 'view', title: 'View Mentors', icon: '/favicon.ico' },
+          { action: 'dismiss', title: 'Later' }
+        ];
+        break;
+        
+      case 'system_alert':
+        notificationOptions.requireInteraction = true;
+        notificationOptions.silent = false;
+        notificationOptions.tag = 'critical_alert';
+        break;
+        
+      case 'monthly_summary':
+        notificationOptions.requireInteraction = false;
+        notificationOptions.actions = [
+          { action: 'view', title: 'View Dashboard', icon: '/favicon.ico' }
+        ];
+        break;
+    }
+
+    self.registration.showNotification(notificationTitle, notificationOptions);
+  }
+});
