@@ -68,11 +68,19 @@ const MentorForm = ({ open, onClose, onSave, mentor }) => {
         if (!validate()) return;
         setSaving(true);
         try {
+            // Serialize assignedEvaluator to plain object (avoid Firestore metadata)
+            const evaluatorData = assignedEvaluator ? {
+                id: assignedEvaluator.id,
+                name: assignedEvaluator.name,
+                role: assignedEvaluator.role,
+                email: assignedEvaluator.email
+            } : null;
+
             await onSave({ 
                 name, 
                 assignedCenters, 
                 assignedFormIds,
-                assignedEvaluator
+                assignedEvaluator: evaluatorData
             });
             setName('');
             setAssignedCenters([]);
@@ -81,6 +89,7 @@ const MentorForm = ({ open, onClose, onSave, mentor }) => {
             setErrors({});
             setSaving(false);
         } catch (err) {
+            console.error('Error saving mentor:', err);
             setErrors({ form: 'Failed to save. Please try again.' });
             setSaving(false);
         }

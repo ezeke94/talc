@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Box, Card, CardContent, CardActions, Avatar, IconButton, Button, Typography, Fab, useTheme, useMediaQuery, Tooltip, TextField, Chip, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper as MuiPaper } from '@mui/material';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
-import VisibilityIcon from '@mui/icons-material/Visibility';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 import AddIcon from '@mui/icons-material/Add';
+import ModeEditOutlineIcon from '@mui/icons-material/ModeEditOutline';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { db } from '../firebase/config';
 import { collection, onSnapshot, addDoc, updateDoc, deleteDoc, doc, query, where, getDocs } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
@@ -157,25 +159,30 @@ const Mentors = () => {
             return (
                 <Tooltip 
                     key={id} 
-                    title={isSubmitted ? 'Submitted this month' : 'Not submitted this month'}
+                    title={isSubmitted ? '✓ Submitted this month' : '○ Not submitted this month'}
                     arrow
+                    placement="top"
                 >
                     <Chip 
                         label={formName} 
-                        size="small"
+                        size={isDesktop ? 'small' : 'medium'}
                         color={isSubmitted ? 'success' : 'default'}
                         variant={isSubmitted ? 'filled' : 'outlined'}
                         onClick={(e) => e.stopPropagation()}
                         sx={{
-                            bgcolor: isSubmitted ? 'success.main' : 'grey.300',
+                            bgcolor: isSubmitted ? 'success.main' : 'background.paper',
                             color: isSubmitted ? 'success.contrastText' : 'text.primary',
+                            borderColor: isSubmitted ? 'success.main' : 'divider',
+                            fontWeight: isSubmitted ? 600 : 500,
+                            fontSize: isDesktop ? '0.75rem' : '0.8125rem',
+                            height: isDesktop ? 24 : 32,
+                            minHeight: isDesktop ? 24 : 44, // Larger touch target for mobile
                             '&:hover': {
-                                bgcolor: isSubmitted ? 'success.dark' : 'grey.400',
+                                bgcolor: isSubmitted ? 'success.dark' : 'grey.100',
+                                borderColor: isSubmitted ? 'success.dark' : 'grey.400',
                             },
-                            ...(isDesktop && {
-                                fontSize: '0.75rem',
-                                height: '24px'
-                            })
+                            transition: 'all 0.2s ease',
+                            boxShadow: isSubmitted ? '0 2px 4px rgba(76, 175, 80, 0.2)' : 'none'
                         }}
                     />
                 </Tooltip>
@@ -184,88 +191,285 @@ const Mentors = () => {
     };
 
     return (
-        <Box sx={{ width: '100%' }}>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h4" sx={{ fontWeight: 700 }}>Manage Mentors</Typography>
+        <Box sx={{ 
+            width: '100%',
+            pb: isMobile ? 10 : 0 // Extra padding at bottom for FAB on mobile
+        }}>
+            <Box sx={{ 
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                alignItems: 'center', 
+                mb: { xs: 2, sm: 3 },
+                flexWrap: 'wrap',
+                gap: 1
+            }}>
+                <Typography 
+                    variant="h4" 
+                    sx={{ 
+                        fontWeight: 700,
+                        fontSize: { xs: '1.5rem', sm: '2rem' }
+                    }}
+                >
+                    Record KPIs
+                </Typography>
                 {!isMobile && (
-                    <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpen()} sx={{ borderRadius: 2 }}>
+                    <Button 
+                        variant="contained" 
+                        startIcon={<AddIcon />} 
+                        onClick={() => handleOpen()} 
+                        sx={{ borderRadius: 2 }}
+                    >
                         Add Mentor
                     </Button>
                 )}
             </Box>
-            <Box sx={{ mb: 2 }}>
+            <Box sx={{ mb: { xs: 2, sm: 3 } }}>
                 <TextField
                     fullWidth
                     variant="outlined"
                     placeholder="Search by name or center..."
                     value={search}
                     onChange={e => setSearch(e.target.value)}
+                    sx={{
+                        '& .MuiOutlineInputBase-root': {
+                            borderRadius: { xs: 2, sm: 1 }
+                        }
+                    }}
                 />
             </Box>
+            
+            {/* Results count for mobile */}
+            {isMobile && (
+                <Typography 
+                    variant="body2" 
+                    color="text.secondary" 
+                    sx={{ mb: 2, px: 0.5 }}
+                >
+                    {filteredMentors.length} mentor{filteredMentors.length !== 1 ? 's' : ''} found
+                </Typography>
+            )}
 
             {isMobile ? (
                 <Box>
-                    {filteredMentors.map(mentor => {
-                        const centers = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
-                        const formChips = getFormChips(mentor, false);
-                        return (
-                            <Card
-                                key={mentor.id}
-                                onClick={() => navigate(`/mentor/${mentor.id}`)}
-                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') navigate(`/mentor/${mentor.id}`); }}
-                                role="button"
-                                tabIndex={0}
-                                sx={{ mb: 2, boxShadow: 2, borderRadius: 3, cursor: 'pointer' }}
-                            >
-                                <CardContent sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                                    <Avatar sx={{ width: 48, height: 48, bgcolor: 'primary.light', fontWeight: 600 }}>
-                                        {mentor.name ? mentor.name.charAt(0).toUpperCase() : '?'}
-                                    </Avatar>
-                                    <Box sx={{ flex: 1 }}>
-                                        <Typography variant="h6" sx={{ fontWeight: 600 }}>{mentor.name}</Typography>
-                                        <Typography variant="body2" color="text.secondary">{centers.join(", ")}</Typography>
-                                        {mentor.assignedEvaluator && (
-                                            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-                                                Evaluator: {mentor.assignedEvaluator.name}
-                                            </Typography>
-                                        )}
-                                        {formChips.length > 0 && (
-                                            <Box sx={{ mt: 0.5, overflowX: 'auto' }} onClick={(e) => e.stopPropagation()}>
-                                                <Stack direction="row" spacing={0.5} sx={{ pt: 0.5 }}>
-                                                    {formChips}
-                                                </Stack>
-                                            </Box>
-                                        )}
-                                    </Box>
-                                    <CardActions sx={{ display: 'flex', flexDirection: 'row', gap: 1 }}>
-                                        <Tooltip title="View Details">
-                                            <IconButton
-                                                aria-label="view details"
-                                                onClick={(e) => { e.stopPropagation(); navigate(`/mentor/${mentor.id}`); }}
-                                                sx={{ p: 1 }}
+                    {filteredMentors.length === 0 ? (
+                        <Card sx={{ p: 4, textAlign: 'center', borderRadius: 3 }}>
+                            <Typography variant="h6" color="text.secondary" gutterBottom>
+                                No mentors found
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                                {search ? 'Try adjusting your search' : 'Add your first mentor to get started'}
+                            </Typography>
+                        </Card>
+                    ) : (
+                        filteredMentors.map(mentor => {
+                            const centers = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
+                            const formChips = getFormChips(mentor, false);
+                            return (
+                                <Card
+                                    key={mentor.id}
+                                    onClick={() => navigate(`/mentor/${mentor.id}`)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') navigate(`/mentor/${mentor.id}`); }}
+                                    role="button"
+                                    tabIndex={0}
+                                    sx={{ 
+                                        mb: 1.5, 
+                                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)', 
+                                        borderRadius: 2, 
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s ease',
+                                        '&:hover': {
+                                            boxShadow: '0 4px 16px rgba(0,0,0,0.12)',
+                                            transform: 'translateY(-2px)'
+                                        },
+                                        '&:active': {
+                                            transform: 'translateY(0)',
+                                            boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+                                        }
+                                    }}
+                                >
+                                    <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                                        {/* Header: Avatar + Name + Centers + Action Buttons in one row */}
+                                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+                                            <Avatar 
+                                                sx={{ 
+                                                    width: 48, 
+                                                    height: 48, 
+                                                    bgcolor: 'primary.main',
+                                                    color: 'primary.contrastText',
+                                                    fontWeight: 700,
+                                                    fontSize: '1.25rem',
+                                                    flexShrink: 0
+                                                }}
                                             >
-                                                <VisibilityIcon />
-                                            </IconButton>
-                                        </Tooltip>
-                                        <Tooltip title="Edit">
-                                            <IconButton aria-label="edit" onClick={(e) => { e.stopPropagation(); handleOpen(mentor); }} sx={{ p: 1 }}>
-                                                <EditIcon />
-                                            </IconButton>
-                                        </Tooltip>
-                                        {userRole !== 'evaluator' && (
-                                            <Tooltip title="Delete">
-                                                <IconButton aria-label="delete" onClick={(e) => { e.stopPropagation(); handleDelete(mentor.id); }} sx={{ p: 1 }}>
-                                                    <DeleteIcon />
-                                                </IconButton>
-                                            </Tooltip>
-                                        )}
-                                    </CardActions>
-                                </CardContent>
-                            </Card>
-                        );
-                    })}
-                    <Fab color="primary" aria-label="add" onClick={() => handleOpen()} sx={{ position: 'fixed', bottom: 32, right: 32, zIndex: 1000 }}>
-                        <AddIcon />
+                                                {mentor.name ? mentor.name.charAt(0).toUpperCase() : '?'}
+                                            </Avatar>
+                                            
+                                            <Box sx={{ flex: 1, minWidth: 0 }}>
+                                                <Typography 
+                                                    variant="subtitle1" 
+                                                    sx={{ 
+                                                        fontWeight: 600,
+                                                        fontSize: '1rem',
+                                                        lineHeight: 1.3,
+                                                        overflow: 'hidden',
+                                                        textOverflow: 'ellipsis',
+                                                        whiteSpace: 'nowrap'
+                                                    }}
+                                                >
+                                                    {mentor.name}
+                                                </Typography>
+                                                {centers.length > 0 && (
+                                                    <Typography 
+                                                        variant="caption" 
+                                                        color="text.secondary"
+                                                        sx={{ 
+                                                            display: 'block',
+                                                            overflow: 'hidden',
+                                                            textOverflow: 'ellipsis',
+                                                            whiteSpace: 'nowrap',
+                                                            fontSize: '0.75rem'
+                                                        }}
+                                                    >
+                                                        {centers.join(", ")}
+                                                    </Typography>
+                                                )}
+                                            </Box>
+
+                                            <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
+                                                <Tooltip title="Edit">
+                                                    <IconButton 
+                                                        aria-label="edit" 
+                                                        onClick={(e) => { e.stopPropagation(); handleOpen(mentor); }}
+                                                        size="small"
+                                                        sx={{ 
+                                                            width: 40,
+                                                            height: 40,
+                                                            borderRadius: '50%',
+                                                            bgcolor: 'primary.main',
+                                                            color: 'white',
+                                                            '&:hover': {
+                                                                bgcolor: 'primary.dark'
+                                                            }
+                                                        }}
+                                                    >
+                                                        <ModeEditOutlineIcon sx={{ fontSize: '1.2rem' }} />
+                                                    </IconButton>
+                                                </Tooltip>
+                                                {userRole !== 'evaluator' && (
+                                                    <Tooltip title="Delete">
+                                                        <IconButton 
+                                                            aria-label="delete" 
+                                                            onClick={(e) => { e.stopPropagation(); handleDelete(mentor.id); }}
+                                                            size="small"
+                                                            sx={{ 
+                                                                width: 40,
+                                                                height: 40,
+                                                                borderRadius: '50%',
+                                                                bgcolor: 'error.main',
+                                                                color: 'white',
+                                                                '&:hover': {
+                                                                    bgcolor: 'error.dark'
+                                                                }
+                                                            }}
+                                                        >
+                                                            <DeleteOutlineIcon sx={{ fontSize: '1.2rem' }} />
+                                                        </IconButton>
+                                                    </Tooltip>
+                                                )}
+                                            </Box>
+                                        </Box>
+
+                                        {/* Compact info section: Evaluator + Forms in single row */}
+                                        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 1.5 }}>
+                                            <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
+                                                <Typography 
+                                                    variant="caption" 
+                                                    color="text.secondary" 
+                                                    sx={{ 
+                                                        fontWeight: 600,
+                                                        textTransform: 'uppercase',
+                                                        fontSize: '0.65rem',
+                                                        letterSpacing: '0.5px',
+                                                        flexShrink: 0
+                                                    }}
+                                                >
+                                                    Evaluator:
+                                                </Typography>
+                                                <Typography variant="body2" sx={{ fontWeight: 500, fontSize: '0.875rem' }}>
+                                                    {mentor.assignedEvaluator ? mentor.assignedEvaluator.name : 'Not Assigned'}
+                                                </Typography>
+                                            </Box>
+
+                                            {formChips.length > 0 && (
+                                                <Box>
+                                                    <Typography 
+                                                        variant="caption" 
+                                                        color="text.secondary" 
+                                                        sx={{ 
+                                                            fontWeight: 600,
+                                                            textTransform: 'uppercase',
+                                                            fontSize: '0.65rem',
+                                                            letterSpacing: '0.5px',
+                                                            display: 'block',
+                                                            mb: 0.5
+                                                        }}
+                                                    >
+                                                        Forms ({formChips.length})
+                                                    </Typography>
+                                                    <Box 
+                                                        onClick={(e) => e.stopPropagation()}
+                                                        sx={{ 
+                                                            display: 'flex',
+                                                            flexWrap: 'wrap',
+                                                            gap: 0.5
+                                                        }}
+                                                    >
+                                                        {formChips}
+                                                    </Box>
+                                                </Box>
+                                            )}
+                                        </Box>
+
+                                        {/* Evaluate button */}
+                                        <Button
+                                            variant="contained"
+                                            size="medium"
+                                            fullWidth
+                                            startIcon={<AssessmentIcon />}
+                                            onClick={(e) => { e.stopPropagation(); navigate(`/mentor/${mentor.id}`); }}
+                                            sx={{ 
+                                                minHeight: 44,
+                                                borderRadius: 1.5,
+                                                fontWeight: 600,
+                                                textTransform: 'none',
+                                                fontSize: '0.9375rem'
+                                            }}
+                                        >
+                                            Evaluate
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+                            );
+                        })
+                    )}
+                    <Fab 
+                        color="primary" 
+                        aria-label="add" 
+                        onClick={() => handleOpen()} 
+                        sx={{ 
+                            position: 'fixed', 
+                            bottom: { xs: 24, sm: 32 }, 
+                            right: { xs: 20, sm: 32 }, 
+                            width: { xs: 64, sm: 56 },
+                            height: { xs: 64, sm: 56 },
+                            zIndex: 1000,
+                            boxShadow: '0 4px 20px rgba(123,198,120,0.4)',
+                            '&:hover': {
+                                boxShadow: '0 6px 24px rgba(123,198,120,0.5)'
+                            }
+                        }}
+                    >
+                        <AddIcon sx={{ fontSize: { xs: '2rem', sm: '1.5rem' } }} />
                     </Fab>
                 </Box>
             ) : (
@@ -325,9 +529,9 @@ const Mentors = () => {
                                             )}
                                         </TableCell>
                                         <TableCell align="right">
-                                            <Tooltip title="View Details">
-                                                <IconButton aria-label="view details" onClick={(e) => { e.stopPropagation(); navigate(`/mentor/${mentor.id}`); }} size="small">
-                                                    <VisibilityIcon fontSize="small" />
+                                            <Tooltip title="Evaluate">
+                                                <IconButton aria-label="evaluate" onClick={(e) => { e.stopPropagation(); navigate(`/mentor/${mentor.id}`); }} size="small">
+                                                    <AssessmentIcon fontSize="small" />
                                                 </IconButton>
                                             </Tooltip>
                                             <Tooltip title="Edit">

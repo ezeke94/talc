@@ -144,21 +144,30 @@ const SOPManager = () => {
   const removeTodo = idx => setTodos(todos.filter((_, i) => i !== idx));
 
   return (
-    <Container maxWidth="lg">
-      <Paper elevation={3} sx={{ borderRadius: 3 }}>
+    <Container maxWidth="lg" sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
+      <Paper elevation={3} sx={{ borderRadius: { xs: 2, sm: 3 } }}>
         {/* Header Section */}
         <Box sx={{ 
           background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', 
           color: 'white', 
-          p: 4, 
-          borderRadius: '12px 12px 0 0' 
+          p: { xs: 2, sm: 3, md: 4 }, 
+          borderRadius: { xs: '8px 8px 0 0', sm: '12px 12px 0 0' }
         }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" flexWrap="wrap" gap={2}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} justifyContent="space-between" alignItems={{ xs: 'flex-start', sm: 'center' }} spacing={2}>
             <Box>
-              <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, mb: 1 }}>
+              <Typography variant="h4" gutterBottom sx={{ 
+                fontWeight: 700, 
+                mb: 1,
+                fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' }
+              }}>
                 SOP Management
               </Typography>
-              <Typography variant="body1" sx={{ opacity: 0.9, maxWidth: '600px' }}>
+              <Typography variant="body1" sx={{ 
+                opacity: 0.9, 
+                maxWidth: '600px',
+                fontSize: { xs: '0.875rem', sm: '1rem' },
+                lineHeight: 1.5
+              }}>
                 Manage Standard Operating Procedures for events and tasks. Create, edit, and organize SOPs with associated documentation links.
               </Typography>
             </Box>
@@ -167,12 +176,14 @@ const SOPManager = () => {
                 variant="contained" 
                 startIcon={<AddIcon />}
                 onClick={() => handleOpenDialog()}
+                fullWidth={{ xs: true, sm: false }}
                 sx={{ 
                   bgcolor: 'rgba(255,255,255,0.2)', 
                   backdropFilter: 'blur(10px)',
                   border: '1px solid rgba(255,255,255,0.3)',
                   color: 'white',
                   fontWeight: 600,
+                  minHeight: { xs: 44, sm: 36 },
                   '&:hover': { 
                     bgcolor: 'rgba(255,255,255,0.3)' 
                   }
@@ -185,26 +196,30 @@ const SOPManager = () => {
         </Box>
 
         {/* Content Section */}
-        <Box sx={{ p: 4 }}>
+        <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
           {loading ? (
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 8 }}>
               <Stack alignItems="center" spacing={2}>
                 <CircularProgress size={40} />
-                <Typography variant="h6" color="text.secondary">Loading SOPs...</Typography>
+                <Typography variant="h6" color="text.secondary" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                  Loading SOPs...
+                </Typography>
               </Stack>
             </Box>
           ) : error ? (
-            <Box sx={{ textAlign: 'center', py: 8 }}>
-              <Typography variant="h6" color="error" gutterBottom>{error}</Typography>
+            <Box sx={{ textAlign: 'center', py: 8, px: 2 }}>
+              <Typography variant="h6" color="error" gutterBottom sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
+                {error}
+              </Typography>
               <Typography color="text.secondary">Please try refreshing the page</Typography>
             </Box>
           ) : sops.length === 0 ? (
-            <Box sx={{ textAlign: 'center', py: 8 }}>
-              <DescriptionIcon sx={{ fontSize: 64, color: 'text.secondary', mb: 2 }} />
-              <Typography variant="h6" gutterBottom color="text.secondary">
+            <Box sx={{ textAlign: 'center', py: 8, px: 2 }}>
+              <DescriptionIcon sx={{ fontSize: { xs: 48, sm: 64 }, color: 'text.secondary', mb: 2 }} />
+              <Typography variant="h6" gutterBottom color="text.secondary" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
                 No SOPs found
               </Typography>
-              <Typography color="text.secondary" paragraph>
+              <Typography color="text.secondary" paragraph sx={{ fontSize: { xs: '0.875rem', sm: '1rem' } }}>
                 {canEdit ? 'Create your first SOP to get started' : 'No SOPs have been created yet'}
               </Typography>
               {canEdit && (
@@ -212,54 +227,48 @@ const SOPManager = () => {
                   variant="contained" 
                   startIcon={<AddIcon />}
                   onClick={() => handleOpenDialog()}
-                  sx={{ mt: 2 }}
+                  sx={{ mt: 2, minHeight: { xs: 44, sm: 36 } }}
                 >
                   Create First SOP
                 </Button>
               )}
             </Box>
           ) : (
-            <Box sx={{ display: 'grid', gap: 3, gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' } }}>
+            <Box sx={{ display: 'grid', gap: { xs: 2, sm: 3 }, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(3, 1fr)' } }}>
               {sops.map(sop => (
                 <Card key={sop.id} elevation={2} sx={{ 
                   borderRadius: 2, 
                   transition: 'all 0.3s ease',
                   '&:hover': { 
-                    transform: 'translateY(-4px)', 
-                    boxShadow: 4 
+                    transform: { xs: 'none', sm: 'translateY(-4px)' }, 
+                    boxShadow: { xs: 2, sm: 4 }
                   },
                   height: 'fit-content'
                 }}>
-                  <CardContent sx={{ pb: 1 }}>
+                  <CardContent sx={{ pb: 1, p: { xs: 2, sm: 2.5 } }}>
                     <Stack spacing={2}>
-                      {/* SOP Title and Badge */}
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 1 }}>
-                        <Typography variant="h6" sx={{ fontWeight: 600, lineHeight: 1.2, wordBreak: 'break-word', flex: 1 }}>
+                      {/* SOP Title */}
+                      <Box>
+                        <Typography variant="h6" sx={{ 
+                          fontWeight: 600, 
+                          lineHeight: 1.3, 
+                          wordBreak: 'break-word',
+                          fontSize: { xs: '1rem', sm: '1.125rem', md: '1.25rem' }
+                        }}>
                           {sop.title}
                         </Typography>
-                        <Badge 
-                          badgeContent={Array.isArray(sop.todos) ? sop.todos.length : 0} 
-                          color="primary"
-                          sx={{ '& .MuiBadge-badge': { fontSize: '0.75rem' } }}
-                        >
-                          <Chip 
-                            label="SOP" 
-                            size="small" 
-                            variant="outlined" 
-                            color="primary"
-                          />
-                        </Badge>
                       </Box>
 
                       {/* Description */}
                       {sop.description && (
                         <Typography variant="body2" color="text.secondary" sx={{ 
                           display: '-webkit-box',
-                          WebkitLineClamp: 2,
+                          WebkitLineClamp: { xs: 3, sm: 2 },
                           WebkitBoxOrient: 'vertical',
                           overflow: 'hidden',
                           textOverflow: 'ellipsis',
-                          lineHeight: 1.4
+                          lineHeight: 1.5,
+                          fontSize: { xs: '0.8125rem', sm: '0.875rem' }
                         }}>
                           {sop.description}
                         </Typography>
@@ -268,17 +277,28 @@ const SOPManager = () => {
                       {/* Tasks Preview */}
                       {Array.isArray(sop.todos) && sop.todos.length > 0 && (
                         <Box>
-                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, mb: 1, display: 'block' }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ 
+                            fontWeight: 600, 
+                            mb: 1, 
+                            display: 'block',
+                            fontSize: { xs: '0.7rem', sm: '0.75rem' }
+                          }}>
                             TASKS ({sop.todos.length})
                           </Typography>
                           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                            {sop.todos.slice(0, 3).map((todo, idx) => (
+                            {sop.todos.slice(0, { xs: 2, sm: 3 }[Object.keys({ xs: 2, sm: 3 })[0]] || 3).map((todo, idx) => (
                               <Chip 
                                 key={idx}
                                 label={todo.text.length > 20 ? `${todo.text.substring(0, 20)}...` : todo.text}
                                 size="small"
                                 variant="outlined"
-                                sx={{ fontSize: '0.7rem', height: 24 }}
+                                sx={{ 
+                                  fontSize: { xs: '0.65rem', sm: '0.7rem' }, 
+                                  height: { xs: 22, sm: 24 },
+                                  '& .MuiChip-label': {
+                                    px: { xs: 1, sm: 1.5 }
+                                  }
+                                }}
                               />
                             ))}
                             {sop.todos.length > 3 && (
@@ -287,7 +307,10 @@ const SOPManager = () => {
                                 size="small"
                                 variant="outlined"
                                 color="secondary"
-                                sx={{ fontSize: '0.7rem', height: 24 }}
+                                sx={{ 
+                                  fontSize: { xs: '0.65rem', sm: '0.7rem' }, 
+                                  height: { xs: 22, sm: 24 }
+                                }}
                               />
                             )}
                           </Box>
@@ -299,7 +322,13 @@ const SOPManager = () => {
                   <Divider />
 
                   {/* Actions */}
-                  <CardActions sx={{ justifyContent: 'space-between', px: 2, py: 1.5 }}>
+                  <CardActions sx={{ 
+                    justifyContent: 'space-between', 
+                    px: { xs: 1.5, sm: 2 }, 
+                    py: { xs: 1, sm: 1.5 },
+                    flexWrap: 'wrap',
+                    gap: 1
+                  }}>
                     <Box sx={{ display: 'flex', gap: 1 }}>
                       {sop.url && (
                         <Tooltip title="Open SOP Link">
@@ -309,6 +338,8 @@ const SOPManager = () => {
                             onClick={() => window.open(sop.url, '_blank')}
                             sx={{ 
                               bgcolor: 'primary.50',
+                              minWidth: { xs: 36, sm: 32 },
+                              minHeight: { xs: 36, sm: 32 },
                               '&:hover': { bgcolor: 'primary.100' }
                             }}
                           >
@@ -327,6 +358,8 @@ const SOPManager = () => {
                             onClick={() => handleOpenDialog(sop)}
                             sx={{ 
                               bgcolor: 'action.hover',
+                              minWidth: { xs: 36, sm: 32 },
+                              minHeight: { xs: 36, sm: 32 },
                               '&:hover': { bgcolor: 'action.selected' }
                             }}
                           >
@@ -341,6 +374,8 @@ const SOPManager = () => {
                             disabled={deleting}
                             sx={{ 
                               bgcolor: 'error.50',
+                              minWidth: { xs: 36, sm: 32 },
+                              minHeight: { xs: 36, sm: 32 },
                               '&:hover': { bgcolor: 'error.100' }
                             }}
                           >
@@ -355,21 +390,39 @@ const SOPManager = () => {
             </Box>
           )}
         </Box>
-        <Dialog open={showDialog} onClose={() => setShowDialog(false)} fullWidth maxWidth="md">
+        <Dialog 
+          open={showDialog} 
+          onClose={() => setShowDialog(false)} 
+          fullWidth 
+          maxWidth="md"
+          fullScreen={{ xs: true, sm: false }}
+          sx={{
+            '& .MuiDialog-paper': {
+              m: { xs: 0, sm: 2 },
+              maxHeight: { xs: '100%', sm: 'calc(100% - 64px)' }
+            }
+          }}
+        >
           <DialogTitle sx={{ 
             bgcolor: 'primary.50', 
             color: 'primary.main',
             fontWeight: 600,
             borderBottom: '1px solid',
-            borderColor: 'divider'
+            borderColor: 'divider',
+            fontSize: { xs: '1.125rem', sm: '1.25rem' },
+            p: { xs: 2, sm: 3 }
           }}>
             {editingSop ? 'Edit SOP' : 'Create New SOP'}
           </DialogTitle>
-          <DialogContent sx={{ p: 3 }}>
+          <DialogContent sx={{ p: { xs: 2, sm: 3 } }}>
             <Stack spacing={3} sx={{ mt: 1 }}>
               {/* Basic Information Section */}
               <Box>
-                <Typography variant="h6" gutterBottom sx={{ color: 'text.primary', mb: 2 }}>
+                <Typography variant="h6" gutterBottom sx={{ 
+                  color: 'text.primary', 
+                  mb: 2,
+                  fontSize: { xs: '1rem', sm: '1.25rem' }
+                }}>
                   Basic Information
                 </Typography>
                 <Stack spacing={2}>
@@ -380,6 +433,11 @@ const SOPManager = () => {
                     fullWidth 
                     required
                     placeholder="Enter a descriptive title for this SOP"
+                    sx={{
+                      '& .MuiInputBase-input': {
+                        fontSize: { xs: '1rem', sm: '1rem' }
+                      }
+                    }}
                   />
                   <TextField 
                     label="Description" 
@@ -387,8 +445,13 @@ const SOPManager = () => {
                     onChange={e => setDescription(e.target.value)} 
                     fullWidth 
                     multiline
-                    rows={3}
+                    rows={{ xs: 4, sm: 3 }}
                     placeholder="Provide a detailed description of this SOP's purpose and scope"
+                    sx={{
+                      '& .MuiInputBase-input': {
+                        fontSize: { xs: '1rem', sm: '1rem' }
+                      }
+                    }}
                   />
                   <TextField 
                     label="Documentation URL" 
@@ -397,6 +460,14 @@ const SOPManager = () => {
                     fullWidth 
                     placeholder="https://example.com/sop-document"
                     helperText="Optional: Link to external SOP documentation"
+                    sx={{
+                      '& .MuiInputBase-input': {
+                        fontSize: { xs: '1rem', sm: '1rem' }
+                      },
+                      '& .MuiFormHelperText-root': {
+                        fontSize: { xs: '0.75rem', sm: '0.75rem' }
+                      }
+                    }}
                   />
                 </Stack>
               </Box>
@@ -405,8 +476,11 @@ const SOPManager = () => {
 
               {/* Tasks Section */}
               <Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                  <Typography variant="h6" sx={{ color: 'text.primary' }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, gap: 1, flexWrap: 'wrap' }}>
+                  <Typography variant="h6" sx={{ 
+                    color: 'text.primary',
+                    fontSize: { xs: '1rem', sm: '1.25rem' }
+                  }}>
                     Task Checklist
                   </Typography>
                   <Button 
@@ -414,6 +488,7 @@ const SOPManager = () => {
                     startIcon={<AddIcon />}
                     onClick={addTodo}
                     size="small"
+                    sx={{ minHeight: { xs: 40, sm: 32 } }}
                   >
                     Add Task
                   </Button>
@@ -422,13 +497,14 @@ const SOPManager = () => {
                 {todos.length === 0 ? (
                   <Box sx={{ 
                     textAlign: 'center', 
-                    py: 4, 
+                    py: { xs: 3, sm: 4 }, 
+                    px: 2,
                     bgcolor: 'grey.50', 
                     borderRadius: 1,
                     border: '2px dashed',
                     borderColor: 'grey.300'
                   }}>
-                    <Typography color="text.secondary" variant="body2">
+                    <Typography color="text.secondary" variant="body2" sx={{ fontSize: { xs: '0.875rem', sm: '0.875rem' } }}>
                       No tasks added yet. Click "Add Task" to create your first task.
                     </Typography>
                   </Box>
@@ -436,16 +512,27 @@ const SOPManager = () => {
                   <Stack spacing={1}>
                     {todos.map((todo, idx) => (
                       <Card key={todo.id} variant="outlined" sx={{ bgcolor: 'grey.50' }}>
-                        <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <Typography variant="body2" sx={{ minWidth: 60, color: 'text.secondary' }}>
+                        <CardContent sx={{ p: { xs: 1.5, sm: 2 }, '&:last-child': { pb: { xs: 1.5, sm: 2 } } }}>
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 }, flexDirection: { xs: 'column', sm: 'row' } }}>
+                            <Typography variant="body2" sx={{ 
+                              minWidth: { xs: 'auto', sm: 60 }, 
+                              color: 'text.secondary',
+                              fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                              alignSelf: { xs: 'flex-start', sm: 'center' }
+                            }}>
                               Task {idx + 1}
                             </Typography>
                             <TextField 
                               value={todo.text} 
                               onChange={e => updateTodo(idx, e.target.value)} 
                               size="small" 
-                              sx={{ flex: 1 }}
+                              sx={{ 
+                                flex: 1,
+                                width: { xs: '100%', sm: 'auto' },
+                                '& .MuiInputBase-input': {
+                                  fontSize: { xs: '1rem', sm: '0.875rem' }
+                                }
+                              }}
                               placeholder="Enter task description"
                             />
                             <Tooltip title="Remove Task">
@@ -453,6 +540,11 @@ const SOPManager = () => {
                                 color="error" 
                                 onClick={() => removeTodo(idx)}
                                 size="small"
+                                sx={{ 
+                                  minWidth: { xs: 36, sm: 32 },
+                                  minHeight: { xs: 36, sm: 32 },
+                                  alignSelf: { xs: 'flex-end', sm: 'center' }
+                                }}
                               >
                                 <DeleteIcon fontSize="small" />
                               </IconButton>
@@ -466,8 +558,20 @@ const SOPManager = () => {
               </Box>
             </Stack>
           </DialogContent>
-          <DialogActions sx={{ p: 3, bgcolor: 'grey.50', borderTop: '1px solid', borderColor: 'divider' }}>
-            <Button onClick={() => setShowDialog(false)} variant="outlined">
+          <DialogActions sx={{ 
+            p: { xs: 2, sm: 3 }, 
+            bgcolor: 'grey.50', 
+            borderTop: '1px solid', 
+            borderColor: 'divider',
+            gap: 1,
+            flexDirection: { xs: 'column-reverse', sm: 'row' }
+          }}>
+            <Button 
+              onClick={() => setShowDialog(false)} 
+              variant="outlined"
+              fullWidth={{ xs: true, sm: false }}
+              sx={{ minHeight: { xs: 44, sm: 36 } }}
+            >
               Cancel
             </Button>
             <Button 
@@ -475,36 +579,63 @@ const SOPManager = () => {
               onClick={handleSaveSop} 
               disabled={!title.trim() || saving}
               startIcon={saving ? <CircularProgress size={16} /> : null}
+              fullWidth={{ xs: true, sm: false }}
+              sx={{ minHeight: { xs: 44, sm: 36 } }}
             >
               {saving ? 'Saving...' : (editingSop ? 'Update SOP' : 'Create SOP')}
             </Button>
           </DialogActions>
         </Dialog>
 
-        <Dialog open={Boolean(deleteTarget)} onClose={() => setDeleteTarget(null)} maxWidth="sm" fullWidth>
+        <Dialog 
+          open={Boolean(deleteTarget)} 
+          onClose={() => setDeleteTarget(null)} 
+          maxWidth="sm" 
+          fullWidth
+          sx={{
+            '& .MuiDialog-paper': {
+              m: { xs: 2, sm: 2 }
+            }
+          }}
+        >
           <DialogTitle sx={{ 
             color: 'error.main',
             fontWeight: 600,
             borderBottom: '1px solid',
-            borderColor: 'divider'
+            borderColor: 'divider',
+            fontSize: { xs: '1.125rem', sm: '1.25rem' },
+            p: { xs: 2, sm: 3 }
           }}>
             Delete SOP
           </DialogTitle>
-          <DialogContent sx={{ p: 3 }}>
+          <DialogContent sx={{ p: { xs: 2, sm: 3 } }}>
             <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
-              <DeleteIcon color="error" sx={{ mt: 0.5 }} />
+              <DeleteIcon color="error" sx={{ mt: 0.5, fontSize: { xs: '1.25rem', sm: '1.5rem' } }} />
               <Box>
-                <Typography variant="body1" gutterBottom>
+                <Typography variant="body1" gutterBottom sx={{ fontSize: { xs: '0.9375rem', sm: '1rem' } }}>
                   Are you sure you want to delete "<strong>{deleteTarget?.title}</strong>"?
                 </Typography>
-                <Typography variant="body2" color="text.secondary">
+                <Typography variant="body2" color="text.secondary" sx={{ fontSize: { xs: '0.8125rem', sm: '0.875rem' } }}>
                   This action cannot be undone. All tasks and associated data will be permanently removed.
                 </Typography>
               </Box>
             </Box>
           </DialogContent>
-          <DialogActions sx={{ p: 3, bgcolor: 'grey.50', borderTop: '1px solid', borderColor: 'divider' }}>
-            <Button onClick={() => setDeleteTarget(null)} disabled={deleting} variant="outlined">
+          <DialogActions sx={{ 
+            p: { xs: 2, sm: 3 }, 
+            bgcolor: 'grey.50', 
+            borderTop: '1px solid', 
+            borderColor: 'divider',
+            gap: 1,
+            flexDirection: { xs: 'column-reverse', sm: 'row' }
+          }}>
+            <Button 
+              onClick={() => setDeleteTarget(null)} 
+              disabled={deleting} 
+              variant="outlined"
+              fullWidth={{ xs: true, sm: false }}
+              sx={{ minHeight: { xs: 44, sm: 36 } }}
+            >
               Cancel
             </Button>
             <Button 
@@ -513,6 +644,8 @@ const SOPManager = () => {
               onClick={() => handleDeleteSop(deleteTarget.id)} 
               disabled={deleting}
               startIcon={deleting ? <CircularProgress size={16} /> : <DeleteIcon />}
+              fullWidth={{ xs: true, sm: false }}
+              sx={{ minHeight: { xs: 44, sm: 36 } }}
             >
               {deleting ? 'Deleting...' : 'Delete SOP'}
             </Button>

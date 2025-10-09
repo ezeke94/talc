@@ -169,7 +169,7 @@ const Layout = () => {
     
     const standaloneItems = [
         { text: 'Calendar', path: '/calendar' },
-        { text: 'Mentors', path: '/mentors' }
+        { text: 'Record KPIs', path: '/mentors' }
     ];
 
     const drawer = (
