@@ -1,0 +1,168 @@
+// Firestore Security Rules with Coordinator Role Support
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions for role checking
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function hasRole(role) {
+      return isAuthenticated() && getUserData().role == role;
+    }
+    
+    function hasAnyRole(roles) {
+      return isAuthenticated() && getUserData().role in roles;
+    }
+    
+    function isAdmin() {
+      return hasRole('Admin');
+    }
+    
+    function isQuality() {
+      return hasRole('Quality');
+    }
+    
+    function isCoordinator() {
+      return hasRole('Coordinator');
+    }
+    
+    function isEvaluator() {
+      return hasRole('Evaluator');
+    }
+    
+    function isManagement() {
+      return hasRole('Management');
+    }
+    
+    function canManageUsers() {
+      return isAdmin() || isQuality();
+    }
+    
+    function canViewDashboards() {
+      return hasAnyRole(['Admin', 'Quality']);
+    }
+    
+    function canEditCalendar() {
+      return hasAnyRole(['Admin', 'Quality', 'Evaluator']);
+    }
+    
+    function canRecordKPIs() {
+      return hasAnyRole(['Admin', 'Quality', 'Evaluator']);
+    }
+    
+    function canViewSOPs() {
+      return hasAnyRole(['Admin', 'Quality', 'Coordinator']);
+    }
+    
+    function canEditSOPs() {
+      return hasAnyRole(['Admin', 'Quality']);
+    }
+
+    // Users collection
+    match /users/{userId} {
+      // Users can read their own profile
+      allow read: if isAuthenticated() && request.auth.uid == userId;
+      
+      // Admin and Quality can read all users
+      allow read: if canManageUsers();
+      
+      // Users can update their own profile (except role and isActive)
+      allow update: if isAuthenticated() && 
+                   request.auth.uid == userId && 
+                   !('role' in request.resource.data.diff(resource.data)) &&
+                   !('isActive' in request.resource.data.diff(resource.data));
+      
+      // Admin and Quality can update any user
+      allow update: if canManageUsers();
+      
+      // System can create user profiles during authentication
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Mentors collection
+    match /mentors/{mentorId} {
+      // Admin, Quality, and Evaluators can read mentors
+      allow read: if hasAnyRole(['Admin', 'Quality', 'Evaluator', 'Coordinator']);
+      
+      // Admin and Quality can write mentors
+      allow write: if hasAnyRole(['Admin', 'Quality']);
+    }
+
+    // Events collection (Calendar)
+    match /events/{eventId} {
+      // All authenticated users can read events
+      allow read: if isAuthenticated();
+      
+      // Only Admin and Quality can create/update/delete events
+      allow write: if canEditCalendar();
+    }
+
+    // SOPs collection
+    match /sops/{sopId} {
+      // Admin, Quality, and Coordinators can read SOPs
+      allow read: if canViewSOPs();
+      
+      // Only Admin and Quality can write SOPs
+      allow write: if canEditSOPs();
+    }
+
+    // KPI Submissions collection
+    match /kpiSubmissions/{submissionId} {
+      // Admin, Quality, and Evaluators can read KPI submissions
+      allow read: if canRecordKPIs() || isCoordinator();
+      
+      // Admin, Quality, and Evaluators can create KPI submissions
+      allow write: if canRecordKPIs();
+    }
+
+    // Forms collection (KPI Forms)
+    match /kpiForms/{formId} {
+      // Admin, Quality, and Evaluators can read forms
+      allow read: if hasAnyRole(['Admin', 'Quality', 'Evaluator', 'Coordinator']);
+      
+      // Only Admin and Quality can write forms
+      allow write: if hasAnyRole(['Admin', 'Quality']);
+    }
+
+    // Centers collection
+    match /centers/{centerId} {
+      // All authenticated users can read centers
+      allow read: if isAuthenticated();
+      
+      // Only Admin and Quality can write centers
+      allow write: if hasAnyRole(['Admin', 'Quality']);
+    }
+
+    // Notifications collection
+    match /notifications/{notificationId} {
+      // Users can read their own notifications
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      
+      // System and Admin can create notifications
+      allow create: if isAdmin();
+      
+      // Users can update their own notifications (mark as read)
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+    }
+
+    // Analytics/Metrics collections (if any)
+    match /metrics/{metricId} {
+      // Admin, Quality, and Coordinators can read metrics
+      allow read: if canViewDashboards();
+      
+      // Only Admin and Quality can write metrics
+      allow write: if hasAnyRole(['Admin', 'Quality']);
+    }
+
+    // Default deny all other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

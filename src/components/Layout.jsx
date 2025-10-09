@@ -112,6 +112,8 @@ const Layout = () => {
     const roleRaw = (currentUser && currentUser.role) || roleFromCache || '';
     const normalizedRole = (typeof roleRaw === 'string') ? roleRaw.trim().toLowerCase() : '';
     const showUserManagement = ['admin', 'quality'].includes(normalizedRole);
+    const showDashboards = ['admin', 'quality'].includes(normalizedRole);
+    const canRecordKPIs = ['admin', 'quality', 'evaluator'].includes(normalizedRole);
     
     // Organized menu structure
     const hardReload = useCallback(() => {
@@ -153,10 +155,10 @@ const Layout = () => {
         }
     }, []);
 
-    const dashboardItems = [
+    const dashboardItems = showDashboards ? [
         { text: 'KPI Dashboard', path: '/kpi-dashboard' },
         { text: 'Operational', path: '/operational-dashboard' }
-    ];
+    ] : [];
     
     const appSetupItems = [
         { text: 'SOPs', path: '/sop-management' },
@@ -169,7 +171,7 @@ const Layout = () => {
     
     const standaloneItems = [
         { text: 'Calendar', path: '/calendar' },
-        { text: 'Record KPIs', path: '/mentors' }
+        ...(canRecordKPIs ? [{ text: 'Record KPIs', path: '/mentors' }] : [])
     ];
 
     const drawer = (
@@ -188,31 +190,35 @@ const Layout = () => {
             ))}
             
             {/* Dashboards section */}
-            <ListItem 
-                onClick={() => toggleMobileSection('dashboards')}
-                sx={{ borderRadius: 1, mx: 1, cursor: 'pointer' }}
-            >
-                <ListItemIcon>
-                    <DashboardIcon />
-                </ListItemIcon>
-                <ListItemText primary="Dashboards" />
-                {mobileExpandedSections.dashboards ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-            </ListItem>
-            <Collapse in={mobileExpandedSections.dashboards} timeout="auto" unmountOnExit>
-                <List component="div" disablePadding>
-                    {dashboardItems.map((item) => (
-                        <ListItem
-                            key={item.text}
-                            component={RouterLink}
-                            to={item.path}
-                            onClick={handleDrawerToggle}
-                            sx={{ pl: 4, borderRadius: 1, mx: 1 }}
-                        >
-                            <ListItemText primary={item.text} />
-                        </ListItem>
-                    ))}
-                </List>
-            </Collapse>
+            {dashboardItems.length > 0 && (
+                <>
+                    <ListItem 
+                        onClick={() => toggleMobileSection('dashboards')}
+                        sx={{ borderRadius: 1, mx: 1, cursor: 'pointer' }}
+                    >
+                        <ListItemIcon>
+                            <DashboardIcon />
+                        </ListItemIcon>
+                        <ListItemText primary="Dashboards" />
+                        {mobileExpandedSections.dashboards ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                    </ListItem>
+                    <Collapse in={mobileExpandedSections.dashboards} timeout="auto" unmountOnExit>
+                        <List component="div" disablePadding>
+                            {dashboardItems.map((item) => (
+                                <ListItem
+                                    key={item.text}
+                                    component={RouterLink}
+                                    to={item.path}
+                                    onClick={handleDrawerToggle}
+                                    sx={{ pl: 4, borderRadius: 1, mx: 1 }}
+                                >
+                                    <ListItemText primary={item.text} />
+                                </ListItem>
+                            ))}
+                        </List>
+                    </Collapse>
+                </>
+            )}
             
             {/* App Setup section (only show if user has access to any setup items) */}
             {appSetupItems.length > 0 && (
@@ -224,8 +230,6 @@ const Layout = () => {
                         <ListItemIcon>
                             <SettingsIcon />
                         </ListItemIcon>
-                        <ListItemText primary="App Setup" />
-                        {mobileExpandedSections.appSetup ? <ExpandLessIcon /> : <ExpandMoreIcon />}
                     </ListItem>
                     <Collapse in={mobileExpandedSections.appSetup} timeout="auto" unmountOnExit>
                         <List component="div" disablePadding>
@@ -338,10 +342,9 @@ const Layout = () => {
                                     <Button
                                         color="inherit"
                                         onClick={openAppSetupMenu}
-                                        endIcon={<ExpandMoreIcon />}
                                         sx={{ borderRadius: 2, fontWeight: 500, '&:hover': { bgcolor: 'rgba(123,198,120,0.15)' } }}
                                     >
-                                        App Setup
+                                        <SettingsIcon />
                                     </Button>
                                     <Menu
                                         anchorEl={appSetupMenuEl}

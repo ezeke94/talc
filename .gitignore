@@ -44,3 +44,6 @@ public/sw-version.js
 public/fcm-test.html
 /public/vite.svg
 src/assets/react.svg
+
+# Functions-specific ignores (merged from functions/.gitignore)
+*.local

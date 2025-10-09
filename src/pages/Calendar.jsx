@@ -108,7 +108,9 @@ const Calendar = () => {
     } catch { return ''; }
   }, [currentUser]);
   const isEvaluator = useMemo(() => normalizedRole === 'evaluator', [normalizedRole]);
+  const isCoordinator = useMemo(() => normalizedRole === 'coordinator', [normalizedRole]);
   const isAdminOrQuality = useMemo(() => (normalizedRole === 'admin' || normalizedRole === 'quality'), [normalizedRole]);
+  const canEditEvents = useMemo(() => (normalizedRole === 'admin' || normalizedRole === 'quality' || normalizedRole === 'evaluator'), [normalizedRole]);
 
   const [showForm, setShowForm] = useState(false);
   const [editingEvent, setEditingEvent] = useState(null);
@@ -762,7 +764,7 @@ const Calendar = () => {
                   </IconButton>
                 </span>
               </Tooltip>
-              {!isMobile && (
+              {!isMobile && canEditEvents && (
                 <Button variant="contained" color="primary" onClick={() => setShowForm(true)}>
                   Create New Event/Task
                 </Button>
@@ -1018,7 +1020,7 @@ const Calendar = () => {
                                         </IconButton>
                                       </Tooltip>
                                     )}
-                                    {isAdminOrQuality && (
+                                    {canEditEvents && (
                                       <IconButton 
                                         size="small" 
                                         color="primary" 
@@ -1034,6 +1036,7 @@ const Calendar = () => {
                                         <EditIcon sx={{ fontSize: { xs: '0.85rem', sm: '1rem' } }} />
                                       </IconButton>
                                     )}
+                                    {canEditEvents && (
                                     <IconButton 
                                       size="small" 
                                       color="primary" 
@@ -1043,6 +1046,8 @@ const Calendar = () => {
                                     >
                                       <ContentCopyIcon sx={{ fontSize: { xs: '0.85rem', sm: '1rem' } }} />
                                     </IconButton>
+                                    )}
+                                    {canEditEvents && (
                                     <IconButton 
                                       size="small" 
                                       color="secondary" 
@@ -1051,6 +1056,7 @@ const Calendar = () => {
                                     >
                                       <AutorenewIcon sx={{ fontSize: { xs: '0.85rem', sm: '1rem' } }} />
                                     </IconButton>
+                                    )}
                                     {isAdminOrQuality && (
                                       <IconButton 
                                         size="small" 
@@ -1225,7 +1231,7 @@ const Calendar = () => {
       </Paper>
 
       {/* Mobile floating action button for creating a new event/task (matches Mentors page behavior) */}
-      {isMobile && (
+      {isMobile && canEditEvents && (
         <Fab
           color="primary"
           aria-label="add"

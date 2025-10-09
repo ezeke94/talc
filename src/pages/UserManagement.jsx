@@ -31,7 +31,7 @@ import { db } from '../firebase/config';
 import { collection, onSnapshot, updateDoc, doc } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 
-const ROLES = ['Evaluator', 'Admin', 'Quality', 'Management'];
+const ROLES = ['Evaluator', 'Admin', 'Quality', 'Management', 'Coordinator'];
 
 const UserManagement = () => {
   const { currentUser } = useAuth();

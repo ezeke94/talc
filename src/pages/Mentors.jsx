@@ -21,6 +21,7 @@ const Mentors = () => {
     const [currentUserFirstName, setCurrentUserFirstName] = useState('');
     const [forms, setForms] = useState([]);
     const [kpiSubmissions, setKpiSubmissions] = useState([]);
+    const [centers, setCenters] = useState([]);
     const { currentUser: authUser } = useAuth();
     const navigate = useNavigate();
 
@@ -28,6 +29,15 @@ const Mentors = () => {
         const unsubscribe = onSnapshot(collection(db, 'mentors'), (snapshot) => {
             const mentorData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setMentors(mentorData);
+        });
+        return () => unsubscribe();
+    }, []);
+
+    // Load centers for name mapping
+    useEffect(() => {
+        const unsubscribe = onSnapshot(collection(db, 'centers'), (snapshot) => {
+            const centerData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setCenters(centerData);
         });
         return () => unsubscribe();
     }, []);
@@ -114,6 +124,14 @@ const Mentors = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
+
+    // Map center IDs to names for display
+    const getCenterNames = (centerArray) => {
+        if (!Array.isArray(centerArray)) return [];
+        const centerMap = new Map(centers.map(c => [c.id || c.name, c.name || c.id]));
+        return centerArray.map(centerId => centerMap.get(centerId) || centerId);
+    };
+
     // Filter mentors by search
     // Sort mentors alphabetically by name
     const sortedMentors = [...mentors].sort((a, b) => {
@@ -124,12 +142,13 @@ const Mentors = () => {
     const filteredMentors = sortedMentors.filter(mentor => {
         const name = mentor.name?.toLowerCase() || "";
         // hide mentor card if mentor's first name matches current user's first name
-    const mentorFirst = name.split(' ')[0] || '';
-    // Do not hide mentors for evaluator role; only hide when current user is non-evaluator
-    if (userRole !== 'evaluator' && currentUserFirstName && mentorFirst === currentUserFirstName) return false;
+        const mentorFirst = name.split(' ')[0] || '';
+        // Do not hide mentors for evaluator role; only hide when current user is non-evaluator
+        if (userRole !== 'evaluator' && currentUserFirstName && mentorFirst === currentUserFirstName) return false;
         // Support both 'center' and 'assignedCenters' (array)
-        const centers = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
-        const centerStr = centers.join(", ").toLowerCase();
+        const centerIds = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
+        const centerNames = getCenterNames(centerIds);
+        const centerStr = centerNames.join(", ").toLowerCase();
         return name.includes(search.toLowerCase()) || centerStr.includes(search.toLowerCase());
     });
 
@@ -262,7 +281,8 @@ const Mentors = () => {
                         </Card>
                     ) : (
                         filteredMentors.map(mentor => {
-                            const centers = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
+                            const centerIds = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
+                            const centerNames = getCenterNames(centerIds);
                             const formChips = getFormChips(mentor, false);
                             return (
                                 <Card
@@ -318,7 +338,7 @@ const Mentors = () => {
                                                 >
                                                     {mentor.name}
                                                 </Typography>
-                                                {centers.length > 0 && (
+                                                {centerNames.length > 0 && (
                                                     <Typography 
                                                         variant="caption" 
                                                         color="text.secondary"
@@ -330,7 +350,7 @@ const Mentors = () => {
                                                             fontSize: '0.75rem'
                                                         }}
                                                     >
-                                                        {centers.join(", ")}
+                                                        {centerNames.join(", ")}
                                                     </Typography>
                                                 )}
                                             </Box>
@@ -342,8 +362,8 @@ const Mentors = () => {
                                                         onClick={(e) => { e.stopPropagation(); handleOpen(mentor); }}
                                                         size="small"
                                                         sx={{ 
-                                                            width: 40,
-                                                            height: 40,
+                                                            width: 50,
+                                                            height: 50,
                                                             borderRadius: '50%',
                                                             bgcolor: 'primary.main',
                                                             color: 'white',
@@ -362,8 +382,8 @@ const Mentors = () => {
                                                             onClick={(e) => { e.stopPropagation(); handleDelete(mentor.id); }}
                                                             size="small"
                                                             sx={{ 
-                                                                width: 40,
-                                                                height: 40,
+                                                                width: 50,
+                                                                height: 50,
                                                                 borderRadius: '50%',
                                                                 bgcolor: 'error.main',
                                                                 color: 'white',
@@ -432,7 +452,7 @@ const Mentors = () => {
 
                                         {/* Evaluate button */}
                                         <Button
-                                            variant="contained"
+                                            variant="outlined"
                                             size="medium"
                                             fullWidth
                                             startIcon={<AssessmentIcon />}
@@ -442,7 +462,8 @@ const Mentors = () => {
                                                 borderRadius: 1.5,
                                                 fontWeight: 600,
                                                 textTransform: 'none',
-                                                fontSize: '0.9375rem'
+                                                fontSize: '0.9375rem',
+                                                borderWidth: 2
                                             }}
                                         >
                                             Evaluate
@@ -486,7 +507,8 @@ const Mentors = () => {
                         </TableHead>
                         <TableBody>
                             {filteredMentors.map(mentor => {
-                                const centers = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
+                                const centerIds = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
+                                const centerNames = getCenterNames(centerIds);
                                 const formChips = getFormChips(mentor, true);
                                 return (
                                     <TableRow hover key={mentor.id} sx={{ cursor: 'pointer' }} onClick={() => navigate(`/mentor/${mentor.id}`)}>
@@ -501,7 +523,7 @@ const Mentors = () => {
                                             </Stack>
                                         </TableCell>
                                         <TableCell>
-                                            <Typography variant="body2" color="text.secondary">{centers.join(', ')}</Typography>
+                                            <Typography variant="body2" color="text.secondary">{centerNames.join(', ')}</Typography>
                                         </TableCell>
                                         <TableCell>
                                             {mentor.assignedEvaluator ? (

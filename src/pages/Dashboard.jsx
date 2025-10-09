@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { db } from '../firebase/config';
 import { collection, getDocs } from 'firebase/firestore';
-import { Box, Typography, Paper, ToggleButton, ToggleButtonGroup, Autocomplete, TextField, CircularProgress, Dialog, DialogTitle, List, ListItem, ListItemText } from '@mui/material';
+import { Box, Typography, Paper, ToggleButton, ToggleButtonGroup, Autocomplete, TextField, CircularProgress, Dialog, DialogTitle, List, ListItem, ListItemText, Container } from '@mui/material';
 import KPIChart from '../components/KPIChart';
 import { centers } from '../utils/seedData';
+import { useAuth } from '../context/AuthContext';
 
 const scoreToCategory = (score) => {
     if (score === 0 || !score) return "N/A";
@@ -15,6 +16,7 @@ const scoreToCategory = (score) => {
 };
 
 const Dashboard = () => {
+    const { currentUser } = useAuth();
     const [kpiType, setKpiType] = useState('Intellect');
     const [forms, setForms] = useState([]); // dynamic forms
     const [centerFilter, setCenterFilter] = useState(null);
@@ -26,6 +28,26 @@ const Dashboard = () => {
     const [modalOpen, setModalOpen] = useState(false);
     const [modalTitle, setModalTitle] = useState('');
     const [modalMentors, setModalMentors] = useState([]);
+
+    // Check if user has dashboard access
+    const userRole = (currentUser?.role || '').trim().toLowerCase();
+    const canViewDashboard = ['admin', 'quality'].includes(userRole);
+
+    // If user doesn't have dashboard access, show access denied
+    if (!canViewDashboard) {
+        return (
+            <Container maxWidth="lg" sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
+                <Paper elevation={3} sx={{ borderRadius: { xs: 2, sm: 3 }, p: 4, textAlign: 'center' }}>
+                    <Typography variant="h5" color="error" gutterBottom>
+                        Access Denied
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary">
+                        You don't have permission to view dashboards. Only Admin and Quality roles can access this page.
+                    </Typography>
+                </Paper>
+            </Container>
+        );
+    }
 
     useEffect(() => {
         const fetchData = async () => {

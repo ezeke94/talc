@@ -44,11 +44,17 @@ const SOPManager = () => {
     };
   }, [currentUser]);
 
-  // Allow only Admin/Quality (not Evaluators) to edit/delete
+  // Allow only Admin/Quality (not Evaluators or Coordinators) to edit/delete
   const canEdit = useMemo(() => {
     const role = (userRole || '').trim().toLowerCase();
-    if (import.meta.env.MODE !== 'production') return role !== 'evaluator';
+    if (import.meta.env.MODE !== 'production') return role !== 'evaluator' && role !== 'coordinator';
     return role === 'admin' || role === 'quality';
+  }, [userRole]);
+
+  // Allow view access for Admin, Quality, and Coordinators
+  const canView = useMemo(() => {
+    const role = (userRole || '').trim().toLowerCase();
+    return ['admin', 'quality', 'coordinator'].includes(role);
   }, [userRole]);
 
   useEffect(() => {
@@ -142,6 +148,22 @@ const SOPManager = () => {
     setTodos(newTodos);
   };
   const removeTodo = idx => setTodos(todos.filter((_, i) => i !== idx));
+
+  // If user doesn't have view access, show access denied
+  if (!canView) {
+    return (
+      <Container maxWidth="lg" sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
+        <Paper elevation={3} sx={{ borderRadius: { xs: 2, sm: 3 }, p: 4, textAlign: 'center' }}>
+          <Typography variant="h5" color="error" gutterBottom>
+            Access Denied
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            You don't have permission to view SOPs. Only Admin, Quality, and Coordinator roles can access this page.
+          </Typography>
+        </Paper>
+      </Container>
+    );
+  }
 
   return (
     <Container maxWidth="lg" sx={{ px: { xs: 1, sm: 2, md: 3 } }}>

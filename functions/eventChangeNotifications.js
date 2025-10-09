@@ -259,61 +259,15 @@ exports.notifyEventDelete = onDocumentDeleted({
     const eventId = event.params.eventId;
     const eventTitle = deletedData.title || 'Unnamed Event';
 
-    // Build recipient list: assignees + owner + creator
-    const recipients = new Set();
-    (deletedData.assignees || []).forEach((id) => id && recipients.add(id));
-    if (deletedData.ownerId) recipients.add(deletedData.ownerId);
-    if (deletedData.createdBy?.userId) recipients.add(deletedData.createdBy.userId);
 
+    // Notify ALL users with a valid FCM token
+    const usersSnapshot = await db.collection('users').where('fcmToken', '!=', null).get();
     const messages = [];
-    const recipientIds = []; // parallel array for error mapping
+    const recipientIds = [];
     const eventDateStr = formatEventDate(deletedData.startDateTime);
 
-    // Notify direct recipients
-    for (const userId of recipients) {
-      try {
-        const userDoc = await db.collection('users').doc(userId).get();
-        const userData = userDoc.data();
-        if (userData?.fcmToken) {
-          messages.push({
-            token: userData.fcmToken,
-            notification: {
-              title: `Event Deleted: ${eventTitle}`,
-              body: `Event scheduled for ${eventDateStr} has been removed`,
-            },
-            data: {
-              type: 'event_delete',
-              eventId,
-              url: '/calendar',
-            },
-            webpush: {
-              fcmOptions: {
-                link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`,
-              },
-              notification: {
-                icon: '/favicon.ico',
-              },
-            },
-            android: { priority: 'high' },
-            apns: { headers: { 'apns-priority': '10' } },
-          });
-          recipientIds.push(userId);
-        }
-      } catch (userError) {
-        console.error(`Error getting user ${userId}:`, userError);
-      }
-    }
-
-    // Also notify supervisors (Admin/Quality roles) - query by role only, filter fcmToken in memory
-    const supervisorRoles = ['Admin', 'Quality', 'admin', 'quality'];
-    const supervisorsSnapshot = await db
-      .collection('users')
-      .where('role', 'in', supervisorRoles)
-      .get();
-
-    supervisorsSnapshot.forEach((docSnap) => {
+    usersSnapshot.forEach((docSnap) => {
       const userData = docSnap.data();
-      // Filter for valid FCM tokens in memory to avoid composite index requirement
       if (userData.fcmToken) {
         messages.push({
           token: userData.fcmToken,
@@ -334,6 +288,8 @@ exports.notifyEventDelete = onDocumentDeleted({
               icon: '/favicon.ico',
             },
           },
+          android: { priority: 'high' },
+          apns: { headers: { 'apns-priority': '10' } },
         });
         recipientIds.push(docSnap.id);
       }

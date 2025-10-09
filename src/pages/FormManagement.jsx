@@ -32,6 +32,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDocs,
   onSnapshot,
   serverTimestamp,
   updateDoc
@@ -195,6 +196,7 @@ const FormManagement = () => {
   useEffect(() => {
     const unsubForms = onSnapshot(collection(db, 'kpiForms'), (snap) => {
       const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      console.log('FormManagement: Loaded forms:', arr); // Keep this log to verify forms are loading
       setForms(arr);
       setLoading(false);
     });
@@ -245,6 +247,13 @@ const FormManagement = () => {
     ...forms
   ];
 
+  // Debug logging
+  console.log('FormManagement: forms from Firestore:', forms);
+  console.log('FormManagement: formsByName:', formsByName);
+  console.log('FormManagement: displayForms:', displayForms);
+  console.log('FormManagement: legacyIntellect:', legacyIntellect);
+  console.log('FormManagement: legacyCultural:', legacyCultural);
+
   const importDefaultForms = async () => {
     setImporting(true);
     try {
@@ -282,9 +291,16 @@ const FormManagement = () => {
         ) : displayForms.length === 0 ? (
           <Box sx={{ textAlign: 'center', py: 6 }}>
             <Typography color="text.secondary">No forms yet. Create your first KPI form.</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+              Debug: {forms.length} forms loaded from Firebase
+            </Typography>
           </Box>
         ) : (
-          <List>
+          <>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Showing {displayForms.length} forms ({forms.length} from database)
+            </Typography>
+            <List>
             {displayForms.map(f => (
               <ListItem key={f.id || f.name} divider>
                 <ListItemText
@@ -308,7 +324,8 @@ const FormManagement = () => {
                 </Stack>
               </ListItem>
             ))}
-          </List>
+            </List>
+          </>
         )}
       </Paper>
 

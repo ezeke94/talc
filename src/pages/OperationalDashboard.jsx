@@ -27,13 +27,35 @@ import {
 } from 'recharts';
 import { db } from '../firebase/config';
 import { collection, getDocs } from 'firebase/firestore';
+import { useAuth } from '../context/AuthContext';
 
 const OperationalDashboard = () => {
+  const { currentUser } = useAuth();
   const [metrics, setMetrics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [centerMap, setCenterMap] = useState({});
   const theme = useTheme();
   const isSmall = useMediaQuery(theme.breakpoints.down('sm'));
+
+  // Check if user has dashboard access
+  const userRole = (currentUser?.role || '').trim().toLowerCase();
+  const canViewDashboard = ['admin', 'quality'].includes(userRole);
+
+  // If user doesn't have dashboard access, show access denied
+  if (!canViewDashboard) {
+    return (
+      <Container maxWidth="lg" sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
+        <Paper elevation={3} sx={{ borderRadius: { xs: 2, sm: 3 }, p: 4, textAlign: 'center' }}>
+          <Typography variant="h5" color="error" gutterBottom>
+            Access Denied
+          </Typography>
+          <Typography variant="body1" color="text.secondary">
+            You don't have permission to view dashboards. Only Admin and Quality roles can access this page.
+          </Typography>
+        </Paper>
+      </Container>
+    );
+  }
 
   // Fetch events and calculate metrics per center name
   const fetchMetrics = async () => {
