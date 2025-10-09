@@ -43,6 +43,8 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import AddIcon from '@mui/icons-material/Add';
+import CheckIcon from '@mui/icons-material/Check';
 import { exportEventsToPDF } from '../utils/pdfExport';
 import logo from '../assets/logo.png';
 import { db } from '../firebase/config';
@@ -149,11 +151,26 @@ const Calendar = () => {
   const [confirmLoading, setConfirmLoading] = useState(false);
 
   // Helpers
-  // Map center IDs to names for display; fallback to 'Unknown Center (ID)' if not found
-  const centerMap = useMemo(
-    () => Object.fromEntries(centers.map(c => [c.id, c.name || c.id])),
-    [centers]
-  );
+  // Map centers by both document id and known code fields to ensure names resolve across data variations
+  // Fallback to 'Unknown Center (ID)' at render time if not found
+  const centerMap = useMemo(() => {
+    const pairs = [];
+    centers.forEach((c) => {
+      const id = c.id;
+      const name = c.name || id;
+      const code = c.code || c.centerCode || c.shortCode || c.codeName;
+      if (id) pairs.push([String(id), name]);
+      if (code) {
+        const codeStr = String(code);
+        pairs.push([codeStr, name]);
+        pairs.push([codeStr.toUpperCase(), name]);
+        pairs.push([codeStr.toLowerCase(), name]);
+      }
+    });
+    const map = Object.fromEntries(pairs);
+    console.log('Center map created:', map, 'from centers:', centers);
+    return map;
+  }, [centers]);
   const userMap = useMemo(
     () => Object.fromEntries(users.map(u => [u.id || u.uid, u.name || u.displayName || u.email || ''])),
     [users]
@@ -223,12 +240,17 @@ const Calendar = () => {
         getDocs(collection(db, 'mentors')),
         getDocs(collection(db, 'sops')),
       ]);
-      setCenters(centersSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      const centersData = centersSnapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      console.log('Centers loaded:', centersData.length, centersData);
+      setCenters(centersData);
       setUsers(usersSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
       setMentors(mentorsSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
       setSops(sopsSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (error) {
       console.error('Error fetching data:', error);
+      console.error('Error details:', error.code, error.message);
+      // Show user-friendly error
+      alert(`Failed to load calendar data: ${error.message}. Please check your permissions or contact support.`);
     } finally {
       setLoading(false);
     }
@@ -765,8 +787,13 @@ const Calendar = () => {
                   </IconButton>
                 </span>
               </Tooltip>
-              {!isMobile && canEditEvents && (
-                <Button variant="contained" color="primary" onClick={() => setShowForm(true)}>
+              {!isMobile && (
+                <Button 
+                  variant="contained" 
+                  color="primary" 
+                  onClick={() => setShowForm(true)}
+                  startIcon={<AddIcon />}
+                >
                   Create New Event/Task
                 </Button>
               )}
@@ -974,7 +1001,7 @@ const Calendar = () => {
                                     <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
                                       {todosChanged[event.id] && (
                                         <IconButton size="small" color="success" onClick={() => handleSaveTodos(event.id)} title="Save tasks">
-                                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#388e3c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                          <CheckIcon />
                                         </IconButton>
                                       )}
                                     </Stack>
@@ -1131,7 +1158,7 @@ const Calendar = () => {
                                 ))}
                                 {todosChanged[event.id] && (
                                   <IconButton size="small" color="success" onClick={() => handleSaveTodos(event.id)} title="Save tasks">
-                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="#388e3c" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                                    <CheckIcon />
                                   </IconButton>
                                 )}
                               </Box>
@@ -1231,15 +1258,26 @@ const Calendar = () => {
         })()}
       </Paper>
 
-      {/* Mobile floating action button for creating a new event/task (matches Mentors page behavior) */}
-      {canEditEvents && (
+      {/* Mobile floating action button for creating a new event/task - available to all users */}
+      {isMobile && (
         <Fab
           color="primary"
           aria-label="add"
           onClick={() => { setShowForm(true); setEditingEvent(null); }}
-          sx={{ position: 'fixed', bottom: 32, right: 32, zIndex: 1000 }}
+          sx={{ 
+            position: 'fixed', 
+            bottom: { xs: 24, sm: 32 }, 
+            right: { xs: 20, sm: 32 }, 
+            width: { xs: 64, sm: 56 },
+            height: { xs: 64, sm: 56 },
+            zIndex: 1000,
+            boxShadow: '0 4px 20px rgba(123,198,120,0.4)',
+            '&:hover': {
+              boxShadow: '0 6px 24px rgba(123,198,120,0.5)'
+            }
+          }}
         >
-          +
+          <AddIcon sx={{ fontSize: { xs: '2rem', sm: '1.5rem' } }} />
         </Fab>
       )}
 
