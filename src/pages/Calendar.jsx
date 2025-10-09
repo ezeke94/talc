@@ -149,8 +149,9 @@ const Calendar = () => {
   const [confirmLoading, setConfirmLoading] = useState(false);
 
   // Helpers
+  // Map center IDs to names for display; fallback to 'Unknown Center (ID)' if not found
   const centerMap = useMemo(
-    () => Object.fromEntries(centers.map(c => [c.id || c.name, c.name || c.id])),
+    () => Object.fromEntries(centers.map(c => [c.id, c.name || c.id])),
     [centers]
   );
   const userMap = useMemo(
@@ -945,7 +946,7 @@ const Calendar = () => {
                                 <TableCell sx={{ width: 120, maxWidth: 160 }}>
                                   <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                                     {(event.centers || []).map(center => (
-                                      <Chip key={center} label={centerMap[center] || center} size="small" />
+                                      <Chip key={center} label={centerMap[center] || `Unknown Center (${center})`} size="small" />
                                     ))}
                                   </Box>
                                 </TableCell>
