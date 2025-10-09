@@ -25,6 +25,7 @@ const NotificationSettings = () => {
   const { currentUser } = useAuth();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
   const [status, setStatus] = useState(() => {
     // Initialize status immediately to prevent null state
     try {
@@ -78,6 +79,7 @@ const NotificationSettings = () => {
 
   const handleToggleNotifications = async () => {
     setLoading(true);
+    setErrorMsg("");
     try {
       if (notificationsEnabled) {
         // Disable notifications
@@ -93,13 +95,16 @@ const NotificationSettings = () => {
           await updateDoc(userRef, {
             notificationPreferences: preferences
           });
+        } else {
+          setErrorMsg("Failed to enable notifications. Please check your browser settings, allow notifications, and ensure you are online. If on Android, make sure Chrome is up to date and notifications are allowed for this site.");
+          setNotificationsEnabled(false);
         }
       }
-      
       // Refresh status
       const notifStatus = getNotificationStatus();
       setStatus(notifStatus);
     } catch (error) {
+      setErrorMsg("An error occurred while toggling notifications: " + (error?.message || error));
       console.error('Error toggling notifications:', error);
     } finally {
       setLoading(false);
@@ -147,13 +152,17 @@ const NotificationSettings = () => {
         <Typography variant="h6" gutterBottom>
           Notification Settings
         </Typography>
-        
+
+        {errorMsg && (
+          <Alert severity="error" sx={{ mb: 2 }}>{errorMsg}</Alert>
+        )}
+
         {!status.supported && (
           <Alert severity="warning" sx={{ mb: 2 }}>
             Your browser does not support push notifications.
           </Alert>
         )}
-        
+
         {status.supported && status.permission === 'denied' && (
           <Alert severity="error" sx={{ mb: 2 }}>
             <strong>Notifications are blocked.</strong> To enable them:
@@ -173,7 +182,7 @@ const NotificationSettings = () => {
             Click "Allow Notifications" below to receive important reminders about events, KPI deadlines, and system updates.
           </Alert>
         )}
-        
+
         <Box sx={{ mb: 3 }}>
           {!notificationsEnabled && status.supported && status.permission !== 'denied' && (
             <Box sx={{ mb: 2, textAlign: 'center' }}>
@@ -203,7 +212,7 @@ const NotificationSettings = () => {
               </Typography>
             </Box>
           )}
-          
+
           <FormControlLabel
             control={
               <Switch
