@@ -2,6 +2,7 @@
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
+import { isIOS, isPWA } from './pwaUtils';
 
 let messaging = null;
 
@@ -22,6 +23,16 @@ const initMessaging = () => {
 export async function setupNotifications(currentUser) {
   if (!currentUser) {
     console.log('No user provided to setup notifications');
+    return null;
+  }
+
+  if (isIOS() && !isPWA()) {
+    console.warn('iOS system notifications require the app to be installed as a PWA (Add to Home Screen).');
+    showCustomNotification(
+      'Enable Notifications on iPhone',
+      'Add TALC to your Home Screen, then reopen it to enable system notifications.',
+      '/favicon.ico'
+    );
     return null;
   }
 

@@ -150,7 +150,6 @@ exports.sendWeeklyKPIReminders = onSchedule({
         notification: {
           title: `KPI Assessments Pending`,
           body: `${mentorCount} mentor(s) need evaluation (${formCount} forms)`,
-          icon: '/favicon.ico'
         },
         data: {
           type: 'kpi_reminder',
@@ -162,6 +161,9 @@ exports.sendWeeklyKPIReminders = onSchedule({
         webpush: {
           fcmOptions: {
             link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/mentors`
+          },
+          notification: {
+            icon: '/favicon.ico'
           }
         }
       });

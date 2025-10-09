@@ -8,6 +8,32 @@ import { initializePWAHandlers } from './utils/pwaUtils.js';
 // Initialize PWA handlers early
 initializePWAHandlers();
 
+const ensureFirebaseMessagingServiceWorker = () => {
+  if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return;
+  }
+
+  const registerIfNeeded = async () => {
+    try {
+      const existing = await navigator.serviceWorker.getRegistration('/firebase-messaging-sw.js');
+      if (!existing) {
+        await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        console.log('Firebase messaging service worker registered proactively');
+      }
+    } catch (err) {
+      console.warn('Unable to register firebase messaging service worker upfront:', err);
+    }
+  };
+
+  if (document.readyState === 'complete') {
+    registerIfNeeded();
+  } else {
+    window.addEventListener('load', registerIfNeeded, { once: true });
+  }
+};
+
+ensureFirebaseMessagingServiceWorker();
+
 const theme = createTheme({
   palette: {
     mode: 'light',
@@ -261,8 +287,25 @@ ReactDOM.createRoot(document.getElementById('root')).render(
 // Remove PWA service worker: always unregister any existing service workers and clear app caches.
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.getRegistrations?.().then(regs => {
-    regs.forEach(r => r.unregister());
+    regs.forEach(reg => {
+      const scriptUrl = reg.active?.scriptURL || reg.installing?.scriptURL || reg.waiting?.scriptURL;
+      let isFirebaseMessagingSw = false;
+
+      if (scriptUrl) {
+        try {
+          const swPath = new URL(scriptUrl).pathname;
+          isFirebaseMessagingSw = swPath.endsWith('/firebase-messaging-sw.js');
+        } catch {
+          isFirebaseMessagingSw = scriptUrl.includes('/firebase-messaging-sw.js');
+        }
+      }
+
+      if (!isFirebaseMessagingSw) {
+        reg.unregister();
+      }
+    });
   });
+
   if (window.caches?.keys) {
     caches.keys().then(keys => {
       keys.forEach(k => {

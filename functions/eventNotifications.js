@@ -112,7 +112,6 @@ exports.sendOwnerEventReminders = onSchedule({
             notification: {
               title: `Event Tomorrow: ${event.title}`,
               body: `Due tomorrow at ${new Date(event.startDateTime.toDate()).toLocaleTimeString()}`,
-              icon: '/favicon.ico'
             },
             data: {
               type: 'event_reminder_owner',
@@ -123,6 +122,9 @@ exports.sendOwnerEventReminders = onSchedule({
             webpush: {
               fcmOptions: {
                 link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`
+              },
+              notification: {
+                icon: '/favicon.ico'
               }
             }
           });
@@ -213,7 +215,6 @@ exports.sendQualityTeamEventReminders = onSchedule({
             notification: {
               title: `Event Today: ${event.title}`,
               body: `Due today at ${eventTime.toLocaleTimeString()}`,
-              icon: '/favicon.ico'
             },
             data: {
               type: 'event_reminder_quality',
@@ -224,6 +225,9 @@ exports.sendQualityTeamEventReminders = onSchedule({
             webpush: {
               fcmOptions: {
                 link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`
+              },
+              notification: {
+                icon: '/favicon.ico'
               }
             }
           });
@@ -247,13 +251,17 @@ exports.sendQualityTeamEventReminders = onSchedule({
             notification: {
               title: `Event Today: ${event.title}`,
               body: `Due today at ${eventTime.toLocaleTimeString()}`,
-              icon: '/favicon.ico'
             },
             data: {
               type: 'event_reminder_owner_same_day',
               eventId: eventDoc.id,
               url: `/calendar`,
               timing: 'same_day'
+            },
+            webpush: {
+              notification: {
+                icon: '/favicon.ico'
+              }
             }
           });
           recipientsMeta.push({ userId, token });
@@ -313,13 +321,17 @@ exports.sendWeeklyOverdueTaskReminders = onSchedule({
             notification: {
               title: `Overdue Task: ${event.title}`,
               body: `This task is ${daysOverdue} days overdue`,
-              icon: '/favicon.ico'
             },
             data: {
               type: 'task_overdue',
               eventId: eventDoc.id,
               daysOverdue: daysOverdue.toString(),
               url: '/calendar'
+            },
+            webpush: {
+              notification: {
+                icon: '/favicon.ico'
+              }
             }
           });
           recipientsMeta.push({ userId, token });

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Outlet, useNavigate, Link as RouterLink } from 'react-router-dom';
 import { 
     AppBar, 
@@ -22,13 +22,15 @@ import {
     DialogTitle,
     DialogContent,
     Collapse,
-    ListItemIcon
+    ListItemIcon,
+    ListItemButton
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import SettingsIcon from '@mui/icons-material/Settings';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { auth } from '../firebase/config';
 import { signOut } from 'firebase/auth';
 import logo from '../assets/logo.png';
@@ -112,17 +114,57 @@ const Layout = () => {
     const showUserManagement = ['admin', 'quality'].includes(normalizedRole);
     
     // Organized menu structure
+    const hardReload = useCallback(() => {
+        const performReload = () => {
+            try {
+                const url = new URL(window.location.href);
+                url.searchParams.set('r', String(Date.now()));
+                window.location.replace(url.toString());
+            } catch (err) {
+                const { href, search, hash } = window.location;
+                const base = href.split('#')[0].split('?')[0];
+                const sep = search ? '&' : '?';
+                window.location.replace(`${base}${search}${sep}r=${Date.now()}${hash || ''}`);
+            }
+        };
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations()
+                .then((regs) => {
+                    const waiting = regs.find(reg => reg && reg.waiting)?.waiting;
+                    if (waiting) {
+                        const onStateChange = (event) => {
+                            if (event.target?.state === 'activated') {
+                                performReload();
+                            }
+                        };
+                        waiting.addEventListener('statechange', onStateChange, { once: true });
+                        waiting.postMessage({ type: 'SKIP_WAITING' });
+                        setTimeout(performReload, 500);
+                    } else {
+                        performReload();
+                    }
+                })
+                .catch(() => {
+                    performReload();
+                });
+        } else {
+            performReload();
+        }
+    }, []);
+
     const dashboardItems = [
         { text: 'KPI Dashboard', path: '/kpi-dashboard' },
-        { text: 'Operational Dashboard', path: '/operational-dashboard' }
+        { text: 'Operational', path: '/operational-dashboard' }
     ];
     
     const appSetupItems = [
-        { text: 'SOP Management', path: '/sop-management' },
+        { text: 'SOPs', path: '/sop-management' },
         ...(showUserManagement ? [
-            { text: 'Form Management', path: '/form-management' },
-            { text: 'User Management', path: '/user-management' }
-        ] : [])
+            { text: 'Forms', path: '/form-management' },
+            { text: 'Users', path: '/user-management' }
+        ] : []),
+        { text: 'Reload Application', action: hardReload, icon: <RefreshIcon fontSize="small" /> }
     ];
     
     const standaloneItems = [
@@ -188,14 +230,24 @@ const Layout = () => {
                     <Collapse in={mobileExpandedSections.appSetup} timeout="auto" unmountOnExit>
                         <List component="div" disablePadding>
                             {appSetupItems.map((item) => (
-                                <ListItem
-                                    key={item.text}
-                                    component={RouterLink}
-                                    to={item.path}
-                                    onClick={handleDrawerToggle}
-                                    sx={{ pl: 4, borderRadius: 1, mx: 1 }}
-                                >
-                                    <ListItemText primary={item.text} />
+                                <ListItem key={item.text} disablePadding sx={{ mx: 1, borderRadius: 1 }}>
+                                    <ListItemButton
+                                        {...(item.path ? { component: RouterLink, to: item.path } : { component: 'button' })}
+                                        onClick={() => {
+                                            handleDrawerToggle();
+                                            if (!item.path && typeof item.action === 'function') {
+                                                item.action();
+                                            }
+                                        }}
+                                        sx={{ pl: item.icon ? 3 : 4, borderRadius: 1 }}
+                                    >
+                                        {item.icon && (
+                                            <ListItemIcon sx={{ minWidth: 32 }}>
+                                                {item.icon}
+                                            </ListItemIcon>
+                                        )}
+                                        <ListItemText primary={item.text} />
+                                    </ListItemButton>
                                 </ListItem>
                             ))}
                         </List>
@@ -301,10 +353,19 @@ const Layout = () => {
                                         {appSetupItems.map((item) => (
                                             <MenuItem
                                                 key={item.text}
-                                                component={RouterLink}
-                                                to={item.path}
-                                                onClick={closeAppSetupMenu}
+                                                {...(item.path ? { component: RouterLink, to: item.path } : {})}
+                                                onClick={() => {
+                                                    closeAppSetupMenu();
+                                                    if (!item.path && typeof item.action === 'function') {
+                                                        item.action();
+                                                    }
+                                                }}
                                             >
+                                                {item.icon && (
+                                                    <ListItemIcon sx={{ minWidth: 32 }}>
+                                                        {item.icon}
+                                                    </ListItemIcon>
+                                                )}
                                                 {item.text}
                                             </MenuItem>
                                         ))}

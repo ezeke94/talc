@@ -42,7 +42,6 @@ import EventForm from '../components/EventForm';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
-import RefreshIcon from '@mui/icons-material/Refresh';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import { exportEventsToPDF } from '../utils/pdfExport';
 import logo from '../assets/logo.png';
@@ -748,20 +747,6 @@ const Calendar = () => {
                 >
                   <FilterListIcon sx={{ fontSize: { xs: '1.1rem', sm: '1.5rem' } }} />
                 </IconButton>
-              </Tooltip>
-              <Tooltip title="Reload data">
-                <span>
-                  <IconButton 
-                    onClick={() => loadData()} 
-                    color="primary" 
-                    aria-label="refresh" 
-                    disabled={loading}
-                    size={isMobile ? "small" : "medium"}
-                    sx={{ p: { xs: 1, sm: 1.5 } }}
-                  >
-                    {loading ? <CircularProgress size={isMobile ? 16 : 20} /> : <RefreshIcon sx={{ fontSize: { xs: '1.1rem', sm: '1.5rem' } }} />}
-                  </IconButton>
-                </span>
               </Tooltip>
               <Tooltip title="Export next week's events (Mon–Sun)">
                 <span>

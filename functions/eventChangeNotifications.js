@@ -50,7 +50,6 @@ exports.notifyEventReschedule = onDocumentUpdated({
             notification: {
               title: `Event Rescheduled: ${eventTitle}`,
               body: `Moved from ${oldDateStr} to ${newDateStr}`,
-              icon: '/favicon.ico'
             },
             data: {
               type: 'event_reschedule',
@@ -62,6 +61,9 @@ exports.notifyEventReschedule = onDocumentUpdated({
             webpush: {
               fcmOptions: {
                 link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`
+              },
+              notification: {
+                icon: '/favicon.ico'
               }
             },
             android: {
@@ -131,12 +133,16 @@ exports.notifyEventCancellation = onDocumentUpdated({
             notification: {
               title: `Event Cancelled: ${eventTitle}`,
               body: `Scheduled for ${eventDateStr} has been cancelled`,
-              icon: '/favicon.ico'
             },
             data: {
               type: 'event_cancellation',
               eventId: eventId,
               url: '/calendar'
+            },
+            webpush: {
+              notification: {
+                icon: '/favicon.ico'
+              }
             },
             android: {
               priority: 'high'
@@ -201,12 +207,16 @@ exports.notifyEventCompletion = onDocumentUpdated({
           notification: {
             title: `Event Completed: ${eventTitle}`,
             body: `All tasks have been marked as complete`,
-            icon: '/favicon.ico'
           },
           data: {
             type: 'event_completion',
             eventId: event.params.eventId,
             url: '/operational-dashboard'
+          },
+          webpush: {
+            notification: {
+              icon: '/favicon.ico'
+            }
           }
         });
       }
@@ -270,7 +280,6 @@ exports.notifyEventDelete = onDocumentDeleted({
             notification: {
               title: `Event Deleted: ${eventTitle}`,
               body: `Event scheduled for ${eventDateStr} has been removed`,
-              icon: '/favicon.ico',
             },
             data: {
               type: 'event_delete',
@@ -280,6 +289,9 @@ exports.notifyEventDelete = onDocumentDeleted({
             webpush: {
               fcmOptions: {
                 link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`,
+              },
+              notification: {
+                icon: '/favicon.ico',
               },
             },
             android: { priority: 'high' },
@@ -308,7 +320,6 @@ exports.notifyEventDelete = onDocumentDeleted({
           notification: {
             title: `Event Deleted: ${eventTitle}`,
             body: `Event scheduled for ${eventDateStr} was removed by ${deletedData.lastModifiedBy?.userName || 'a user'}`,
-            icon: '/favicon.ico',
           },
           data: {
             type: 'event_delete',
@@ -318,6 +329,9 @@ exports.notifyEventDelete = onDocumentDeleted({
           webpush: {
             fcmOptions: {
               link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`,
+            },
+            notification: {
+              icon: '/favicon.ico',
             },
           },
         });

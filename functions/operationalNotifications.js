@@ -75,7 +75,6 @@ exports.sendMonthlyOperationalSummary = onSchedule({
           notification: {
             title: `Monthly Summary - ${monthName}`,
             body: `${completedEvents}/${totalEvents} events completed (${completionRate}%). ${overdueCount} overdue.`,
-            icon: '/favicon.ico'
           },
           data: {
             type: 'monthly_summary',
@@ -90,6 +89,9 @@ exports.sendMonthlyOperationalSummary = onSchedule({
           webpush: {
             fcmOptions: {
               link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/operational-dashboard`
+            },
+            notification: {
+              icon: '/favicon.ico'
             }
           }
         });
@@ -156,13 +158,17 @@ exports.sendCriticalSystemAlert = onSchedule({
             notification: {
               title: `🚨 System Alert`,
               body: `${errorCount} errors detected in the last 6 hours`,
-              icon: '/favicon.ico'
             },
             data: {
               type: 'system_alert',
               errorCount: errorCount.toString(),
               timeframe: '6_hours',
               url: '/operational-dashboard'
+            },
+            webpush: {
+              notification: {
+                icon: '/favicon.ico'
+              }
             },
             android: {
               priority: 'high'
