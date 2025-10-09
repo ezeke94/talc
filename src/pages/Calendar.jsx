@@ -1109,7 +1109,7 @@ const Calendar = () => {
                             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 1 }}>
                               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                                 {(event.centers || []).map(center => (
-                                  <Chip key={center} label={centerMap[center] || center} size="small" />
+                                  <Chip key={center} label={centerMap[center] || `Unknown Center (${center})`} size="small" />
                                 ))}
                               </Box>
                               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
@@ -1232,7 +1232,7 @@ const Calendar = () => {
       </Paper>
 
       {/* Mobile floating action button for creating a new event/task (matches Mentors page behavior) */}
-      {isMobile && canEditEvents && (
+      {canEditEvents && (
         <Fab
           color="primary"
           aria-label="add"
