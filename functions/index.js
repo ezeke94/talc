@@ -20,6 +20,7 @@ const operationalNotifications = require('./operationalNotifications');
 exports.sendOwnerEventReminders = eventNotifications.sendOwnerEventReminders;
 exports.sendQualityTeamEventReminders = eventNotifications.sendQualityTeamEventReminders;
 exports.sendWeeklyOverdueTaskReminders = eventNotifications.sendWeeklyOverdueTaskReminders;
+exports.sendNotificationsOnEventCreate = eventNotifications.sendNotificationsOnEventCreate;
 exports.sendWeeklyKPIReminders = kpiNotifications.sendWeeklyKPIReminders;
 exports.notifyEventReschedule = eventChangeNotifications.notifyEventReschedule;
 exports.notifyEventCancellation = eventChangeNotifications.notifyEventCancellation;

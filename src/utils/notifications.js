@@ -20,7 +20,7 @@ const initMessaging = () => {
 };
 
 // Request notification permission and setup FCM
-export async function setupNotifications(currentUser) {
+export async function setupNotifications(currentUser, deviceName = null) {
   if (!currentUser) {
     console.log('No user provided to setup notifications');
     return null;
@@ -103,6 +103,9 @@ export async function setupNotifications(currentUser) {
 
     console.log('FCM registration token obtained:', token ? 'token_received' : 'no_token');
 
+    // Store token in localStorage for device identification
+    localStorage.setItem('fcmToken', token);
+
     // Save token to user document (merge ensures doc is created if missing)
     const userRef = doc(db, 'users', currentUser.uid);
     console.log('Attempting to save FCM token to Firestore for user:', currentUser.uid);
@@ -123,6 +126,7 @@ export async function setupNotifications(currentUser) {
       const deviceRef = doc(db, 'users', currentUser.uid, 'devices', token);
       await setDoc(deviceRef, {
         token,
+        name: deviceName || null,
         platform: navigator?.platform || 'web',
         userAgent: navigator?.userAgent || '',
         createdAt: serverTimestamp(),
@@ -234,6 +238,9 @@ export async function disableNotifications(currentUser) {
   if (!currentUser) return;
 
   try {
+    // Remove token from localStorage
+    localStorage.removeItem('fcmToken');
+    
     const userRef = doc(db, 'users', currentUser.uid);
     await setDoc(userRef, {
       fcmToken: null,

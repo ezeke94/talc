@@ -1,5 +1,4 @@
-const { onSchedule } = require("firebase-functions/v2/scheduler");
-const { onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onSchedule, onDocumentCreated } = require("firebase-functions/v2/scheduler");
 const { initializeApp, getApps } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
