@@ -1,10 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Button, TextField, FormControl, InputLabel, Select, MenuItem, Chip, OutlinedInput, Typography, Divider, Switch, FormControlLabel, Alert, AlertTitle } from '@mui/material';
-import NotificationsIcon from '@mui/icons-material/Notifications';
+import { Box, Button, TextField, FormControl, InputLabel, Select, MenuItem, Chip, OutlinedInput, Typography, Divider } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../firebase/config';
 import { doc, getDoc, updateDoc, collection, onSnapshot } from 'firebase/firestore';
-import { setupNotifications, disableNotifications, getNotificationStatus } from '../utils/notifications';
+import NotificationSettings from './NotificationSettings';
 
 const ProfileSettingsDialog = ({ onClose }) => {
   const { currentUser } = useAuth();
@@ -12,17 +11,6 @@ const ProfileSettingsDialog = ({ onClose }) => {
   const [name, setName] = useState('');
   const [assignedCenter, setAssignedCenter] = useState('');
   const [centers, setCenters] = useState([]);
-  
-  // Notification settings state
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [notificationStatus, setNotificationStatus] = useState(() => {
-    try {
-      return getNotificationStatus();
-    } catch (error) {
-      return { supported: false, permission: 'default', messagingSupported: false };
-    }
-  });
 
   useEffect(() => {
     if (!currentUser) return;
@@ -35,17 +23,12 @@ const ProfileSettingsDialog = ({ onClose }) => {
       
       setUserData(data);
       setName(data?.name || data?.displayName || '');
-      setNotificationsEnabled(!!data?.notificationsEnabled);
       
       if (Array.isArray(data?.assignedCenters)) {
         setAssignedCenter(data.assignedCenters[0] || '');
       } else {
         setAssignedCenter(data?.assignedCenters || '');
       }
-      
-      // Update notification status
-      const status = getNotificationStatus();
-      setNotificationStatus(status);
     };
     
     loadData();
@@ -65,33 +48,8 @@ const ProfileSettingsDialog = ({ onClose }) => {
     onClose?.();
   };
 
-  const handleToggleNotifications = async () => {
-    setLoading(true);
-    try {
-      if (notificationsEnabled) {
-        // Disable notifications
-        await disableNotifications(currentUser);
-        setNotificationsEnabled(false);
-      } else {
-        // Enable notifications
-        const token = await setupNotifications(currentUser);
-        if (token) {
-          setNotificationsEnabled(true);
-        }
-      }
-      
-      // Refresh status
-      const status = getNotificationStatus();
-      setNotificationStatus(status);
-    } catch (error) {
-      console.error('Error toggling notifications:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1, maxHeight: '70vh', overflowY: 'auto' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
       {/* Profile Information */}
       <Typography variant="h6" gutterBottom>
         Profile Information
@@ -114,62 +72,8 @@ const ProfileSettingsDialog = ({ onClose }) => {
 
       <Divider sx={{ my: 2 }} />
 
-      {/* Notification Settings */}
-      <Typography variant="h6" gutterBottom>
-        Notification Preferences
-      </Typography>
-      
-      {notificationStatus.supported && notificationStatus.permission === 'denied' && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          <AlertTitle>Notifications Blocked</AlertTitle>
-          Click the lock icon (🔒) in your browser's address bar and allow notifications, then refresh this page.
-        </Alert>
-      )}
-      
-      {notificationStatus.supported && notificationStatus.permission === 'default' && !notificationsEnabled && (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          <AlertTitle>Enable Push Notifications</AlertTitle>
-          Get important reminders about events, KPI deadlines, and system updates.
-        </Alert>
-      )}
-
-      <Box sx={{ mb: 2, textAlign: 'center' }}>
-        <Button
-          variant="contained"
-          startIcon={<NotificationsIcon />}
-          onClick={handleToggleNotifications}
-          disabled={loading}
-          sx={{ 
-            py: 1.2, 
-            px: 3,
-            fontSize: '1rem',
-            fontWeight: 600,
-            background: 'linear-gradient(45deg, #7BC678 30%, #5BA055 90%)',
-            '&:hover': {
-              background: 'linear-gradient(45deg, #5BA055 30%, #7BC678 90%)',
-            }
-          }}
-        >
-          {loading ? 'Enabling...' : notificationsEnabled ? 'Disable Notifications' : 'Enable Notifications'}
-        </Button>
-      </Box>
-      
-      <FormControlLabel
-        control={
-          <Switch
-            checked={notificationsEnabled}
-            onChange={handleToggleNotifications}
-            disabled={loading || !notificationStatus.supported || notificationStatus.permission === 'denied'}
-          />
-        }
-        label={notificationsEnabled ? "Push Notifications Enabled" : "Push Notifications Disabled"}
-      />
-      
-      {notificationsEnabled && (
-        <Alert severity="success" sx={{ mb: 1 }}>
-          ✅ Notifications are enabled! You'll receive important reminders and updates.
-        </Alert>
-      )}
+      {/* Notification Settings with Device Manager */}
+      <NotificationSettings compact />
 
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 3 }}>
         <Button onClick={onClose}>Cancel</Button>

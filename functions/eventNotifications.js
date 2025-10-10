@@ -1,4 +1,5 @@
-const { onSchedule, onDocumentCreated } = require("firebase-functions/v2/scheduler");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { initializeApp, getApps } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
@@ -10,6 +11,42 @@ if (!getApps().length) {
 
 const db = getFirestore();
 const messaging = getMessaging();
+
+// Helper: Safely convert Firestore Timestamp to JavaScript Date
+function timestampToDate(timestamp) {
+  if (!timestamp) return null;
+  
+  try {
+    // Firestore Timestamp with toDate() method
+    if (typeof timestamp.toDate === 'function') {
+      return timestamp.toDate();
+    }
+    // Already a Date object
+    if (timestamp instanceof Date) {
+      return timestamp;
+    }
+    // Raw Timestamp with seconds property
+    if (timestamp.seconds) {
+      return new Date(timestamp.seconds * 1000);
+    }
+  } catch (error) {
+    console.error('Error converting timestamp:', error);
+  }
+  
+  return null;
+}
+
+// Helper: Safely format timestamp to locale string
+function formatTimestamp(timestamp, defaultValue = 'Unknown date') {
+  const date = timestampToDate(timestamp);
+  return date ? date.toLocaleString() : defaultValue;
+}
+
+// Helper: Safely format timestamp to locale time string
+function formatTimestampTime(timestamp, defaultValue = 'Unknown time') {
+  const date = timestampToDate(timestamp);
+  return date ? date.toLocaleTimeString() : defaultValue;
+}
 
 // Helper: fetch all device tokens for a user (main fcmToken + devices subcollection)
 async function getAllUserTokens(userId) {
@@ -120,7 +157,7 @@ exports.sendOwnerEventReminders = onSchedule({
             token,
             notification: {
               title: `Event Tomorrow: ${event.title}`,
-              body: `Due tomorrow at ${new Date(event.startDateTime.toDate()).toLocaleTimeString()}`,
+              body: `Due tomorrow at ${formatTimestampTime(event.startDateTime)}`,
             },
             data: {
               type: 'event_reminder_owner',
@@ -205,10 +242,10 @@ exports.sendQualityTeamEventReminders = onSchedule({
     // Process events for same-day reminders
     for (const eventDoc of eventsSnapshot.docs) {
       const event = eventDoc.data();
-      const eventTime = event.startDateTime.toDate();
+      const eventTime = timestampToDate(event.startDateTime);
       
       // Skip if event is in the past (already started today)
-      if (eventTime < new Date()) {
+      if (eventTime && eventTime < new Date()) {
         continue;
       }
 
@@ -324,7 +361,8 @@ exports.sendWeeklyOverdueTaskReminders = onSchedule({
       for (const userId of assigneeIds) {
         const tokens = await getAllUserTokens(userId);
         for (const token of tokens) {
-          const daysOverdue = Math.ceil((now - event.startDateTime.toDate()) / (1000 * 60 * 60 * 24));
+          const eventDate = timestampToDate(event.startDateTime);
+          const daysOverdue = eventDate ? Math.ceil((now - eventDate) / (1000 * 60 * 60 * 24)) : 0;
           notifications.push({
             token,
             notification: {
@@ -400,7 +438,7 @@ exports.sendCalendarEventNotifications = onSchedule({
           token,
           notification: {
             title: `Event Tomorrow: ${event.title}`,
-            body: `Due tomorrow at ${new Date(event.startDateTime.toDate()).toLocaleTimeString()}`,
+            body: `Due tomorrow at ${formatTimestampTime(event.startDateTime)}`,
           },
           data: {
             type: 'event_reminder_all',
@@ -443,20 +481,40 @@ exports.sendCalendarEventNotifications = onSchedule({
 exports.sendNotificationsOnEventCreate = onDocumentCreated({
   document: "events/{eventId}",
   region: "us-central1",
+  memory: "256MiB",
 }, async (event) => {
   try {
-    const eventData = event.data;
+    const eventData = event.data.data();
+    const eventId = event.params.eventId;
     const tokens = await getAllTokensForAllUsers();
+
+    // Format the date properly
+    let eventDateStr = 'Unknown date';
+    if (eventData.startDateTime) {
+      try {
+        // Handle Firestore Timestamp
+        if (typeof eventData.startDateTime.toDate === 'function') {
+          eventDateStr = eventData.startDateTime.toDate().toLocaleString();
+        } else if (eventData.startDateTime instanceof Date) {
+          eventDateStr = eventData.startDateTime.toLocaleString();
+        } else if (eventData.startDateTime.seconds) {
+          // Firestore Timestamp object format
+          eventDateStr = new Date(eventData.startDateTime.seconds * 1000).toLocaleString();
+        }
+      } catch (dateError) {
+        console.error('Error formatting date:', dateError);
+      }
+    }
 
     const notifications = tokens.map(token => ({
       token,
       notification: {
         title: `New Event Created: ${eventData.title}`,
-        body: `Scheduled for ${new Date(eventData.startDateTime.toDate()).toLocaleString()}`,
+        body: `Scheduled for ${eventDateStr}`,
       },
       data: {
         type: 'event_created',
-        eventId: event.id,
+        eventId: eventId,
         url: `/calendar`,
       },
       webpush: {

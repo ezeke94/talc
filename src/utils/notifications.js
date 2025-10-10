@@ -1,6 +1,6 @@
 // Enhanced notification utilities for TALC Management Application
 import { getMessaging, getToken, onMessage } from 'firebase/messaging';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { isIOS, isPWA } from './pwaUtils';
 
@@ -106,35 +106,54 @@ export async function setupNotifications(currentUser, deviceName = null) {
     // Store token in localStorage for device identification
     localStorage.setItem('fcmToken', token);
 
-    // Save token to user document (merge ensures doc is created if missing)
-    const userRef = doc(db, 'users', currentUser.uid);
-    console.log('Attempting to save FCM token to Firestore for user:', currentUser.uid);
+    // Record this device token in the devices subcollection (this is the source of truth)
     try {
-      await setDoc(userRef, {
-        fcmToken: token,
-        notificationsEnabled: true,
-        lastTokenUpdate: new Date()
-      }, { merge: true });
-      console.log('FCM token successfully saved to Firestore');
-    } catch (firestoreError) {
-      console.error('Failed to save FCM token to Firestore:', firestoreError);
+      const deviceRef = doc(db, 'users', currentUser.uid, 'devices', token);
+      
+      // Check if this device already exists to preserve createdAt
+      const existingDevice = await getDoc(deviceRef);
+      
+      if (existingDevice.exists()) {
+        // Device exists - update it (re-enabling)
+        console.log('Device already registered, updating...');
+        await setDoc(deviceRef, {
+          token,
+          name: deviceName || existingDevice.data().name || null,
+          platform: navigator?.platform || 'web',
+          userAgent: navigator?.userAgent || '',
+          lastSeenAt: serverTimestamp(),
+          enabled: true
+        }, { merge: true });
+      } else {
+        // New device - create it
+        console.log('Registering new device...');
+        await setDoc(deviceRef, {
+          token,
+          name: deviceName || null,
+          platform: navigator?.platform || 'web',
+          userAgent: navigator?.userAgent || '',
+          createdAt: serverTimestamp(),
+          lastSeenAt: serverTimestamp(),
+          enabled: true
+        });
+      }
+      
+      console.log('Device token successfully saved to subcollection');
+    } catch (e) {
+      console.error('Failed to record device token to subcollection:', e);
       return null;
     }
 
-    // Additionally, record this device token in a subcollection for multi-device support
+    // Update main user document with notification status (but NOT the token)
     try {
-      const deviceRef = doc(db, 'users', currentUser.uid, 'devices', token);
-      await setDoc(deviceRef, {
-        token,
-        name: deviceName || null,
-        platform: navigator?.platform || 'web',
-        userAgent: navigator?.userAgent || '',
-        createdAt: serverTimestamp(),
-        lastSeenAt: serverTimestamp(),
-        enabled: true
+      const userRef = doc(db, 'users', currentUser.uid);
+      await setDoc(userRef, {
+        notificationsEnabled: true,
+        lastTokenUpdate: new Date()
       }, { merge: true });
-    } catch (e) {
-      console.warn('Failed to record device token subdoc (non-fatal):', e);
+      console.log('User notification status updated');
+    } catch (firestoreError) {
+      console.warn('Failed to update user notification status (non-fatal):', firestoreError);
     }
 
     // Setup foreground message handler
@@ -238,15 +257,33 @@ export async function disableNotifications(currentUser) {
   if (!currentUser) return;
 
   try {
+    // Get current token from localStorage
+    const currentToken = localStorage.getItem('fcmToken');
+    
     // Remove token from localStorage
     localStorage.removeItem('fcmToken');
     
+    // Update main user document status (remove fcmToken if it exists)
     const userRef = doc(db, 'users', currentUser.uid);
     await setDoc(userRef, {
-      fcmToken: null,
+      fcmToken: null, // Explicitly remove the old fcmToken field
       notificationsEnabled: false,
       lastTokenUpdate: new Date()
     }, { merge: true });
+
+    // Also disable the device in the devices subcollection instead of removing it
+    if (currentToken) {
+      try {
+        const deviceRef = doc(db, 'users', currentUser.uid, 'devices', currentToken);
+        await setDoc(deviceRef, {
+          enabled: false,
+          lastSeenAt: serverTimestamp()
+        }, { merge: true });
+        console.log('Device disabled in subcollection');
+      } catch (deviceError) {
+        console.warn('Failed to disable device in subcollection:', deviceError);
+      }
+    }
 
     console.log('Notifications disabled for user');
     return true;

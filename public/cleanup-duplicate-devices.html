@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cleanup Duplicate Devices - TALC Admin</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #1976d2;
+      margin-top: 0;
+    }
+    button {
+      background: #1976d2;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      margin-top: 20px;
+    }
+    button:hover {
+      background: #1565c0;
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    #status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 4px;
+      display: none;
+    }
+    #status.info {
+      background: #e3f2fd;
+      color: #1976d2;
+      display: block;
+    }
+    #status.success {
+      background: #e8f5e9;
+      color: #2e7d32;
+      display: block;
+    }
+    #status.error {
+      background: #ffebee;
+      color: #c62828;
+      display: block;
+    }
+    #log {
+      margin-top: 20px;
+      padding: 15px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      max-height: 400px;
+      overflow-y: auto;
+      display: none;
+    }
+    #log.show {
+      display: block;
+    }
+    .log-entry {
+      margin: 4px 0;
+      padding: 4px;
+    }
+    .log-entry.info {
+      color: #1976d2;
+    }
+    .log-entry.success {
+      color: #2e7d32;
+    }
+    .log-entry.error {
+      color: #c62828;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧹 Cleanup Duplicate Devices</h1>
+    <p>This tool will remove duplicate device registrations from all users' accounts.</p>
+    <p><strong>What it does:</strong></p>
+    <ul>
+      <li>Scans all users for duplicate device registrations</li>
+      <li>Identifies same physical device with multiple FCM tokens (by userAgent + platform)</li>
+      <li>Keeps the most recently used token for each device</li>
+      <li>Removes older tokens from the same device</li>
+      <li>Optionally removes old fcmToken field from user documents</li>
+    </ul>
+    <p><strong>Note:</strong> This is safe to run and won't affect active devices. It cleans up old tokens when FCM refreshes tokens.</p>
+    
+    <button id="cleanupBtn" onclick="runCleanup()">Start Duplicate Cleanup</button>
+    <button id="cleanupTokensBtn" onclick="cleanupOldTokens()" style="background: #f57c00; margin-left: 10px;">Clean Old fcmToken Fields</button>
+    <button id="closeBtn" onclick="window.close()" style="background: #666; display: none;">Close</button>
+    
+    <div id="status"></div>
+    <div id="log"></div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+    import { getFirestore, collection, getDocs, doc, deleteDoc, updateDoc, deleteField } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js';
+    import { getAuth, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+
+    // Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyDdCtN1WsoNtMFAwEUDv34pJy4lT6a3I38",
+      authDomain: "kpi-talc.firebaseapp.com",
+      projectId: "kpi-talc",
+      storageBucket: "kpi-talc.firebasestorage.app",
+      messagingSenderId: "67217863373",
+      appId: "1:67217863373:web:d014a8576b8bd7cfdd6f84"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    let currentUser = null;
+
+    onAuthStateChanged(auth, (user) => {
+      currentUser = user;
+      if (!user) {
+        showStatus('Please sign in to use this tool. Redirecting to login...', 'error');
+        document.getElementById('cleanupBtn').disabled = true;
+        // Redirect to main app for login
+        setTimeout(() => {
+          window.location.href = '/';
+        }, 2000);
+      } else {
+        showStatus(`Signed in as: ${user.email}`, 'info');
+        document.getElementById('cleanupBtn').disabled = false;
+      }
+    });
+
+    function showStatus(message, type) {
+      const statusDiv = document.getElementById('status');
+      statusDiv.textContent = message;
+      statusDiv.className = type;
+    }
+
+    function addLog(message, type = 'info') {
+      const logDiv = document.getElementById('log');
+      logDiv.classList.add('show');
+      const entry = document.createElement('div');
+      entry.className = `log-entry ${type}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logDiv.appendChild(entry);
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    window.runCleanup = async function() {
+      if (!currentUser) {
+        showStatus('Please sign in first', 'error');
+        return;
+      }
+
+      const btn = document.getElementById('cleanupBtn');
+      btn.disabled = true;
+      btn.textContent = 'Cleaning up...';
+      
+      document.getElementById('log').innerHTML = '';
+      showStatus('Starting cleanup...', 'info');
+      addLog('Starting duplicate device cleanup...', 'info');
+
+      try {
+        const usersSnapshot = await getDocs(collection(db, 'users'));
+        addLog(`Found ${usersSnapshot.size} users to process`, 'info');
+
+        let totalDuplicatesRemoved = 0;
+        let usersProcessed = 0;
+
+        for (const userDoc of usersSnapshot.docs) {
+          const userId = userDoc.id;
+          usersProcessed++;
+          addLog(`Processing user ${usersProcessed}/${usersSnapshot.size}: ${userId}`, 'info');
+
+          try {
+            const devicesSnapshot = await getDocs(collection(db, 'users', userId, 'devices'));
+            const devices = [];
+            
+            devicesSnapshot.forEach(deviceDoc => {
+              devices.push({
+                id: deviceDoc.id,
+                token: deviceDoc.id,
+                ...deviceDoc.data()
+              });
+            });
+
+            if (devices.length === 0) {
+              addLog(`  No devices found for user ${userId}`, 'info');
+              continue;
+            }
+
+            addLog(`  Found ${devices.length} devices`, 'info');
+
+            // Group by device fingerprint (userAgent + platform) to find same physical device with different tokens
+            const deviceFingerprintMap = new Map();
+            devices.forEach(device => {
+              // Create fingerprint from userAgent and platform
+              const fingerprint = `${device.userAgent || 'unknown'}_${device.platform || 'unknown'}`;
+              if (!deviceFingerprintMap.has(fingerprint)) {
+                deviceFingerprintMap.set(fingerprint, []);
+              }
+              deviceFingerprintMap.get(fingerprint).push(device);
+            });
+
+            // Remove duplicates (same device with multiple tokens)
+            for (const [fingerprint, deviceList] of deviceFingerprintMap.entries()) {
+              if (deviceList.length > 1) {
+                addLog(`  Found ${deviceList.length} tokens for same device: ${fingerprint.substring(0, 50)}...`, 'info');
+                
+                // Sort by lastSeenAt (keep most recent)
+                deviceList.sort((a, b) => {
+                  const aTime = a.lastSeenAt?.toMillis?.() || a.lastSeenAt?.seconds * 1000 || 0;
+                  const bTime = b.lastSeenAt?.toMillis?.() || b.lastSeenAt?.seconds * 1000 || 0;
+                  return bTime - aTime;
+                });
+
+                // Keep first (most recent), delete rest
+                for (let i = 1; i < deviceList.length; i++) {
+                  const deviceToRemove = deviceList[i];
+                  try {
+                    await deleteDoc(doc(db, 'users', userId, 'devices', deviceToRemove.id));
+                    totalDuplicatesRemoved++;
+                    addLog(`    ✓ Removed old token ${i}/${deviceList.length - 1}: ${deviceToRemove.token?.substring(0, 30)}...`, 'success');
+                  } catch (error) {
+                    addLog(`    ✗ Failed to remove device: ${error.message}`, 'error');
+                  }
+                }
+              }
+            }
+          } catch (userError) {
+            addLog(`  Error processing user ${userId}: ${userError.message}`, 'error');
+          }
+        }
+
+        showStatus(`✅ Cleanup complete! Removed ${totalDuplicatesRemoved} duplicate devices from ${usersProcessed} users.`, 'success');
+        addLog(`Cleanup complete! Total duplicates removed: ${totalDuplicatesRemoved}`, 'success');
+        
+        btn.style.display = 'none';
+        document.getElementById('closeBtn').style.display = 'inline-block';
+      } catch (error) {
+        showStatus(`Error: ${error.message}`, 'error');
+        addLog(`Error: ${error.message}`, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Retry Cleanup';
+      }
+    };
+
+    // Clean up old fcmToken fields from user documents
+    window.cleanupOldTokens = async function() {
+      if (!currentUser) {
+        showStatus('Please sign in first', 'error');
+        return;
+      }
+
+      if (!confirm('This will remove the old fcmToken field from all user documents. The devices subcollection will remain as the source of truth. Continue?')) {
+        return;
+      }
+
+      const btn = document.getElementById('cleanupTokensBtn');
+      btn.disabled = true;
+      btn.textContent = 'Cleaning...';
+      
+      document.getElementById('log').innerHTML = '';
+      showStatus('Cleaning up old fcmToken fields...', 'info');
+      addLog('Starting fcmToken field cleanup...', 'info');
+
+      try {
+        const usersSnapshot = await getDocs(collection(db, 'users'));
+        addLog(`Found ${usersSnapshot.size} users to process`, 'info');
+
+        let tokensRemoved = 0;
+        let usersProcessed = 0;
+
+        for (const userDoc of usersSnapshot.docs) {
+          const userId = userDoc.id;
+          const userData = userDoc.data();
+          usersProcessed++;
+
+          if (userData.fcmToken) {
+            try {
+              await updateDoc(doc(db, 'users', userId), {
+                fcmToken: deleteField()
+              });
+              tokensRemoved++;
+              addLog(`  ✓ Removed fcmToken from user ${userId}`, 'success');
+            } catch (error) {
+              addLog(`  ✗ Failed to remove fcmToken from user ${userId}: ${error.message}`, 'error');
+            }
+          }
+        }
+
+        showStatus(`✅ Cleanup complete! Removed fcmToken field from ${tokensRemoved}/${usersProcessed} users.`, 'success');
+        addLog(`fcmToken cleanup complete! Fields removed: ${tokensRemoved}`, 'success');
+        
+        btn.style.display = 'none';
+        document.getElementById('closeBtn').style.display = 'inline-block';
+      } catch (error) {
+        showStatus(`Error: ${error.message}`, 'error');
+        addLog(`Error: ${error.message}`, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Retry Cleanup';
+      }
+    };
+  </script>
+</body>
+</html>

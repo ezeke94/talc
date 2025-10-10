@@ -42,10 +42,11 @@ import {
   removeDevice, 
   formatDeviceDate,
   parseDeviceInfo,
-  updateDeviceName
+  updateDeviceName,
+  cleanupDuplicateDevices
 } from '../utils/deviceManager';
 
-const NotificationSettings = () => {
+const NotificationSettings = ({ compact = false }) => {
   const { currentUser } = useAuth();
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -96,16 +97,32 @@ const NotificationSettings = () => {
   }, [currentUser]);
 
   const loadDevices = async () => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      console.log('NotificationSettings: No current user, skipping device load');
+      return;
+    }
     
+    console.log('NotificationSettings: Loading devices for user:', currentUser.uid);
     setLoadingDevices(true);
     try {
+      // First, clean up any duplicate devices
+      const duplicatesRemoved = await cleanupDuplicateDevices(currentUser.uid);
+      if (duplicatesRemoved > 0) {
+        console.log(`NotificationSettings: Cleaned up ${duplicatesRemoved} duplicate devices`);
+      }
+      
+      // Then load the devices
       const userDevices = await getUserDevices(currentUser.uid);
+      console.log('NotificationSettings: Loaded devices:', userDevices);
+      console.log('NotificationSettings: Device count:', userDevices.length);
       setDevices(userDevices);
+      console.log('NotificationSettings: State updated with', userDevices.length, 'devices');
     } catch (error) {
-      console.error('Error loading devices:', error);
+      console.error('NotificationSettings: Error loading devices:', error);
+      setErrorMsg('Failed to load devices. Please refresh the page.');
     } finally {
       setLoadingDevices(false);
+      console.log('NotificationSettings: Loading complete');
     }
   };
 
@@ -229,6 +246,83 @@ const NotificationSettings = () => {
     }
   };
 
+  const handleCleanupDuplicates = async () => {
+    if (!currentUser) return;
+
+    if (!window.confirm('This will remove duplicate device registrations (same device with multiple tokens). Only the most recent token for each device will be kept. Continue?')) {
+      return;
+    }
+
+    setLoadingDevices(true);
+    setErrorMsg('');
+
+    try {
+      console.log('Starting duplicate cleanup for current user...');
+      
+      // Get all devices
+      const userDevices = await getUserDevices(currentUser.uid);
+      console.log(`Found ${userDevices.length} devices to analyze`);
+
+      // Group by device fingerprint (userAgent + platform)
+      const deviceFingerprintMap = new Map();
+      userDevices.forEach(device => {
+        const fingerprint = `${device.userAgent || 'unknown'}_${device.platform || 'unknown'}`;
+        if (!deviceFingerprintMap.has(fingerprint)) {
+          deviceFingerprintMap.set(fingerprint, []);
+        }
+        deviceFingerprintMap.get(fingerprint).push(device);
+      });
+
+      let duplicatesRemoved = 0;
+
+      // Remove duplicates
+      for (const [fingerprint, deviceList] of deviceFingerprintMap.entries()) {
+        if (deviceList.length > 1) {
+          console.log(`Found ${deviceList.length} tokens for same device: ${fingerprint.substring(0, 50)}`);
+          
+          // Sort by lastSeenAt (keep most recent)
+          deviceList.sort((a, b) => {
+            const aTime = a.lastSeenAt?.toMillis?.() || a.lastSeenAt?.seconds * 1000 || 0;
+            const bTime = b.lastSeenAt?.toMillis?.() || b.lastSeenAt?.seconds * 1000 || 0;
+            return bTime - aTime;
+          });
+
+          // Keep first (most recent), delete rest
+          for (let i = 1; i < deviceList.length; i++) {
+            const deviceToRemove = deviceList[i];
+            try {
+              const success = await removeDevice(currentUser.uid, deviceToRemove.token);
+              if (success) {
+                duplicatesRemoved++;
+                console.log(`Removed old token: ${deviceToRemove.token?.substring(0, 30)}...`);
+              }
+            } catch (error) {
+              console.error(`Failed to remove device: ${error.message}`);
+            }
+          }
+        }
+      }
+
+      // Reload devices to show updated list
+      await loadDevices();
+
+      if (duplicatesRemoved > 0) {
+        setErrorMsg(`✅ Successfully removed ${duplicatesRemoved} duplicate device${duplicatesRemoved > 1 ? 's' : ''}!`);
+        setTimeout(() => setErrorMsg(''), 5000);
+      } else {
+        setErrorMsg('ℹ️ No duplicates found. Your devices are clean!');
+        setTimeout(() => setErrorMsg(''), 3000);
+      }
+
+      console.log(`Cleanup complete! Removed ${duplicatesRemoved} duplicates`);
+    } catch (error) {
+      console.error('Error during cleanup:', error);
+      setErrorMsg('Failed to cleanup duplicates. Please try again.');
+    } finally {
+      setLoadingDevices(false);
+    }
+  };
+
   const getDeviceIcon = (userAgent) => {
     const info = parseDeviceInfo(userAgent);
     if (info.device === 'Mobile') return <PhoneAndroidIcon />;
@@ -242,151 +336,175 @@ const NotificationSettings = () => {
 
   // No extra permission info in simplified UI
 
-  return (
-    <Card>
-      <CardContent>
-        <Typography variant="h6" gutterBottom>
-          Push Notifications
+  const Content = (
+    <>
+      <Typography variant="h6" gutterBottom>
+        Push Notifications
+      </Typography>
+      {errorMsg && (
+        <Alert severity="error" sx={{ mb: 2 }}>{errorMsg}</Alert>
+      )}
+      {!status.supported && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          Your browser does not support push notifications.
+        </Alert>
+      )}
+      {status.supported && status.permission === 'denied' && (
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Notifications are blocked. Please allow notifications in your browser settings.
+        </Alert>
+      )}
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 2 }}>
+        <Switch
+          checked={notificationsEnabled}
+          onChange={handleToggleNotifications}
+          disabled={loading || !status.supported || status.permission === 'denied'}
+          inputProps={{ 'aria-label': 'Enable push notifications' }}
+        />
+        <Typography variant="body1">
+          {notificationsEnabled ? 'Notifications are ON' : 'Notifications are OFF'}
         </Typography>
-        {errorMsg && (
-          <Alert severity="error" sx={{ mb: 2 }}>{errorMsg}</Alert>
-        )}
-        {!status.supported && (
-          <Alert severity="warning" sx={{ mb: 2 }}>
-            Your browser does not support push notifications.
-          </Alert>
-        )}
-        {status.supported && status.permission === 'denied' && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            Notifications are blocked. Please allow notifications in your browser settings.
-          </Alert>
-        )}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 2 }}>
-          <Switch
-            checked={notificationsEnabled}
-            onChange={handleToggleNotifications}
-            disabled={loading || !status.supported || status.permission === 'denied'}
-            inputProps={{ 'aria-label': 'Enable push notifications' }}
-          />
-          <Typography variant="body1">
-            {notificationsEnabled ? 'Notifications are ON' : 'Notifications are OFF'}
-          </Typography>
-        </Box>
-        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-          Toggle to receive or stop important reminders about events, KPIs, and system updates.
+      </Box>
+      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+        Toggle to receive or stop important reminders about events, KPIs, and system updates.
+      </Typography>
+
+      <Divider sx={{ my: 3 }} />
+
+      {/* Registered Devices Section */}
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+        <Typography variant="h6">
+          Registered Devices
         </Typography>
-
-        <Divider sx={{ my: 3 }} />
-
-        {/* Registered Devices Section */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-          <Typography variant="h6">
-            Registered Devices
-          </Typography>
+        <Stack direction="row" spacing={1}>
+          <Tooltip title="Clean up duplicate devices">
+            <IconButton onClick={handleCleanupDuplicates} disabled={loadingDevices} size="small" color="warning">
+              <DeleteIcon />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Refresh devices">
             <IconButton onClick={loadDevices} disabled={loadingDevices} size="small">
               <RefreshIcon />
             </IconButton>
           </Tooltip>
-        </Box>
+        </Stack>
+      </Box>
 
-        {loadingDevices ? (
-          <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-            <CircularProgress size={30} />
-          </Box>
-        ) : devices.length === 0 ? (
-          <Alert severity="info">
-            No devices registered for notifications. Enable notifications on this device to get started.
-          </Alert>
-        ) : (
+      {loadingDevices ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+          <CircularProgress size={30} />
+        </Box>
+      ) : devices.length === 0 ? (
+        <Alert severity="info">
+          No devices registered for notifications. Enable notifications on this device to get started.
+        </Alert>
+      ) : (
+        <>
+          {/* Check for potential duplicates */}
+          {(() => {
+            const fingerprintMap = new Map();
+            devices.forEach(device => {
+              const fingerprint = `${device.userAgent || 'unknown'}_${device.platform || 'unknown'}`;
+              fingerprintMap.set(fingerprint, (fingerprintMap.get(fingerprint) || 0) + 1);
+            });
+            const hasDuplicates = Array.from(fingerprintMap.values()).some(count => count > 1);
+            
+            return hasDuplicates ? (
+              <Alert severity="warning" sx={{ mb: 2 }}>
+                <strong>Duplicate devices detected!</strong> You have the same device registered with multiple tokens. 
+                Click the cleanup button (🗑️) above to remove old tokens.
+              </Alert>
+            ) : null;
+          })()}
+          
           <List>
             {devices.map((device, index) => {
               const isCurrentDevice = device.token === currentDeviceToken;
               const deviceName = getDeviceName(device);
-              
-              return (
-                <React.Fragment key={device.token}>
-                  {index > 0 && <Divider />}
-                  <ListItem
-                    sx={{
-                      bgcolor: isCurrentDevice ? 'action.hover' : 'transparent',
-                      borderRadius: 1,
-                      mb: 0.5
-                    }}
-                  >
-                    <Box sx={{ mr: 2, color: 'action.active' }}>
-                      {getDeviceIcon(device.userAgent)}
-                    </Box>
-                    <ListItemText
-                      primary={
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          <Typography variant="body1">
-                            {deviceName}
-                          </Typography>
-                          {isCurrentDevice && (
-                            <Chip label="This Device" size="small" color="primary" variant="outlined" />
-                          )}
-                        </Stack>
-                      }
-                      secondary={
-                        <Stack spacing={0.5} sx={{ mt: 0.5 }}>
-                          <Typography variant="caption" color="text.secondary">
-                            Last active: {formatDeviceDate(device.lastSeenAt)}
-                          </Typography>
-                          {device.platform && (
-                            <Typography variant="caption" color="text.secondary">
-                              Platform: {device.platform}
-                            </Typography>
-                          )}
-                        </Stack>
-                      }
-                    />
-                    <ListItemSecondaryAction>
+            
+            return (
+              <React.Fragment key={device.token}>
+                {index > 0 && <Divider />}
+                <ListItem
+                  sx={{
+                    bgcolor: isCurrentDevice ? 'action.hover' : 'transparent',
+                    borderRadius: 1,
+                    mb: 0.5
+                  }}
+                >
+                  <Box sx={{ mr: 2, color: 'action.active' }}>
+                    {getDeviceIcon(device.userAgent)}
+                  </Box>
+                  <ListItemText
+                    primary={
                       <Stack direction="row" spacing={1} alignItems="center">
-                        <Tooltip title="Edit device name">
-                          <IconButton
-                            edge="end"
-                            onClick={() => handleEditDeviceName(device)}
-                            size="small"
-                          >
-                            <EditIcon fontSize="small" />
-                          </IconButton>
-                        </Tooltip>
-                        <Tooltip title={device.enabled ? 'Disable notifications' : 'Enable notifications'}>
-                          <Switch
-                            edge="end"
-                            checked={device.enabled !== false}
-                            onChange={() => handleToggleDevice(device.token, device.enabled !== false)}
-                            size="small"
-                          />
-                        </Tooltip>
-                        {!isCurrentDevice && (
-                          <Tooltip title="Remove device">
-                            <IconButton
-                              edge="end"
-                              onClick={() => handleRemoveDevice(device.token)}
-                              size="small"
-                              color="error"
-                            >
-                              <DeleteIcon fontSize="small" />
-                            </IconButton>
-                          </Tooltip>
+                        <Typography variant="body1">
+                          {deviceName}
+                        </Typography>
+                        {isCurrentDevice && (
+                          <Chip label="This Device" size="small" color="primary" variant="outlined" />
                         )}
                       </Stack>
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                </React.Fragment>
-              );
-            })}
-          </List>
-        )}
+                    }
+                    secondary={
+                      <Stack spacing={0.5} sx={{ mt: 0.5 }}>
+                        <Typography variant="caption" color="text.secondary">
+                          Last active: {formatDeviceDate(device.lastSeenAt)}
+                        </Typography>
+                        {device.platform && (
+                          <Typography variant="caption" color="text.secondary">
+                            Platform: {device.platform}
+                          </Typography>
+                        )}
+                      </Stack>
+                    }
+                  />
+                  <ListItemSecondaryAction>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Tooltip title="Edit device name">
+                        <IconButton
+                          edge="end"
+                          onClick={() => handleEditDeviceName(device)}
+                          size="small"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={device.enabled ? 'Disable notifications' : 'Enable notifications'}>
+                        <Switch
+                          edge="end"
+                          checked={device.enabled !== false}
+                          onChange={() => handleToggleDevice(device.token, device.enabled !== false)}
+                          size="small"
+                        />
+                      </Tooltip>
+                      {!isCurrentDevice && (
+                        <Tooltip title="Remove device">
+                          <IconButton
+                            edge="end"
+                            onClick={() => handleRemoveDevice(device.token)}
+                            size="small"
+                            color="error"
+                          >
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Stack>
+                  </ListItemSecondaryAction>
+                </ListItem>
+              </React.Fragment>
+            );
+          })}
+        </List>
+        </>
+      )}
 
-        {devices.length > 0 && (
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
-            You can enable/disable notifications per device or remove devices you no longer use.
-          </Typography>
-        )}
-      </CardContent>
+      {devices.length > 0 && (
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+          You can enable/disable notifications per device or remove devices you no longer use.
+        </Typography>
+      )}
 
       {/* Device Name Dialog */}
       <Dialog open={deviceNameDialogOpen} onClose={handleCancelDeviceName} maxWidth="sm" fullWidth>
@@ -429,6 +547,18 @@ const NotificationSettings = () => {
           </Button>
         </DialogActions>
       </Dialog>
+    </>
+  );
+
+  if (compact) {
+    return Content;
+  }
+
+  return (
+    <Card>
+      <CardContent>
+        {Content}
+      </CardContent>
     </Card>
   );
 };

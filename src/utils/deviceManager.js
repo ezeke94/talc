@@ -8,25 +8,64 @@ import { db } from '../firebase/config';
  * @returns {Promise<Array>} Array of device objects
  */
 export async function getUserDevices(userId) {
-  if (!userId) return [];
+  if (!userId) {
+    console.warn('deviceManager.getUserDevices: No userId provided');
+    return [];
+  }
+
+  console.log('deviceManager.getUserDevices: Fetching devices for user:', userId);
 
   try {
     const devicesRef = collection(db, 'users', userId, 'devices');
     const q = query(devicesRef, orderBy('lastSeenAt', 'desc'));
     const snapshot = await getDocs(q);
     
+    console.log('deviceManager.getUserDevices: Found', snapshot.size, 'devices');
+    
     const devices = [];
-    snapshot.forEach((doc) => {
-      devices.push({
-        id: doc.id,
-        token: doc.id, // token is the document ID
-        ...doc.data()
-      });
+    snapshot.forEach((docSnap) => {
+      const deviceData = {
+        id: docSnap.id,
+        token: docSnap.id, // token is the document ID
+        ...docSnap.data()
+      };
+      console.log('deviceManager.getUserDevices: Device:', deviceData);
+      devices.push(deviceData);
     });
 
+    console.log('deviceManager.getUserDevices: Returning', devices.length, 'devices');
     return devices;
   } catch (error) {
-    console.error('Error fetching user devices:', error);
+    console.error('deviceManager.getUserDevices: Error fetching user devices:', error);
+    
+    // If it's an ordering error, try without ordering
+    if (error.code === 'failed-precondition' || error.message?.includes('index')) {
+      try {
+        console.log('deviceManager.getUserDevices: Retrying without orderBy...');
+        const devicesRef = collection(db, 'users', userId, 'devices');
+        const snapshot = await getDocs(devicesRef);
+        
+        console.log('deviceManager.getUserDevices: Retry found', snapshot.size, 'devices');
+        
+        const devices = [];
+        snapshot.forEach((docSnap) => {
+          const deviceData = {
+            id: docSnap.id,
+            token: docSnap.id,
+            ...docSnap.data()
+          };
+          console.log('deviceManager.getUserDevices: Device (retry):', deviceData);
+          devices.push(deviceData);
+        });
+
+        console.log('deviceManager.getUserDevices: Retry returning', devices.length, 'devices');
+        return devices;
+      } catch (retryError) {
+        console.error('deviceManager.getUserDevices: Retry also failed:', retryError);
+        return [];
+      }
+    }
+    
     return [];
   }
 }
@@ -179,5 +218,69 @@ export function formatDeviceDate(timestamp) {
   } catch (error) {
     console.error('Error formatting date:', error);
     return 'Unknown';
+  }
+}
+
+/**
+ * Clean up duplicate devices (keeps the most recent one for each unique token)
+ * @param {string} userId - The user ID
+ * @returns {Promise<number>} Number of duplicates removed
+ */
+export async function cleanupDuplicateDevices(userId) {
+  if (!userId) {
+    console.warn('deviceManager.cleanupDuplicateDevices: No userId provided');
+    return 0;
+  }
+
+  console.log('deviceManager.cleanupDuplicateDevices: Cleaning up for user:', userId);
+
+  try {
+    const devices = await getUserDevices(userId);
+    console.log('deviceManager.cleanupDuplicateDevices: Found', devices.length, 'total devices');
+
+    // Group devices by token
+    const tokenMap = new Map();
+    devices.forEach(device => {
+      const token = device.token || device.id;
+      if (!tokenMap.has(token)) {
+        tokenMap.set(token, []);
+      }
+      tokenMap.get(token).push(device);
+    });
+
+    let duplicatesRemoved = 0;
+
+    // For each token, keep only the most recent device (by lastSeenAt)
+    for (const [token, deviceList] of tokenMap.entries()) {
+      if (deviceList.length > 1) {
+        console.log(`deviceManager.cleanupDuplicateDevices: Found ${deviceList.length} duplicates for token:`, token.substring(0, 20) + '...');
+        
+        // Sort by lastSeenAt (most recent first)
+        deviceList.sort((a, b) => {
+          const aTime = a.lastSeenAt?.toMillis?.() || a.lastSeenAt?.seconds * 1000 || 0;
+          const bTime = b.lastSeenAt?.toMillis?.() || b.lastSeenAt?.seconds * 1000 || 0;
+          return bTime - aTime;
+        });
+
+        // Keep the first (most recent), delete the rest
+        for (let i = 1; i < deviceList.length; i++) {
+          const deviceToRemove = deviceList[i];
+          try {
+            const deviceRef = doc(db, 'users', userId, 'devices', deviceToRemove.id);
+            await deleteDoc(deviceRef);
+            duplicatesRemoved++;
+            console.log('deviceManager.cleanupDuplicateDevices: Removed duplicate device:', deviceToRemove.id.substring(0, 20) + '...');
+          } catch (error) {
+            console.error('deviceManager.cleanupDuplicateDevices: Failed to remove device:', error);
+          }
+        }
+      }
+    }
+
+    console.log(`deviceManager.cleanupDuplicateDevices: Removed ${duplicatesRemoved} duplicate devices`);
+    return duplicatesRemoved;
+  } catch (error) {
+    console.error('deviceManager.cleanupDuplicateDevices: Error:', error);
+    return 0;
   }
 }

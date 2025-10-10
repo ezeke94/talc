@@ -4,8 +4,9 @@ service cloud.firestore {
     // Users: Admins manage all, users manage their own profile and notifications (updated 2025-10-10)
     match /users/{userId} {
       allow read, write: if isAuthed();
+      // Devices subcollection: users can only manage their own devices
       match /devices/{deviceId} {
-        allow read, write: if isAuthed();
+        allow read, write: if isAuthed() && request.auth.uid == userId;
       }
     }
     // Events: Authenticated users can read/create, update/delete by owner/admin/quality

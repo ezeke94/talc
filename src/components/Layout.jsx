@@ -491,13 +491,13 @@ const Layout = () => {
                 onClose={() => setShowProfile(false)} 
                 fullWidth 
                 maxWidth="sm"
-                scroll="body"
+                scroll="paper"
                 PaperProps={{
                     sx: { maxHeight: '90vh' }
                 }}
             >
                 <DialogTitle>Profile Settings</DialogTitle>
-                <DialogContent sx={{ minHeight: 200 }}>
+                <DialogContent sx={{ overflowY: 'auto' }}>
                     <ProfileSettingsDialog onClose={() => setShowProfile(false)} />
                 </DialogContent>
             </Dialog>

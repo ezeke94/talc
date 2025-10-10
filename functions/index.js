@@ -23,6 +23,7 @@ exports.sendWeeklyOverdueTaskReminders = eventNotifications.sendWeeklyOverdueTas
 exports.sendNotificationsOnEventCreate = eventNotifications.sendNotificationsOnEventCreate;
 exports.sendWeeklyKPIReminders = kpiNotifications.sendWeeklyKPIReminders;
 exports.notifyEventReschedule = eventChangeNotifications.notifyEventReschedule;
+exports.notifyEventUpdate = eventChangeNotifications.notifyEventUpdate;
 exports.notifyEventCancellation = eventChangeNotifications.notifyEventCancellation;
 exports.notifyEventCompletion = eventChangeNotifications.notifyEventCompletion;
 exports.notifyEventDelete = eventChangeNotifications.notifyEventDelete;
