@@ -12,6 +12,9 @@
   <meta name="apple-mobile-web-app-title" content="TALC Management" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="application-name" content="TALC Management" />
+  <!-- Additional iOS PWA meta tags -->
+  <meta name="apple-touch-fullscreen" content="yes" />
+  <meta name="HandheldFriendly" content="true" />
   <!-- App description and SEO -->
   <meta name="description" content="TALC Management - Evaluator Dashboard for Managing Events, Tasks, and KPIs" />
   <meta name="keywords" content="TALC, management, evaluator, dashboard, events, tasks, KPI" />
@@ -32,12 +35,21 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/service-worker.js')
+          // Register the messaging service worker first
+          navigator.serviceWorker.register('/firebase-messaging-sw.js')
             .then((registration) => {
-              console.log('SW registered: ', registration);
+              console.log('Firebase SW registered: ', registration);
             })
             .catch((registrationError) => {
-              console.log('SW registration failed: ', registrationError);
+              console.log('Firebase SW registration failed: ', registrationError);
+              // Fallback to regular service worker
+              navigator.serviceWorker.register('/service-worker.js')
+                .then((registration) => {
+                  console.log('Regular SW registered: ', registration);
+                })
+                .catch((error) => {
+                  console.log('All SW registration failed: ', error);
+                });
             });
         });
       }
