@@ -47,31 +47,38 @@ export const AuthProvider = ({ children }) => {
     useEffect(() => {
         let unsubscribe = () => {};
         let authStateTimeout;
+        let redirectUser = null; // Move this to outer scope so it's accessible in onAuthStateChanged
 
         const init = async () => {
             // Ensure auth persistence has been configured before handling redirect or subscribing.
             try {
-                await (persistencePromise || Promise.resolve());
+                const persistResult = await (persistencePromise || Promise.resolve());
+                console.debug('Auth persistence configured:', persistResult);
             } catch (e) {
                 // If persistence setup failed, continue anyway.
                 console.debug('Auth persistence setup failed or was skipped:', e?.message || e);
             }
 
-            // Keep loading true while we check for any redirect sign-in results
+            // CRITICAL: Check for redirect result FIRST before setting up auth state listener
+            // This must happen BEFORE onAuthStateChanged to catch the redirect user
+            console.log('AuthContext: Checking for redirect sign-in result...');
+            console.log('AuthContext: Current URL:', window.location.href);
+            console.log('AuthContext: URL search params:', window.location.search);
             try {
                 const redirectResult = await getRedirectResult(auth);
+                console.log('AuthContext: getRedirectResult returned:', redirectResult ? 'user found' : 'null');
                 if (redirectResult?.user) {
-                    console.debug('Redirect sign-in successful:', redirectResult.user.email);
+                    console.log('AuthContext: ✓ Redirect sign-in successful:', redirectResult.user.email);
+                    redirectUser = redirectResult.user; // Set the outer scope variable
                     // Clear any previous redirect error markers
                     try { sessionStorage.removeItem('authRedirectError'); } catch {}
                 } else {
-                    console.debug('No redirect user result present');
+                    console.log('AuthContext: No redirect result (user may have been on login page or already signed in)');
                 }
             } catch (e) {
                 // Persist redirect error so UI can surface it on the login screen
+                console.error('AuthContext: Redirect sign-in failed:', e?.code, e?.message, e);
                 try { sessionStorage.setItem('authRedirectError', e?.code || e?.message || 'redirect_failed'); } catch {}
-                // No redirect result or failure is okay — continue
-                console.debug('No redirect result or redirect processing failed:', e?.message || e);
             }
 
             // Log the current URL to confirm OAuth redirect parameters are received
@@ -82,7 +89,8 @@ export const AuthProvider = ({ children }) => {
                 try {
                     const isiOSStandalone = !!window.navigator?.standalone;
                     const displayStandalone = window.matchMedia?.('(display-mode: standalone)')?.matches;
-                    return isiOSStandalone || displayStandalone;
+                    const displayWCO = window.matchMedia?.('(display-mode: window-controls-overlay)')?.matches;
+                    return isiOSStandalone || displayStandalone || displayWCO;
                 } catch (e) {
                     return false;
                 }
@@ -105,7 +113,7 @@ export const AuthProvider = ({ children }) => {
 
             // Now subscribe to auth state changes
             unsubscribe = onAuthStateChanged(auth, async (user) => {
-                console.debug('AuthStateChanged fired. User present?', !!user);
+                console.debug('AuthStateChanged fired. User present?', !!user, user?.email || 'no email');
                 // Clear timeout since we got a response
                 if (authStateTimeout) {
                     clearTimeout(authStateTimeout);
@@ -114,15 +122,19 @@ export const AuthProvider = ({ children }) => {
 
                 setAuthInitialized(true);
 
+                // If we just got a user from redirect, prefer that over the auth state user
+                const actualUser = redirectUser || user;
+                console.debug('Actual user to process:', actualUser?.email || 'none');
+
                 // Start processing this change
-                if (user) {
+                if (actualUser) {
                     // Expose Firebase user immediately so routes can proceed
-                    setCurrentUser(prev => prev || user);
+                    setCurrentUser(prev => prev || actualUser);
                     // Stop blocking UI immediately; profile sync continues in background
                     setLoading(false);
 
                     // Setup notifications for authenticated user (async)
-                    setupNotifications(user).then(token => {
+                    setupNotifications(actualUser).then(token => {
                         if (token) {
                             console.log('Notifications setup completed for user');
                         }
@@ -130,14 +142,14 @@ export const AuthProvider = ({ children }) => {
                         console.warn('Notification setup failed:', err);
                     });
                     try {
-                        const userRef = doc(db, 'users', user.uid);
+                        const userRef = doc(db, 'users', actualUser.uid);
                         const snap = await getDoc(userRef);
                         const base = {
-                            uid: user.uid,
-                            email: user.email || '',
-                            name: user.displayName || '',
-                            displayName: user.displayName || '',
-                            photoURL: user.photoURL || '',
+                            uid: actualUser.uid,
+                            email: actualUser.email || '',
+                            name: actualUser.displayName || '',
+                            displayName: actualUser.displayName || '',
+                            photoURL: actualUser.photoURL || '',
                             lastLoginAt: serverTimestamp(),
                         };
                         console.log('AuthContext: Firestore user doc data:', snap.exists() ? snap.data() : null);
@@ -145,7 +157,7 @@ export const AuthProvider = ({ children }) => {
                             // Merge fresh auth data without clobbering role/centers
                             await setDoc(userRef, base, { merge: true });
                             // Start/refresh live subscription to user profile for stable role/permissions
-                            startUserDocSubscription(user.uid, user);
+                            startUserDocSubscription(actualUser.uid, actualUser);
                         } else {
                             await setDoc(userRef, {
                                 ...base,
@@ -154,17 +166,17 @@ export const AuthProvider = ({ children }) => {
                                 assignedCenters: [],
                                 createdAt: serverTimestamp(),
                             }, { merge: true });
-                            const merged = { ...user, ...base, role: 'Evaluator', isActive: false, assignedCenters: [] };
+                            const merged = { ...actualUser, ...base, role: 'Evaluator', isActive: false, assignedCenters: [] };
                             console.log('AuthContext: Created new user doc, currentUser:', merged);
                             setCurrentUser(merged);
                             // Begin subscription so future role updates are reflected immediately
-                            startUserDocSubscription(user.uid, merged);
+                            startUserDocSubscription(actualUser.uid, merged);
                         }
                     } catch (e) {
                         console.error('Failed to upsert user profile', e);
                         // Still ensure we subscribe to user doc to enrich when network recovers
-                        setCurrentUser(user);
-                        startUserDocSubscription(user.uid, user);
+                        setCurrentUser(actualUser);
+                        startUserDocSubscription(actualUser.uid, actualUser);
                     } finally {
                         // Ensure we are not stuck in loading if any of the above throws
                         setLoading(false);

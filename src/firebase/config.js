@@ -17,13 +17,38 @@ const app = initializeApp(firebaseConfig);
 
 // Initialize and export Firebase services for use throughout the app
 export const auth = getAuth(app);
+
+// CRITICAL: Set the app verification disabled for testing in PWA mode
+// This helps debug auth issues in standalone mode
+if (import.meta.env?.DEV) {
+  console.log('Firebase Config:', {
+    authDomain: firebaseConfig.authDomain,
+    apiKey: firebaseConfig.apiKey ? '***' : 'MISSING',
+    projectId: firebaseConfig.projectId
+  });
+}
+
 // Use the device/browser language for OAuth flows
 try { useDeviceLanguage(auth); } catch { /* noop */ }
 
 // Enhanced auth persistence setup for PWAs with better error handling
 export const persistencePromise = (async () => {
   try {
-    // First, test if IndexedDB is available and working
+    // First, test if localStorage is available and working
+    try {
+      const testKey = 'firebase-test-' + Date.now();
+      localStorage.setItem(testKey, 'test');
+      localStorage.removeItem(testKey);
+      
+      // localStorage is working, use it
+      await setPersistence(auth, browserLocalPersistence);
+      console.debug('Firebase: LocalStorage persistence configured successfully');
+      return 'localstorage';
+    } catch (localStorageError) {
+      console.warn('Firebase: LocalStorage test failed, trying IndexedDB:', localStorageError);
+    }
+    
+    // Fall back to IndexedDB
     if (typeof indexedDB !== 'undefined') {
       try {
         const testRequest = indexedDB.open('firebase-test', 1);
@@ -43,17 +68,15 @@ export const persistencePromise = (async () => {
         console.debug('Firebase: IndexedDB persistence configured successfully');
         return 'indexeddb';
       } catch (indexedDBError) {
-        console.warn('Firebase: IndexedDB test failed, falling back to localStorage:', indexedDBError);
+        console.warn('Firebase: IndexedDB test failed:', indexedDBError);
       }
     }
     
-    // Fall back to localStorage
-    await setPersistence(auth, browserLocalPersistence);
-    console.debug('Firebase: LocalStorage persistence configured successfully');
-    return 'localstorage';
+    console.warn('Firebase: All auth persistence mechanisms failed, using session persistence');
+    return 'none';
     
   } catch (error) {
-    console.error('Firebase: All auth persistence mechanisms failed:', error);
+    console.error('Firebase: Auth persistence setup failed:', error);
     // Don't throw - let the app continue without persistence
     return 'none';
   }
@@ -61,6 +84,33 @@ export const persistencePromise = (async () => {
 export const googleProvider = new GoogleAuthProvider();
 // Encourage account chooser to avoid silent account reuse issues
 try { googleProvider.setCustomParameters({ prompt: 'select_account' }); } catch { /* noop */ }
+
+// CRITICAL FIX for PWA: Add custom parameters to help with redirect flow
+// This ensures the OAuth flow works correctly in installed PWA mode
+try {
+  // For PWAs, we need to explicitly set the redirect parameter
+  const isPWAMode = () => {
+    try {
+      return window.navigator.standalone || 
+             window.matchMedia('(display-mode: standalone)').matches ||
+             window.matchMedia('(display-mode: window-controls-overlay)').matches;
+    } catch {
+      return false;
+    }
+  };
+  
+  if (isPWAMode()) {
+    console.log('Firebase: Configuring auth for PWA mode');
+    // Set additional parameters for better PWA compatibility
+    googleProvider.setCustomParameters({
+      prompt: 'select_account',
+      // Ensure redirect works properly in PWA
+      display: 'page' // Use full page instead of popup for better PWA support
+    });
+  }
+} catch (e) {
+  console.warn('Firebase: Could not configure PWA-specific auth parameters:', e);
+}
 // Use long polling to avoid QUIC/HTTP3 issues on some networks and hosts.
 // Only one of these options may be used at a time; prefer force in production for stability.
 const firestoreSettings = import.meta.env?.PROD

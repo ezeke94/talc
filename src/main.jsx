@@ -299,35 +299,39 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 );
 
-// Remove PWA service worker: always unregister any existing service workers and clear app caches.
+// In development, unregister any non-messaging service workers to avoid stale caches during hot reloads.
+// In production/standalone, keep the main service worker so OAuth redirect flows aren’t disrupted.
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations?.().then(regs => {
-    regs.forEach(reg => {
-      const scriptUrl = reg.active?.scriptURL || reg.installing?.scriptURL || reg.waiting?.scriptURL;
-      let isFirebaseMessagingSw = false;
+  const isDev = import.meta?.env?.DEV;
+  if (isDev) {
+    navigator.serviceWorker.getRegistrations?.().then(regs => {
+      regs.forEach(reg => {
+        const scriptUrl = reg.active?.scriptURL || reg.installing?.scriptURL || reg.waiting?.scriptURL;
+        let isFirebaseMessagingSw = false;
 
-      if (scriptUrl) {
-        try {
-          const swPath = new URL(scriptUrl).pathname;
-          isFirebaseMessagingSw = swPath.endsWith('/firebase-messaging-sw.js');
-        } catch {
-          isFirebaseMessagingSw = scriptUrl.includes('/firebase-messaging-sw.js');
+        if (scriptUrl) {
+          try {
+            const swPath = new URL(scriptUrl).pathname;
+            isFirebaseMessagingSw = swPath.endsWith('/firebase-messaging-sw.js');
+          } catch {
+            isFirebaseMessagingSw = scriptUrl.includes('/firebase-messaging-sw.js');
+          }
         }
-      }
 
-      if (!isFirebaseMessagingSw) {
-        reg.unregister();
-      }
-    });
-  });
-
-  if (window.caches?.keys) {
-    caches.keys().then(keys => {
-      keys.forEach(k => {
-        if (k.startsWith('talc-cache')) {
-          caches.delete(k);
+        if (!isFirebaseMessagingSw) {
+          reg.unregister();
         }
       });
     });
+
+    if (window.caches?.keys) {
+      caches.keys().then(keys => {
+        keys.forEach(k => {
+          if (k.startsWith('talc-cache')) {
+            caches.delete(k);
+          }
+        });
+      });
+    }
   }
 }

@@ -28,17 +28,21 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
-    <!-- PWA Service Worker Registration for iOS -->
+    <!-- PWA Service Worker Registration -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/service-worker.js')
-            .then((registration) => {
-              console.log('SW registered: ', registration);
-            })
-            .catch((registrationError) => {
-              console.log('SW registration failed: ', registrationError);
-            });
+          // Avoid duplicate registrations if another part of the app already did
+          navigator.serviceWorker.getRegistration('/service-worker.js').then((existing) => {
+            if (existing) return;
+            navigator.serviceWorker.register('/service-worker.js')
+              .then((registration) => {
+                console.log('SW registered: ', registration.scope);
+              })
+              .catch((registrationError) => {
+                console.log('SW registration failed: ', registrationError);
+              });
+          });
         });
       }
     </script>

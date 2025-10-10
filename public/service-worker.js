@@ -41,6 +41,16 @@ self.addEventListener('message', event => {
   if (!event.data) return;
   if (event.data === 'SKIP_WAITING') {
     self.skipWaiting();
+    return;
+  }
+  // Allow app to request cache clearing for auth-related safety
+  if (event.data && (event.data.type === 'CLEAR_AUTH_CACHE' || event.data === 'CLEAR_AUTH_CACHE')) {
+    event.waitUntil(
+      caches.keys().then(keys => Promise.all(keys
+        .filter(k => k.startsWith('talc-cache'))
+        .map(k => caches.delete(k))
+      )).catch(() => {})
+    );
   }
 });
 
@@ -57,47 +67,49 @@ self.addEventListener('fetch', event => {
     (event.request.method === 'GET' && event.request.headers.get('accept')?.includes('text/html'));
 
   if (isNavigate) {
-    // If the navigation URL contains OAuth / redirect query params (common during
-    // Firebase / Google redirect sign-in flows), prefer a network fetch and
-    // do NOT fall back to the cached index.html. Returning the cached index at
-    // that moment can swallow important query params or redirect responses and
-    // prevent the Firebase SDK from handling the sign-in result.
+    // CRITICAL FIX: If the navigation URL contains OAuth / redirect query params,
+    // ALWAYS go to the network and do NOT serve from cache. Returning the cached
+    // index.html here would swallow the auth tokens and break the login flow.
     try {
       const url = new URL(event.request.url);
-      const hasQuery = !!url.search;
-      const oauthKeys = ['code', 'state', 'access_token', 'oauth_token', 'error', 'g_csrf_token'];
-      const hasOAuthParams = oauthKeys.some(k => url.searchParams.has(k));
+      const hasOAuthParams = /[?&](code|state|oauth_token|g_csrf_token)=/.test(url.search);
+      const isAuthHandler = url.pathname.startsWith('/__/auth');
 
-      if (hasQuery && hasOAuthParams) {
+      if (isAuthHandler || hasOAuthParams) {
+        console.log('Service Worker: Bypassing cache for OAuth navigation.', event.request.url, {
+          hasOAuthParams,
+          isAuthHandler,
+          pathname: url.pathname,
+          search: url.search
+        });
         // Let the browser perform a full network navigation for redirect results.
         event.respondWith(fetch(event.request));
         return;
       }
     } catch (e) {
-      // If URL parsing fails for any reason, fall back to the normal handling below.
+      // If URL parsing fails, fall back to the normal handling below.
+      console.error('Service Worker: Failed to parse URL for OAuth check.', e);
     }
 
     event.respondWith(
       fetch(event.request)
         .then(response => {
-          // Accept the network response only if it's a successful HTML document.
+          // For regular navigations, if it's a valid HTML response, cache it.
           const contentType = response?.headers?.get?.('content-type') || '';
           if (response && response.status === 200 && contentType.includes('text/html')) {
-            // Save a copy of index.html so we can serve it while offline.
             const copy = response.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put('/index.html', copy)).catch(() => {});
+            caches.open(CACHE_NAME).then(cache => cache.put('/index.html', copy));
             return response;
           }
-
-          // Non-HTML or non-200 responses fall back to the cached index.html if available.
+          // If not, try to serve the cached index.html.
           return caches.match('/index.html').then(cached => cached || response);
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(() => caches.match('/index.html')) // On network failure, serve from cache.
     );
     return;
   }
 
-  // For other requests prefer cache, fallback to network
+  // For all other requests (CSS, JS, images), use a cache-first strategy.
   event.respondWith(
     caches.match(event.request).then(response => response || fetch(event.request))
   );

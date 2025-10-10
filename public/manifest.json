@@ -4,7 +4,7 @@
   "description": "TALC Management - Evaluator Dashboard for Managing Events, Tasks, and KPIs",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "start_url": "/",
+  "start_url": "/?source=pwa",
   "scope": "/",
   "background_color": "#DDEEDD",
   "theme_color": "#7BC678",
