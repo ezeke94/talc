@@ -4,8 +4,7 @@ service cloud.firestore {
     // Users: Admins manage all, users manage their own profile and notifications
     match /users/{userId} {
       allow read, write: if isAdmin();
-      allow read, create: if isSelf();
-      allow update: if isSelf() && isSelfNotificationUpdate();
+      allow read, create, update: if isSelf();
       match /devices/{deviceId} {
         allow read, write: if isSelf();
       }
@@ -79,13 +78,5 @@ service cloud.firestore {
       return isAuthed() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Coordinator";
     }
     // Removed unused isSafeSelfCreate function
-    function isSelfNotificationUpdate() {
-      return request.resource.data.diff(resource.data).changedKeys().hasOnly([
-        'fcmToken',
-        'notificationsEnabled',
-        'lastTokenUpdate',
-        'notificationPreferences'
-      ]);
-    }
   }
 }

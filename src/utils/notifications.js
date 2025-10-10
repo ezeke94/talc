@@ -67,14 +67,19 @@ export async function setupNotifications(currentUser) {
     // Ensure the messaging service worker is registered at the root scope
     let swReg = null;
     try {
+      console.log('Checking for existing service worker registrations...');
       // First check all registrations to find firebase messaging SW
       const registrations = await navigator.serviceWorker.getRegistrations();
+      console.log('Found service worker registrations:', registrations.length);
       swReg = registrations.find(reg => {
         const scriptUrl = reg.active?.scriptURL || reg.installing?.scriptURL || reg.waiting?.scriptURL;
-        return scriptUrl && scriptUrl.includes('firebase-messaging-sw.js');
+        const isFirebaseSW = scriptUrl && scriptUrl.includes('firebase-messaging-sw.js');
+        console.log('Checking SW:', scriptUrl, 'isFirebase:', isFirebaseSW);
+        return isFirebaseSW;
       });
 
       if (!swReg) {
+        console.log('No firebase messaging SW found, registering new one...');
         // Register it if not found, with explicit root scope
         swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
           scope: '/'
@@ -82,6 +87,7 @@ export async function setupNotifications(currentUser) {
         console.log('Registered firebase-messaging-sw.js with scope:', swReg.scope);
         // Wait for it to be ready
         await navigator.serviceWorker.ready;
+        console.log('Service worker is ready');
       } else {
         console.log('Found existing firebase-messaging-sw.js registration:', swReg.scope);
       }
@@ -91,19 +97,26 @@ export async function setupNotifications(currentUser) {
 
     const token = await getToken(msg, { vapidKey, serviceWorkerRegistration: swReg || undefined });
     if (!token) {
-      console.warn('No FCM token received');
+      console.warn('No FCM token received - this could be due to service worker issues or VAPID key problems');
       return null;
     }
 
-    console.log('FCM registration token obtained:', token);
+    console.log('FCM registration token obtained:', token ? 'token_received' : 'no_token');
 
     // Save token to user document (merge ensures doc is created if missing)
     const userRef = doc(db, 'users', currentUser.uid);
-    await setDoc(userRef, {
-      fcmToken: token,
-      notificationsEnabled: true,
-      lastTokenUpdate: new Date()
-    }, { merge: true });
+    console.log('Attempting to save FCM token to Firestore for user:', currentUser.uid);
+    try {
+      await setDoc(userRef, {
+        fcmToken: token,
+        notificationsEnabled: true,
+        lastTokenUpdate: new Date()
+      }, { merge: true });
+      console.log('FCM token successfully saved to Firestore');
+    } catch (firestoreError) {
+      console.error('Failed to save FCM token to Firestore:', firestoreError);
+      return null;
+    }
 
     // Additionally, record this device token in a subcollection for multi-device support
     try {
