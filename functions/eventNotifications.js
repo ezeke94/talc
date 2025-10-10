@@ -405,77 +405,10 @@ exports.sendWeeklyOverdueTaskReminders = onSchedule({
   }
 });
 
-// Notify all users about calendar events
-exports.sendCalendarEventNotifications = onSchedule({
-  schedule: "0 16 * * *", // Daily at 4 PM UTC
-  timeZone: "UTC",
-  region: "us-central1",
-  memory: "256MiB",
-}, async (event) => {
-  try {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-
-    const dayAfter = new Date(tomorrow);
-    dayAfter.setDate(dayAfter.getDate() + 1);
-
-    // Get events due tomorrow
-    const eventsSnapshot = await db.collection('events')
-      .where('startDateTime', '>=', tomorrow)
-      .where('startDateTime', '<', dayAfter)
-      .where('status', 'in', ['pending', 'in_progress'])
-      .get();
-
-    const notifications = [];
-
-    for (const eventDoc of eventsSnapshot.docs) {
-      const event = eventDoc.data();
-      const tokens = await getAllTokensForAllUsers();
-
-      for (const token of tokens) {
-        notifications.push({
-          token,
-          notification: {
-            title: `Event Tomorrow: ${event.title}`,
-            body: `Due tomorrow at ${formatTimestampTime(event.startDateTime)}`,
-          },
-          data: {
-            type: 'event_reminder_all',
-            eventId: eventDoc.id,
-            url: `/calendar`,
-            timing: 'day_before'
-          },
-          webpush: {
-            fcmOptions: {
-              link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`
-            },
-            notification: {
-              icon: '/favicon.ico'
-            }
-          }
-        });
-      }
-    }
-
-    // Send notifications in batches
-    const batchSize = 500;
-    for (let i = 0; i < notifications.length; i += batchSize) {
-      const batch = notifications.slice(i, i + batchSize);
-      if (batch.length > 0) {
-        const results = await messaging.sendEach(batch);
-        console.log(`Batch sent with ${batch.length} notifications`);
-      }
-    }
-
-    console.log(`Sent ${notifications.length} calendar event notifications to all users`);
-    return { success: true, count: notifications.length };
-
-  } catch (error) {
-    console.error('Error sending calendar event notifications:', error);
-    throw error;
-  }
-});
+// REMOVED: sendCalendarEventNotifications - This function was redundant and caused double notifications
+// It sent reminders to ALL users at 4 PM UTC, but sendOwnerEventReminders and sendQualityTeamEventReminders
+// already handle targeted notifications to the appropriate recipients at the same time.
+// Removed on: October 10, 2025
 
 // Trigger notifications when a new event is created
 exports.sendNotificationsOnEventCreate = onDocumentCreated({
