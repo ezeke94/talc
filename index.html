@@ -8,10 +8,10 @@
   <!-- PWA and mobile app settings -->
   <meta name="theme-color" content="#7BC678" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="TALC" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="TALC Management" />
   <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="application-name" content="TALC" />
+  <meta name="application-name" content="TALC Management" />
   <!-- App description and SEO -->
   <meta name="description" content="TALC Management - Evaluator Dashboard for Managing Events, Tasks, and KPIs" />
   <meta name="keywords" content="TALC, management, evaluator, dashboard, events, tasks, KPI" />
@@ -22,11 +22,25 @@
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <!-- Manifest link -->
-  <link rel="manifest" href="/public/manifest.json" />
+  <link rel="manifest" href="/manifest.json" />
   <title>TALC Management</title>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+    <!-- PWA Service Worker Registration for iOS -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then((registration) => {
+              console.log('SW registered: ', registration);
+            })
+            .catch((registrationError) => {
+              console.log('SW registration failed: ', registrationError);
+            });
+        });
+      }
+    </script>
   </body>
 </html>
