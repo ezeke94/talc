@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PWA Test - TALC</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #DDEEDD;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background-color: #fff;
+        }
+        .success { border-left: 4px solid #7BC678; }
+        .error { border-left: 4px solid #ff4444; }
+        .info { border-left: 4px solid #2196F3; }
+    </style>
+</head>
+<body>
+    <h1>PWA Debug Test</h1>
+    <div id="status"></div>
+    <button onclick="testPWA()">Run PWA Test</button>
+    
+    <script>
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = `status ${type}`;
+            div.innerHTML = message;
+            document.getElementById('status').appendChild(div);
+            console.log(message);
+        }
+        
+        function testPWA() {
+            document.getElementById('status').innerHTML = '';
+            
+            log('🔍 Testing PWA Status...', 'info');
+            
+            // Check if running in standalone mode
+            const isStandalone = window.navigator.standalone || 
+                               window.matchMedia('(display-mode: standalone)').matches;
+            log(`📱 Standalone Mode: ${isStandalone ? 'YES' : 'NO'}`, isStandalone ? 'success' : 'info');
+            
+            // Check service worker
+            if ('serviceWorker' in navigator) {
+                log('✅ Service Worker supported', 'success');
+                navigator.serviceWorker.getRegistrations().then(registrations => {
+                    log(`📋 Active Service Workers: ${registrations.length}`, 'info');
+                    registrations.forEach((reg, index) => {
+                        const scope = reg.scope;
+                        const state = reg.active ? 'active' : reg.installing ? 'installing' : 'waiting';
+                        log(`SW ${index + 1}: ${scope} (${state})`, 'info');
+                    });
+                });
+            } else {
+                log('❌ Service Worker not supported', 'error');
+            }
+            
+            // Check manifest
+            const manifestLink = document.querySelector('link[rel="manifest"]');
+            if (manifestLink) {
+                log('✅ Manifest link found', 'success');
+                fetch('/manifest.json')
+                    .then(response => response.json())
+                    .then(manifest => {
+                        log(`📄 Manifest loaded: ${manifest.name}`, 'success');
+                        log(`🚀 Start URL: ${manifest.start_url}`, 'info');
+                        log(`🎯 Scope: ${manifest.scope}`, 'info');
+                    })
+                    .catch(err => log(`❌ Manifest error: ${err.message}`, 'error'));
+            } else {
+                log('❌ Manifest link not found', 'error');
+            }
+            
+            // Check current URL and referrer
+            log(`🌐 Current URL: ${window.location.href}`, 'info');
+            log(`🔗 Referrer: ${document.referrer || 'none'}`, 'info');
+            log(`👤 User Agent: ${navigator.userAgent.substring(0, 80)}...`, 'info');
+            
+            // Check if main app is accessible
+            log('🔄 Testing main app access...', 'info');
+            fetch('/')
+                .then(response => {
+                    if (response.ok) {
+                        log('✅ Main app accessible', 'success');
+                    } else {
+                        log(`⚠️ Main app response: ${response.status}`, 'error');
+                    }
+                })
+                .catch(err => log(`❌ Main app error: ${err.message}`, 'error'));
+        }
+        
+        // Auto-run on load
+        window.addEventListener('load', testPWA);
+    </script>
+</body>
+</html>

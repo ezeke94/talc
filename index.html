@@ -36,6 +36,14 @@
     <script type="module" src="/src/main.jsx"></script>
     <!-- PWA Service Worker Registration for iOS -->
     <script>
+      // PWA Debug Info
+      console.log('PWA Debug - Initial state:', {
+        standalone: window.navigator.standalone,
+        displayMode: window.matchMedia('(display-mode: standalone)').matches,
+        location: window.location.href,
+        userAgent: navigator.userAgent.substring(0, 100)
+      });
+
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/service-worker.js')
@@ -45,8 +53,22 @@
               // Check PWA status
               if (window.navigator.standalone === true) {
                 console.log('App is running in standalone mode (iOS PWA)');
+                // Force a small delay to ensure React has time to mount
+                setTimeout(() => {
+                  if (document.getElementById('root').children.length === 0) {
+                    console.warn('React app not mounted, reloading...');
+                    window.location.reload();
+                  }
+                }, 2000);
               } else if (window.matchMedia('(display-mode: standalone)').matches) {
                 console.log('App is running in standalone mode (PWA)');
+                // Force a small delay to ensure React has time to mount
+                setTimeout(() => {
+                  if (document.getElementById('root').children.length === 0) {
+                    console.warn('React app not mounted, reloading...');
+                    window.location.reload();
+                  }
+                }, 2000);
               } else {
                 console.log('App is running in browser mode');
                 // For debugging: check if PWA criteria are met
