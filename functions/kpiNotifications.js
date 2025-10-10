@@ -11,6 +11,41 @@ if (!getApps().length) {
 const db = getFirestore();
 const messaging = getMessaging();
 
+// Helper: fetch all device tokens for a user (devices subcollection with fallback to fcmToken)
+async function getAllUserTokens(userId) {
+  const tokens = new Set();
+  let hasDevices = false;
+  
+  // First, try to get tokens from devices subcollection
+  try {
+    const devicesSnap = await db.collection('users').doc(userId).collection('devices').get();
+    devicesSnap.forEach((d) => {
+      const token = d.id;
+      const enabled = d.data()?.enabled !== false; // default true
+      if (token && enabled) {
+        tokens.add(token);
+        hasDevices = true;
+      }
+    });
+  } catch (e) {
+    // subcollection may not exist
+  }
+  
+  // Only fall back to main fcmToken if NO devices subcollection exists
+  // This prevents duplicate notifications when the same token exists in both places
+  if (!hasDevices) {
+    try {
+      const userDoc = await db.collection('users').doc(userId).get();
+      const userData = userDoc.data();
+      if (userData?.fcmToken) tokens.add(userData.fcmToken);
+    } catch (e) {
+      console.error(`getAllUserTokens: failed to read user ${userId}`, e);
+    }
+  }
+  
+  return Array.from(tokens);
+}
+
 // Weekly KPI assessment reminders (Fridays at 2 PM)
 exports.sendWeeklyKPIReminders = onSchedule({
   schedule: "0 14 * * 5", // Every Friday at 2 PM UTC
@@ -45,12 +80,14 @@ exports.sendWeeklyKPIReminders = onSchedule({
     const notifications = [];
     const evaluatorTokens = new Map();
 
-    // Cache evaluator FCM tokens
+    // Cache evaluator FCM tokens (with multi-device support)
     for (const userDoc of usersSnapshot.docs) {
       const userData = userDoc.data();
-      if (userData.fcmToken) {
+      const tokens = await getAllUserTokens(userDoc.id);
+      
+      if (tokens.length > 0) {
         evaluatorTokens.set(userDoc.id, {
-          token: userData.fcmToken,
+          tokens: tokens, // Changed from single token to array of tokens
           centers: userData.assignedCenters || [],
           name: userData.name || userData.email,
           role: userData.role
@@ -99,14 +136,15 @@ exports.sendWeeklyKPIReminders = onSchedule({
         // Get assigned evaluator's FCM token
         const evaluatorDoc = await db.collection('users').doc(pending.assignedEvaluator.id).get();
         const evaluatorData = evaluatorDoc.data();
+        const tokens = await getAllUserTokens(pending.assignedEvaluator.id);
         
-        if (evaluatorData?.fcmToken) {
+        if (tokens.length > 0) {
           targetEvaluatorId = pending.assignedEvaluator.id;
           
           // Add to evaluator tokens if not already cached
           if (!evaluatorTokens.has(targetEvaluatorId)) {
             evaluatorTokens.set(targetEvaluatorId, {
-              token: evaluatorData.fcmToken,
+              tokens: tokens, // Changed to array of tokens
               centers: evaluatorData.assignedCenters || [],
               name: evaluatorData.name || evaluatorData.email,
               role: evaluatorData.role
@@ -145,28 +183,31 @@ exports.sendWeeklyKPIReminders = onSchedule({
       const mentorCount = new Set(pendingList.map(p => p.mentorId)).size;
       const formCount = pendingList.length;
       
-      notifications.push({
-        token: evaluatorData.token,
-        notification: {
-          title: `KPI Assessments Pending`,
-          body: `${mentorCount} mentor(s) need evaluation (${formCount} forms)`,
-        },
-        data: {
-          type: 'kpi_reminder',
-          pendingCount: formCount.toString(),
-          mentorCount: mentorCount.toString(),
-          evaluatorRole: evaluatorData.role,
-          url: '/mentors'
-        },
-        webpush: {
-          fcmOptions: {
-            link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/mentors`
-          },
+      // Send to all devices for this evaluator
+      for (const token of evaluatorData.tokens) {
+        notifications.push({
+          token: token,
           notification: {
-            icon: '/favicon.ico'
+            title: `KPI Assessments Pending`,
+            body: `${mentorCount} mentor(s) need evaluation (${formCount} forms)`,
+          },
+          data: {
+            type: 'kpi_reminder',
+            pendingCount: formCount.toString(),
+            mentorCount: mentorCount.toString(),
+            evaluatorRole: evaluatorData.role,
+            url: '/mentors'
+          },
+          webpush: {
+            fcmOptions: {
+              link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/mentors`
+            },
+            notification: {
+              icon: '/favicon.ico'
+            }
           }
-        }
-      });
+        });
+      }
     }
 
     // Send notifications in batches

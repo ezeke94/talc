@@ -10,9 +10,15 @@ service cloud.firestore {
       }
     }
     // Events: Authenticated users can read/create, update/delete by owner/admin/quality
+    // All users can update todos and status fields for task management
     match /events/{eventId} {
       allow read, create: if isAuthed();
-      allow update: if isAuthed() && (resource.data.createdBy.userId == request.auth.uid || isAdmin() || isQuality());
+      allow update: if isAuthed() && (
+        // Allow all users to update todos and status for task management
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['todos', 'status'])) ||
+        // Allow full updates by creators, admins, and quality team
+        (resource.data.createdBy.userId == request.auth.uid || isAdmin() || isQuality())
+      );
       allow delete: if isAuthed() && (isAdmin() || isQuality());
     }
     // SOPs: Authenticated users can read/create, update/delete by admin/quality

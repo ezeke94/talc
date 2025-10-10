@@ -51,23 +51,35 @@ function formatTimestampTime(timestamp, defaultValue = 'Unknown time') {
 // Helper: fetch all device tokens for a user (main fcmToken + devices subcollection)
 async function getAllUserTokens(userId) {
   const tokens = new Set();
-  try {
-    const userDoc = await db.collection('users').doc(userId).get();
-    const userData = userDoc.data();
-    if (userData?.fcmToken) tokens.add(userData.fcmToken);
-  } catch (e) {
-    console.error(`getAllUserTokens: failed to read user ${userId}`, e);
-  }
+  let hasDevices = false;
+  
+  // First, try to get tokens from devices subcollection
   try {
     const devicesSnap = await db.collection('users').doc(userId).collection('devices').get();
     devicesSnap.forEach((d) => {
       const token = d.id;
       const enabled = d.data()?.enabled !== false; // default true
-      if (token && enabled) tokens.add(token);
+      if (token && enabled) {
+        tokens.add(token);
+        hasDevices = true;
+      }
     });
   } catch (e) {
     // subcollection may not exist
   }
+  
+  // Only fall back to main fcmToken if NO devices subcollection exists
+  // This prevents duplicate notifications when the same token exists in both places
+  if (!hasDevices) {
+    try {
+      const userDoc = await db.collection('users').doc(userId).get();
+      const userData = userDoc.data();
+      if (userData?.fcmToken) tokens.add(userData.fcmToken);
+    } catch (e) {
+      console.error(`getAllUserTokens: failed to read user ${userId}`, e);
+    }
+  }
+  
   return Array.from(tokens);
 }
 
@@ -77,15 +89,29 @@ async function getAllTokensForAllUsers() {
   try {
     const usersSnapshot = await db.collection('users').get();
     for (const userDoc of usersSnapshot.docs) {
-      const userData = userDoc.data();
-      if (userData?.fcmToken) tokens.add(userData.fcmToken);
-
-      const devicesSnap = await db.collection('users').doc(userDoc.id).collection('devices').get();
-      devicesSnap.forEach((d) => {
-        const token = d.id;
-        const enabled = d.data()?.enabled !== false; // default true
-        if (token && enabled) tokens.add(token);
-      });
+      let hasDevices = false;
+      
+      // First, try to get tokens from devices subcollection
+      try {
+        const devicesSnap = await db.collection('users').doc(userDoc.id).collection('devices').get();
+        devicesSnap.forEach((d) => {
+          const token = d.id;
+          const enabled = d.data()?.enabled !== false; // default true
+          if (token && enabled) {
+            tokens.add(token);
+            hasDevices = true;
+          }
+        });
+      } catch (e) {
+        // subcollection may not exist
+      }
+      
+      // Only fall back to main fcmToken if NO devices subcollection exists
+      // This prevents duplicate notifications when the same token exists in both places
+      if (!hasDevices) {
+        const userData = userDoc.data();
+        if (userData?.fcmToken) tokens.add(userData.fcmToken);
+      }
     }
   } catch (e) {
     console.error('getAllTokensForAllUsers: failed to fetch tokens', e);

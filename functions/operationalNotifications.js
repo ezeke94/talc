@@ -11,6 +11,41 @@ if (!getApps().length) {
 const db = getFirestore();
 const messaging = getMessaging();
 
+// Helper: fetch all device tokens for a user (devices subcollection with fallback to fcmToken)
+async function getAllUserTokens(userId) {
+  const tokens = new Set();
+  let hasDevices = false;
+  
+  // First, try to get tokens from devices subcollection
+  try {
+    const devicesSnap = await db.collection('users').doc(userId).collection('devices').get();
+    devicesSnap.forEach((d) => {
+      const token = d.id;
+      const enabled = d.data()?.enabled !== false; // default true
+      if (token && enabled) {
+        tokens.add(token);
+        hasDevices = true;
+      }
+    });
+  } catch (e) {
+    // subcollection may not exist
+  }
+  
+  // Only fall back to main fcmToken if NO devices subcollection exists
+  // This prevents duplicate notifications when the same token exists in both places
+  if (!hasDevices) {
+    try {
+      const userDoc = await db.collection('users').doc(userId).get();
+      const userData = userDoc.data();
+      if (userData?.fcmToken) tokens.add(userData.fcmToken);
+    } catch (e) {
+      console.error(`getAllUserTokens: failed to read user ${userId}`, e);
+    }
+  }
+  
+  return Array.from(tokens);
+}
+
 // Monthly operational summary (1st of each month at 8 AM)
 exports.sendMonthlyOperationalSummary = onSchedule({
   schedule: "0 8 1 * *", // 1st day of every month at 8 AM
@@ -60,18 +95,19 @@ exports.sendMonthlyOperationalSummary = onSchedule({
     // Get admin users
     const adminsSnapshot = await db.collection('users')
       .where('role', '==', 'Admin')
-      .where('fcmToken', '!=', null)
       .get();
 
     const notifications = [];
     
-    adminsSnapshot.forEach(doc => {
+    for (const doc of adminsSnapshot.docs) {
       const userData = doc.data();
-      if (userData.fcmToken) {
+      const tokens = await getAllUserTokens(doc.id);
+      
+      for (const token of tokens) {
         const monthName = lastMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
         
         notifications.push({
-          token: userData.fcmToken,
+          token: token,
           notification: {
             title: `Monthly Summary - ${monthName}`,
             body: `${completedEvents}/${totalEvents} events completed (${completionRate}%). ${overdueCount} overdue.`,
@@ -96,7 +132,7 @@ exports.sendMonthlyOperationalSummary = onSchedule({
           }
         });
       }
-    });
+    }
 
     if (notifications.length > 0) {
       const results = await messaging.sendEach(notifications);
@@ -145,16 +181,17 @@ exports.sendCriticalSystemAlert = onSchedule({
       // Get admin users
       const adminsSnapshot = await db.collection('users')
         .where('role', '==', 'Admin')
-        .where('fcmToken', '!=', null)
         .get();
 
       const notifications = [];
       
-      adminsSnapshot.forEach(doc => {
+      for (const doc of adminsSnapshot.docs) {
         const userData = doc.data();
-        if (userData.fcmToken) {
+        const tokens = await getAllUserTokens(doc.id);
+        
+        for (const token of tokens) {
           notifications.push({
-            token: userData.fcmToken,
+            token: token,
             notification: {
               title: `🚨 System Alert`,
               body: `${errorCount} errors detected in the last 6 hours`,
@@ -180,7 +217,7 @@ exports.sendCriticalSystemAlert = onSchedule({
             }
           });
         }
-      });
+      }
 
       if (notifications.length > 0) {
         const results = await messaging.sendEach(notifications);

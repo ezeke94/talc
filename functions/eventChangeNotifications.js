@@ -47,17 +47,29 @@ async function getAllTokensForAllUsers() {
   try {
     const usersSnapshot = await db.collection('users').get();
     for (const userDoc of usersSnapshot.docs) {
-      const userData = userDoc.data();
-      // Backwards compatibility with old fcmToken field
-      if (userData?.fcmToken) tokens.add(userData.fcmToken);
-
+      let hasDevices = false;
+      
       // Get all enabled devices from devices subcollection
-      const devicesSnap = await db.collection('users').doc(userDoc.id).collection('devices').get();
-      devicesSnap.forEach((d) => {
-        const token = d.id;
-        const enabled = d.data()?.enabled !== false; // default true
-        if (token && enabled) tokens.add(token);
-      });
+      try {
+        const devicesSnap = await db.collection('users').doc(userDoc.id).collection('devices').get();
+        devicesSnap.forEach((d) => {
+          const token = d.id;
+          const enabled = d.data()?.enabled !== false; // default true
+          if (token && enabled) {
+            tokens.add(token);
+            hasDevices = true;
+          }
+        });
+      } catch (e) {
+        // subcollection may not exist
+      }
+      
+      // Only fall back to main fcmToken if NO devices subcollection exists
+      // This prevents duplicate notifications when the same token exists in both places
+      if (!hasDevices) {
+        const userData = userDoc.data();
+        if (userData?.fcmToken) tokens.add(userData.fcmToken);
+      }
     }
   } catch (e) {
     console.error('getAllTokensForAllUsers: failed to fetch tokens', e);
@@ -426,19 +438,23 @@ function formatEventDate(val) {
 async function getUserTokens(userId) {
   const tokenSet = new Set();
   try {
-    // Get tokens from devices subcollection
+    // First, try to get tokens from devices subcollection
     const devicesSnap = await db.collection('users').doc(userId).collection('devices').get();
+    let hasDevices = false;
+    
     devicesSnap.forEach((deviceDoc) => {
       const deviceData = deviceDoc.data();
       const token = deviceDoc.id; // token is the document ID
       const enabled = deviceData?.enabled !== false; // default true
       if (token && enabled) {
         tokenSet.add(token);
+        hasDevices = true;
       }
     });
     
-    // If no devices found, fall back to main fcmToken (for backwards compatibility)
-    if (tokenSet.size === 0) {
+    // Only fall back to main fcmToken if NO devices subcollection exists
+    // This prevents duplicate notifications when the same token exists in both places
+    if (!hasDevices) {
       const userDoc = await db.collection('users').doc(userId).get();
       const userData = userDoc.data();
       if (userData?.fcmToken) {
@@ -458,6 +474,7 @@ async function getAllUserTokens() {
     const usersSnapshot = await db.collection('users').get();
     for (const userDoc of usersSnapshot.docs) {
       // Get tokens from devices subcollection
+      let hasDevices = false;
       try {
         const devicesSnap = await db.collection('users').doc(userDoc.id).collection('devices').get();
         devicesSnap.forEach((deviceDoc) => {
@@ -466,10 +483,16 @@ async function getAllUserTokens() {
           const enabled = deviceData?.enabled !== false; // default true
           if (token && enabled) {
             tokenSet.add(token);
+            hasDevices = true;
           }
         });
       } catch (e) {
-        // If no devices subcollection, fall back to main fcmToken
+        // Subcollection might not exist
+      }
+      
+      // Only fall back to main fcmToken if NO devices subcollection exists
+      // This prevents duplicate notifications when the same token exists in both places
+      if (!hasDevices) {
         const userData = userDoc.data();
         if (userData?.fcmToken) {
           tokenSet.add(userData.fcmToken);
@@ -493,36 +516,82 @@ exports.notifyEventDelete = onDocumentDeleted({
     const eventId = event.params.eventId;
     const eventTitle = deletedData.title || 'Unnamed Event';
 
-    // Get all unique device tokens (no duplicates)
-    const tokens = await getAllUserTokens();
-    const eventDateStr = formatEventDate(deletedData.startDateTime);
+    const notifications = [];
+    const recipientsMeta = [];
 
-    const messages = tokens.map(token => ({
-      token,
-      notification: {
-        title: `Event Deleted: ${eventTitle}`,
-        body: `Event scheduled for ${eventDateStr} was removed by ${deletedData.lastModifiedBy?.userName || 'a user'}`,
-      },
-      data: {
-        type: 'event_delete',
-        eventId,
-        url: '/calendar',
-      },
-      webpush: {
-        fcmOptions: {
-          link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`,
-        },
-        notification: {
-          icon: '/favicon.ico',
-        },
-      },
-      android: { priority: 'high' },
-      apns: { headers: { 'apns-priority': '10' } },
-    }));
+    // Notify assignees (primary stakeholders)
+    const assigneeIds = deletedData.assignees || [];
+    for (const userId of assigneeIds) {
+      const tokens = await getUserTokens(userId);
+      for (const token of tokens) {
+        notifications.push({
+          token,
+          notification: {
+            title: `Event Deleted: ${eventTitle}`,
+            body: `An event you were assigned to has been deleted`,
+          },
+          data: {
+            type: 'event_delete',
+            eventId,
+            url: '/calendar',
+          },
+          webpush: {
+            fcmOptions: {
+              link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`,
+            },
+            notification: {
+              icon: '/favicon.ico',
+            },
+          },
+          android: { priority: 'high' },
+          apns: { headers: { 'apns-priority': '10' } },
+        });
+        recipientsMeta.push({ userId, token });
+      }
+    }
 
-    if (messages.length > 0) {
-      const results = await messaging.sendEach(messages);
-      console.log(`Sent ${results.successCount}/${messages.length} deletion notifications for event ${eventId} to ${tokens.length} unique devices`);
+    // Notify supervisors (Admin/Quality roles) for oversight
+    const supervisorsSnapshot = await db.collection('users')
+      .where('role', 'in', ['Admin', 'Quality'])
+      .get();
+
+    for (const doc of supervisorsSnapshot.docs) {
+      const userId = doc.id;
+      // Skip if already notified as assignee
+      if (assigneeIds.includes(userId)) {
+        continue;
+      }
+      const tokens = await getUserTokens(userId);
+      for (const token of tokens) {
+        notifications.push({
+          token,
+          notification: {
+            title: `Event Deleted: ${eventTitle}`,
+            body: `An event has been deleted from the system`,
+          },
+          data: {
+            type: 'event_delete',
+            eventId,
+            url: '/calendar',
+          },
+          webpush: {
+            fcmOptions: {
+              link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`,
+            },
+            notification: {
+              icon: '/favicon.ico',
+            },
+          },
+          android: { priority: 'high' },
+          apns: { headers: { 'apns-priority': '10' } },
+        });
+        recipientsMeta.push({ userId, token });
+      }
+    }
+
+    if (notifications.length > 0) {
+      const results = await messaging.sendEach(notifications);
+      console.log(`Sent ${results.successCount}/${notifications.length} deletion notifications for event ${eventId}`);
       
       // Log any failures
       results.responses.forEach((res, idx) => {
@@ -533,7 +602,7 @@ exports.notifyEventDelete = onDocumentDeleted({
       });
     }
 
-    return { success: true, notificationsSent: messages.length, uniqueDevices: tokens.length };
+    return { success: true, notificationsSent: notifications.length };
 
   } catch (error) {
     console.error('Error sending deletion notifications:', error);
