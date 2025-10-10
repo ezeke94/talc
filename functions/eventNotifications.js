@@ -135,6 +135,18 @@ exports.sendOwnerEventReminders = onSchedule({
     for (const eventDoc of eventsSnapshot.docs) {
       const event = eventDoc.data();
       
+      // Skip events that were recently modified (within last 24 hours) to avoid double notifications
+      // with real-time update notifications
+      if (event.lastModifiedAt) {
+        const lastModified = timestampToDate(event.lastModifiedAt);
+        const oneDayAgo = new Date();
+        oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+        if (lastModified && lastModified > oneDayAgo) {
+          console.log(`Skipping reminder for recently modified event: ${event.title}`);
+          continue;
+        }
+      }
+      
       // Get event owners (assignees who created or own the event)
       const ownerIds = [];
       
@@ -244,6 +256,18 @@ exports.sendQualityTeamEventReminders = onSchedule({
       const event = eventDoc.data();
       const eventTime = timestampToDate(event.startDateTime);
       
+      // Skip events that were recently modified (within last 24 hours) to avoid double notifications
+      // with real-time update notifications
+      if (event.lastModifiedAt) {
+        const lastModified = timestampToDate(event.lastModifiedAt);
+        const oneDayAgo = new Date();
+        oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+        if (lastModified && lastModified > oneDayAgo) {
+          console.log(`Skipping same-day reminder for recently modified event: ${event.title}`);
+          continue;
+        }
+      }
+      
       // Skip if event is in the past (already started today)
       if (eventTime && eventTime < new Date()) {
         continue;
@@ -281,38 +305,9 @@ exports.sendQualityTeamEventReminders = onSchedule({
         }
       }
 
-      // Also notify owners/assignees same day
-      const ownerIds = [];
-      if (event.createdBy?.userId) {
-        ownerIds.push(event.createdBy.userId);
-      }
-      ownerIds.push(...(event.assignees || []));
-      const uniqueOwnerIds = [...new Set(ownerIds)];
-
-      for (const userId of uniqueOwnerIds) {
-        const tokens = await getAllUserTokens(userId);
-        for (const token of tokens) {
-          notifications.push({
-            token,
-            notification: {
-              title: `Event Today: ${event.title}`,
-              body: `Due today at ${eventTime.toLocaleTimeString()}`,
-            },
-            data: {
-              type: 'event_reminder_owner_same_day',
-              eventId: eventDoc.id,
-              url: `/calendar`,
-              timing: 'same_day'
-            },
-            webpush: {
-              notification: {
-                icon: '/favicon.ico'
-              }
-            }
-          });
-          recipientsMeta.push({ userId, token });
-        }
-      }
+      // REMOVED: Duplicate notification to owners/assignees - Quality team members are the primary recipients for same-day reminders
+      // Owners/assignees get notified about tomorrow's events by sendOwnerEventReminders
+      // This prevents double notifications for users who are both quality team members and event assignees
     }
 
     // Send notifications in batches
@@ -419,54 +414,80 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
   try {
     const eventData = event.data.data();
     const eventId = event.params.eventId;
-    const tokens = await getAllTokensForAllUsers();
 
-    // Format the date properly
-    let eventDateStr = 'Unknown date';
-    if (eventData.startDateTime) {
-      try {
-        // Handle Firestore Timestamp
-        if (typeof eventData.startDateTime.toDate === 'function') {
-          eventDateStr = eventData.startDateTime.toDate().toLocaleString();
-        } else if (eventData.startDateTime instanceof Date) {
-          eventDateStr = eventData.startDateTime.toLocaleString();
-        } else if (eventData.startDateTime.seconds) {
-          // Firestore Timestamp object format
-          eventDateStr = new Date(eventData.startDateTime.seconds * 1000).toLocaleString();
-        }
-      } catch (dateError) {
-        console.error('Error formatting date:', dateError);
+    const notifications = [];
+    const recipientsMeta = [];
+
+    // Notify event assignees
+    const assigneeIds = eventData.assignees || [];
+    for (const userId of assigneeIds) {
+      const tokens = await getAllUserTokens(userId);
+      for (const token of tokens) {
+        notifications.push({
+          token,
+          notification: {
+            title: `New Event Assigned: ${eventData.title}`,
+            body: `You have been assigned to this event`,
+          },
+          data: {
+            type: 'event_assigned',
+            eventId: eventId,
+            url: `/calendar`,
+          },
+          webpush: {
+            fcmOptions: {
+              link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`
+            },
+            notification: {
+              icon: '/favicon.ico'
+            }
+          }
+        });
+        recipientsMeta.push({ userId, token });
       }
     }
 
-    const notifications = tokens.map(token => ({
-      token,
-      notification: {
-        title: `New Event Created: ${eventData.title}`,
-        body: `Scheduled for ${eventDateStr}`,
-      },
-      data: {
-        type: 'event_created',
-        eventId: eventId,
-        url: `/calendar`,
-      },
-      webpush: {
-        fcmOptions: {
-          link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`
-        },
-        notification: {
-          icon: '/favicon.ico'
-        }
+    // Notify Quality team members for oversight
+    const qualityUsersSnapshot = await db.collection('users')
+      .where('role', 'in', ['Quality', 'quality'])
+      .get();
+
+    for (const docSnap of qualityUsersSnapshot.docs) {
+      const userId = docSnap.id;
+      const tokens = await getAllUserTokens(userId);
+      for (const token of tokens) {
+        notifications.push({
+          token,
+          notification: {
+            title: `New Event Created: ${eventData.title}`,
+            body: `A new event has been created in the system`,
+          },
+          data: {
+            type: 'event_created',
+            eventId: eventId,
+            url: `/calendar`,
+          },
+          webpush: {
+            fcmOptions: {
+              link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`
+            },
+            notification: {
+              icon: '/favicon.ico'
+            }
+          }
+        });
+        recipientsMeta.push({ userId, token });
       }
-    }));
+    }
 
     // Send notifications in batches
     const batchSize = 500;
     for (let i = 0; i < notifications.length; i += batchSize) {
       const batch = notifications.slice(i, i + batchSize);
+      const metaBatch = recipientsMeta.slice(i, i + batchSize);
       if (batch.length > 0) {
         const results = await messaging.sendEach(batch);
-        console.log(`Batch sent with ${batch.length} notifications`);
+        await handleSendResults(results, metaBatch);
       }
     }
 
