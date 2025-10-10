@@ -27,7 +27,6 @@ function App() {
     return (
         <AuthProvider>
             <BrowserRouter>
-// ...existing code...
                 <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route path="/privacy-policy" element={<PrivacyPolicy />} />

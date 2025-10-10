@@ -483,7 +483,6 @@ const Layout = () => {
                 }}
             >
                 <NotificationPrompt onNavigateToSettings={handleNavigateToNotificationSettings} />
-// ...existing code...
                 <Outlet />
             </Container>
 

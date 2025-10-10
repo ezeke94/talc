@@ -208,7 +208,6 @@ const Calendar = () => {
   const isMobile = useMediaQuery(theme.breakpoints.down('900px'));
 
   // Export PDF for upcoming week
-  // ...existing code...
 
   // Open reschedule
   const handleOpenReschedule = (event) => {
