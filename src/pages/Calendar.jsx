@@ -205,7 +205,19 @@ const Calendar = () => {
 
   // Theme breakpoint helper for responsive UI (used to show FAB on mobile)
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('900px'));
+  const [isMobile, setIsMobile] = useState(false);
+
+  // More reliable mobile detection for Safari and Opera
+  useEffect(() => {
+    const checkMobile = () => {
+      const width = window.innerWidth;
+      setIsMobile(width < 900);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Export PDF for upcoming week
 
@@ -1258,7 +1270,7 @@ const Calendar = () => {
       </Paper>
 
       {/* Mobile floating action button for creating a new event/task - available to all users */}
-      {isMobile && (
+      {(isMobile || (typeof window !== 'undefined' && window.innerWidth < 900)) && (
         <Fab
           color="primary"
           aria-label="add"
