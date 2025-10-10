@@ -2,26 +2,29 @@
   "short_name": "TALC",
   "name": "TALC Management",
   "description": "TALC Management - Evaluator Dashboard for Managing Events, Tasks, and KPIs",
-  "display": "standalone", 
+  "display": "standalone",
   "start_url": "/",
   "scope": "/",
-  "background_color": "#DDEEDD",
+  "background_color": "#DDEEDD", 
   "theme_color": "#7BC678",
   "icons": [
     {
       "src": "/apple-touch-icon.png",
       "type": "image/png",
-      "sizes": "180x180"
+      "sizes": "180x180",
+      "purpose": "any"
     },
     {
-      "src": "/logo192.png", 
+      "src": "/logo192.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any"
     },
     {
       "src": "/logo512.png",
-      "type": "image/png", 
-      "sizes": "512x512"
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
     }
   ]
 }

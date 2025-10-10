@@ -5,6 +5,7 @@
   <link rel="icon" type="image/x-icon" href="/favicon.ico" />
   <!-- Enhanced mobile viewport settings for iOS/Android PWA -->
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  
   <!-- PWA and mobile app settings -->
   <meta name="theme-color" content="#7BC678" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -12,18 +13,20 @@
   <meta name="apple-mobile-web-app-title" content="TALC Management" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="application-name" content="TALC Management" />
-  <!-- Additional iOS PWA meta tags -->
+  
+  <!-- Additional PWA meta tags for Safari -->
   <meta name="apple-touch-fullscreen" content="yes" />
-  <meta name="HandheldFriendly" content="true" />
+  <meta name="format-detection" content="telephone=no" />
+  <meta name="msapplication-tap-highlight" content="no" />
+  
   <!-- App description and SEO -->
   <meta name="description" content="TALC Management - Evaluator Dashboard for Managing Events, Tasks, and KPIs" />
   <meta name="keywords" content="TALC, management, evaluator, dashboard, events, tasks, KPI" />
-  <!-- Enhanced touch and interaction settings -->
-  <meta name="format-detection" content="telephone=no" />
-  <meta name="msapplication-tap-highlight" content="no" />
+  
   <!-- iOS specific icons and splash screens -->
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+  
   <!-- Manifest link -->
   <link rel="manifest" href="/manifest.json" />
   <title>TALC Management</title>
@@ -35,21 +38,28 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          // Register the messaging service worker first
-          navigator.serviceWorker.register('/firebase-messaging-sw.js')
+          navigator.serviceWorker.register('/service-worker.js')
             .then((registration) => {
-              console.log('Firebase SW registered: ', registration);
+              console.log('SW registered: ', registration);
+              
+              // Check PWA status
+              if (window.navigator.standalone === true) {
+                console.log('App is running in standalone mode (iOS PWA)');
+              } else if (window.matchMedia('(display-mode: standalone)').matches) {
+                console.log('App is running in standalone mode (PWA)');
+              } else {
+                console.log('App is running in browser mode');
+                // For debugging: check if PWA criteria are met
+                setTimeout(() => {
+                  const isSecure = location.protocol === 'https:' || location.hostname === 'localhost';
+                  const hasManifest = document.querySelector('link[rel="manifest"]');
+                  const hasSW = 'serviceWorker' in navigator;
+                  console.log('PWA Checklist:', { isSecure, hasManifest: !!hasManifest, hasSW });
+                }, 1000);
+              }
             })
             .catch((registrationError) => {
-              console.log('Firebase SW registration failed: ', registrationError);
-              // Fallback to regular service worker
-              navigator.serviceWorker.register('/service-worker.js')
-                .then((registration) => {
-                  console.log('Regular SW registered: ', registration);
-                })
-                .catch((error) => {
-                  console.log('All SW registration failed: ', error);
-                });
+              console.log('SW registration failed: ', registrationError);
             });
         });
       }
