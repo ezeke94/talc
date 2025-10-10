@@ -116,7 +116,7 @@ const ProfileSettingsDialog = ({ onClose }) => {
 
       {/* Notification Settings */}
       <Typography variant="h6" gutterBottom>
-        Notification Settings
+        Notification Preferences
       </Typography>
       
       {notificationStatus.supported && notificationStatus.permission === 'denied' && (
@@ -133,28 +133,26 @@ const ProfileSettingsDialog = ({ onClose }) => {
         </Alert>
       )}
 
-      {!notificationsEnabled && notificationStatus.supported && notificationStatus.permission !== 'denied' && (
-        <Box sx={{ mb: 2, textAlign: 'center' }}>
-          <Button
-            variant="contained"
-            startIcon={<NotificationsIcon />}
-            onClick={handleToggleNotifications}
-            disabled={loading}
-            sx={{ 
-              py: 1.2, 
-              px: 3,
-              fontSize: '1rem',
-              fontWeight: 600,
-              background: 'linear-gradient(45deg, #7BC678 30%, #5BA055 90%)',
-              '&:hover': {
-                background: 'linear-gradient(45deg, #5BA055 30%, #7BC678 90%)',
-              }
-            }}
-          >
-            {loading ? 'Enabling...' : 'Allow Notifications'}
-          </Button>
-        </Box>
-      )}
+      <Box sx={{ mb: 2, textAlign: 'center' }}>
+        <Button
+          variant="contained"
+          startIcon={<NotificationsIcon />}
+          onClick={handleToggleNotifications}
+          disabled={loading}
+          sx={{ 
+            py: 1.2, 
+            px: 3,
+            fontSize: '1rem',
+            fontWeight: 600,
+            background: 'linear-gradient(45deg, #7BC678 30%, #5BA055 90%)',
+            '&:hover': {
+              background: 'linear-gradient(45deg, #5BA055 30%, #7BC678 90%)',
+            }
+          }}
+        >
+          {loading ? 'Enabling...' : notificationsEnabled ? 'Disable Notifications' : 'Enable Notifications'}
+        </Button>
+      </Box>
       
       <FormControlLabel
         control={
@@ -164,7 +162,7 @@ const ProfileSettingsDialog = ({ onClose }) => {
             disabled={loading || !notificationStatus.supported || notificationStatus.permission === 'denied'}
           />
         }
-        label="Push Notifications Enabled"
+        label={notificationsEnabled ? "Push Notifications Enabled" : "Push Notifications Disabled"}
       />
       
       {notificationsEnabled && (

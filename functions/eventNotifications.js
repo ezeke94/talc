@@ -1,4 +1,5 @@
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { initializeApp, getApps } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
@@ -30,6 +31,28 @@ async function getAllUserTokens(userId) {
     });
   } catch (e) {
     // subcollection may not exist
+  }
+  return Array.from(tokens);
+}
+
+// Helper: fetch all device tokens for all users
+async function getAllTokensForAllUsers() {
+  const tokens = new Set();
+  try {
+    const usersSnapshot = await db.collection('users').get();
+    for (const userDoc of usersSnapshot.docs) {
+      const userData = userDoc.data();
+      if (userData?.fcmToken) tokens.add(userData.fcmToken);
+
+      const devicesSnap = await db.collection('users').doc(userDoc.id).collection('devices').get();
+      devicesSnap.forEach((d) => {
+        const token = d.id;
+        const enabled = d.data()?.enabled !== false; // default true
+        if (token && enabled) tokens.add(token);
+      });
+    }
+  } catch (e) {
+    console.error('getAllTokensForAllUsers: failed to fetch tokens', e);
   }
   return Array.from(tokens);
 }
@@ -341,6 +364,127 @@ exports.sendWeeklyOverdueTaskReminders = onSchedule({
 
   } catch (error) {
     console.error('Error sending overdue reminders:', error);
+    throw error;
+  }
+});
+
+// Notify all users about calendar events
+exports.sendCalendarEventNotifications = onSchedule({
+  schedule: "0 16 * * *", // Daily at 4 PM UTC
+  timeZone: "UTC",
+  region: "us-central1",
+  memory: "256MiB",
+}, async (event) => {
+  try {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+
+    const dayAfter = new Date(tomorrow);
+    dayAfter.setDate(dayAfter.getDate() + 1);
+
+    // Get events due tomorrow
+    const eventsSnapshot = await db.collection('events')
+      .where('startDateTime', '>=', tomorrow)
+      .where('startDateTime', '<', dayAfter)
+      .where('status', 'in', ['pending', 'in_progress'])
+      .get();
+
+    const notifications = [];
+
+    for (const eventDoc of eventsSnapshot.docs) {
+      const event = eventDoc.data();
+      const tokens = await getAllTokensForAllUsers();
+
+      for (const token of tokens) {
+        notifications.push({
+          token,
+          notification: {
+            title: `Event Tomorrow: ${event.title}`,
+            body: `Due tomorrow at ${new Date(event.startDateTime.toDate()).toLocaleTimeString()}`,
+          },
+          data: {
+            type: 'event_reminder_all',
+            eventId: eventDoc.id,
+            url: `/calendar`,
+            timing: 'day_before'
+          },
+          webpush: {
+            fcmOptions: {
+              link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`
+            },
+            notification: {
+              icon: '/favicon.ico'
+            }
+          }
+        });
+      }
+    }
+
+    // Send notifications in batches
+    const batchSize = 500;
+    for (let i = 0; i < notifications.length; i += batchSize) {
+      const batch = notifications.slice(i, i + batchSize);
+      if (batch.length > 0) {
+        const results = await messaging.sendEach(batch);
+        console.log(`Batch sent with ${batch.length} notifications`);
+      }
+    }
+
+    console.log(`Sent ${notifications.length} calendar event notifications to all users`);
+    return { success: true, count: notifications.length };
+
+  } catch (error) {
+    console.error('Error sending calendar event notifications:', error);
+    throw error;
+  }
+});
+
+// Trigger notifications when a new event is created
+exports.sendNotificationsOnEventCreate = onDocumentCreated({
+  document: "events/{eventId}",
+  region: "us-central1",
+}, async (event) => {
+  try {
+    const eventData = event.data;
+    const tokens = await getAllTokensForAllUsers();
+
+    const notifications = tokens.map(token => ({
+      token,
+      notification: {
+        title: `New Event Created: ${eventData.title}`,
+        body: `Scheduled for ${new Date(eventData.startDateTime.toDate()).toLocaleString()}`,
+      },
+      data: {
+        type: 'event_created',
+        eventId: event.id,
+        url: `/calendar`,
+      },
+      webpush: {
+        fcmOptions: {
+          link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`
+        },
+        notification: {
+          icon: '/favicon.ico'
+        }
+      }
+    }));
+
+    // Send notifications in batches
+    const batchSize = 500;
+    for (let i = 0; i < notifications.length; i += batchSize) {
+      const batch = notifications.slice(i, i + batchSize);
+      if (batch.length > 0) {
+        const results = await messaging.sendEach(batch);
+        console.log(`Batch sent with ${batch.length} notifications`);
+      }
+    }
+
+    console.log(`Sent ${notifications.length} notifications for event creation`);
+    return { success: true, count: notifications.length };
+
+  } catch (error) {
+    console.error('Error sending notifications for event creation:', error);
     throw error;
   }
 });
