@@ -21,7 +21,6 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfUse from './pages/TermsOfUse';
 import Calendar from './pages/Calendar';
 import FormManagement from './pages/FormManagement';
-// ...existing code...
 
 function App() {
     return (

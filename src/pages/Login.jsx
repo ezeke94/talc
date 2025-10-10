@@ -26,10 +26,15 @@ const Login = () => {
 
     useEffect(() => {
         // If a user is signed in, navigate to the app; ProtectedRoute will handle inactive accounts.
-        if (currentUser && currentUser.uid) {
-            navigate('/');
+        // Add additional checks to prevent redirect loops in PWA mode
+        if (currentUser && currentUser.uid && !loading) {
+            // Small delay to ensure auth state is stable
+            const timer = setTimeout(() => {
+                navigate('/', { replace: true });
+            }, 100);
+            return () => clearTimeout(timer);
         }
-    }, [currentUser, navigate]);
+    }, [currentUser, navigate, loading]);
 
     // Surface redirect errors captured by AuthContext
     useEffect(() => {

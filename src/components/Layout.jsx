@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Outlet, useNavigate, Link as RouterLink } from 'react-router-dom';
 import { 
     AppBar, 
@@ -37,7 +37,6 @@ import logo from '../assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 import ProfileSettingsDialog from './ProfileSettingsDialog';
 import NotificationPrompt from './NotificationPrompt';
-// ...existing code...
 
 const Layout = () => {
     const navigate = useNavigate();

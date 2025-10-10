@@ -1,5 +1,5 @@
 // Basic service worker for TALC Management PWA
-// Handles offline caching and notification setup
+// Handles offline caching, notification setup, and PWA state management
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -18,6 +18,18 @@ self.addEventListener('install', event => {
     })
   );
   self.skipWaiting();
+});
+
+// Add PWA focus detection
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'PWA_FOCUS') {
+    // Notify all clients that the PWA has gained focus
+    self.clients.matchAll().then(clients => {
+      clients.forEach(client => {
+        client.postMessage({ type: 'PWA_FOCUS_DETECTED' });
+      });
+    });
+  }
 });
 
 const CACHE_NAME = 'talc-cache-v1';
