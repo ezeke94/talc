@@ -447,13 +447,17 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
       }
     }
 
-    // Notify Quality team members for oversight
+    // Notify Quality team members for oversight (excluding those already notified as assignees)
     const qualityUsersSnapshot = await db.collection('users')
       .where('role', 'in', ['Quality', 'quality'])
       .get();
 
     for (const docSnap of qualityUsersSnapshot.docs) {
       const userId = docSnap.id;
+      // Skip if this quality team member is already being notified as an assignee
+      if (assigneeIds.includes(userId)) {
+        continue;
+      }
       const tokens = await getAllUserTokens(userId);
       for (const token of tokens) {
         notifications.push({
