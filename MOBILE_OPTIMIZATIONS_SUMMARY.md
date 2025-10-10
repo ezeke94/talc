@@ -1,3 +1,4 @@
+// MOVED TO docs/archive/MOBILE_OPTIMIZATIONS_SUMMARY.md
 # Mobile Experience Enhancements - Android & iPhone
 
 ## 🎯 Overview

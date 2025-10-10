@@ -1,3 +1,4 @@
+// MOVED TO docs/archive/EVENT_CREATION_PERMISSIONS_FIX.md
 # Calendar Event Creation Fix - All Users
 
 ## Problem

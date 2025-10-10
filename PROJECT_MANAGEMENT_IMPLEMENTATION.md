@@ -1,3 +1,4 @@
+// MOVED TO docs/archive/PROJECT_MANAGEMENT_IMPLEMENTATION.md
 # Project Management System Implementation
 
 ## Overview

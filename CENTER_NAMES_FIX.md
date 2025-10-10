@@ -1,3 +1,4 @@
+// MOVED TO docs/archive/CENTER_NAMES_FIX.md
 # Calendar Page - Center Names Display Fix
 
 ## Problem

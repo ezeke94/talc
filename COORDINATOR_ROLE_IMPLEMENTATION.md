@@ -1,3 +1,4 @@
+// MOVED TO docs/archive/COORDINATOR_ROLE_IMPLEMENTATION.md
 # Firebase Schema Updates for Coordinator Role
 
 ## User Collection Schema

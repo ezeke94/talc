@@ -1,3 +1,4 @@
+// MOVED TO docs/archive/UI_CONSISTENCY_FIX.md
 # Calendar Page UI Consistency Fix
 
 ## Problem

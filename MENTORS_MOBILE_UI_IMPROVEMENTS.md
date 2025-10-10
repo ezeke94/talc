@@ -1,3 +1,4 @@
+// MOVED TO docs/archive/MENTORS_MOBILE_UI_IMPROVEMENTS.md
 # Mentors Page Mobile UI Improvements
 
 ## Overview

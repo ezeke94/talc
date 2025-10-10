@@ -1,3 +1,4 @@
+// MOVED TO docs/archive/PWA_ENHANCEMENT_SUMMARY.md
 # 📱 TALC PWA & Notification Enhancement Summary
 
 ## 🚀 PWA Installation Improvements

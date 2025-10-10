@@ -1,3 +1,4 @@
+// MOVED TO docs/archive/CALENDAR_UI_FIX.md
 # Calendar Page Mobile UI Fix
 
 ## Changes Made

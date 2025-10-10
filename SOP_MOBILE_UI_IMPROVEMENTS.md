@@ -1,3 +1,4 @@
+// MOVED TO docs/archive/SOP_MOBILE_UI_IMPROVEMENTS.md
 # SOP Manager Mobile UI Improvements
 
 ## Overview

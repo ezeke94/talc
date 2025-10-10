@@ -1,3 +1,4 @@
+// MOVED TO docs/archive/NOTIFICATION_REMINDER_SYSTEM.md
 # 🔔 TALC Notification Reminder System
 
 ## How Users Are Reminded About Disabled Notifications

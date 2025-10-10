@@ -1,3 +1,4 @@
+// MOVED TO docs/archive/NOTIFICATIONS_IMPLEMENTATION_GUIDE.md
 # TALC Notifications Implementation Guide
 
 ## Overview
