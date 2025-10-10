@@ -1,3 +1,13 @@
+/* iOS smooth scrolling */
+html, body, #root {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure touch targets are at least 44x44px for accessibility */
+button, .MuiButtonBase-root, input[type="checkbox"], input[type="radio"] {
+  min-width: 44px;
+  min-height: 44px;
+}
 #root {
   max-width: 1280px;
   margin: 0 auto;

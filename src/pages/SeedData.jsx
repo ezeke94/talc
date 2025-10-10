@@ -4,6 +4,7 @@ import { collection, writeBatch, addDoc, getDocs, where, query, doc, updateDoc }
 // ...existing code...
 import { Button, Typography, CircularProgress, Alert, Paper, Stack } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
+import { seedProjectsToFirebase } from '../utils/projectSeedData';
 
 const SeedData = () => {
     const [loading, setLoading] = useState(false);
@@ -418,6 +419,19 @@ const SeedData = () => {
         }
     };
 
+    const seedProjects = async () => {
+        setLoading(true);
+        setMessage("");
+        try {
+            const result = await seedProjectsToFirebase();
+            setMessage(result.message);
+        } catch (error) {
+            setMessage(`Error seeding projects: ${error.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <Paper sx={{p: 3}}>
             <Typography variant="h4" gutterBottom>Seed Firestore Data</Typography>
@@ -449,6 +463,9 @@ const SeedData = () => {
                 </Button>
                 <Button variant="contained" color="info" onClick={assignDefaultFormsToAllMentors} disabled={loading}>
                     {loading ? <CircularProgress size={24} /> : 'Assign Default KPI Forms to All Mentors'}
+                </Button>
+                <Button variant="contained" sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }} onClick={seedProjects} disabled={loading}>
+                    {loading ? <CircularProgress size={24} /> : "Seed Projects"}
                 </Button>
                 <Button variant="outlined" color="error" onClick={async () => {
                     setLoading(true);

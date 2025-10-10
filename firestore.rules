@@ -88,6 +88,15 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Projects collection
+    match /projects/{projectId} {
+      // Admin and Quality can read/write all projects
+      allow read, write: if isAdmin() || isQuality();
+      
+      // Coordinators can only read projects
+      allow read: if isCoordinator();
+    }
+
     // Other collections: allow authenticated users
     match /{document=**} {
       // Default to read-only for authenticated users; writes must be explicitly allowed above

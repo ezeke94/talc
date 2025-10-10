@@ -2,6 +2,8 @@ import UserProfile from './pages/UserProfile';
 import UserManagement from './pages/UserManagement';
 import SOPManager from './pages/SOPManager';
 import OperationalDashboard from './pages/OperationalDashboard';
+import Projects from './pages/Projects';
+import Boards from './pages/Boards';
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
@@ -19,13 +21,13 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfUse from './pages/TermsOfUse';
 import Calendar from './pages/Calendar';
 import FormManagement from './pages/FormManagement';
-import AddToHomeScreenPrompt from './components/AddToHomeScreenPrompt';
+// ...existing code...
 
 function App() {
     return (
         <AuthProvider>
             <BrowserRouter>
-                <AddToHomeScreenPrompt />
+// ...existing code...
                 <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route path="/privacy-policy" element={<PrivacyPolicy />} />
@@ -34,6 +36,8 @@ function App() {
                         <Route index element={<Calendar />} />
                         <Route path="mentors" element={<Mentors />} />
                         <Route path="calendar" element={<Calendar />} />
+                        <Route path="boards" element={<Boards />} />
+                        <Route path="projects" element={<Projects />} />
                         <Route path="kpi-dashboard" element={<Dashboard />} />
                         <Route path="operational-dashboard" element={<OperationalDashboard />} />
                         <Route path="sop-management" element={<SOPManager />} />

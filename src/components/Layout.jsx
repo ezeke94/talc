@@ -37,7 +37,7 @@ import logo from '../assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 import ProfileSettingsDialog from './ProfileSettingsDialog';
 import NotificationPrompt from './NotificationPrompt';
-import AddToHomeScreenPrompt from './AddToHomeScreenPrompt';
+// ...existing code...
 
 const Layout = () => {
     const navigate = useNavigate();
@@ -156,6 +156,7 @@ const Layout = () => {
     }, []);
 
     const dashboardItems = showDashboards ? [
+        { text: 'Projects', path: '/projects' },
         { text: 'KPI Dashboard', path: '/kpi-dashboard' },
         { text: 'Operational', path: '/operational-dashboard' }
     ] : [];
@@ -171,6 +172,7 @@ const Layout = () => {
     
     const standaloneItems = [
         { text: 'Calendar', path: '/calendar' },
+        { text: 'Boards', path: '/boards' },
         ...(canRecordKPIs ? [{ text: 'Record KPIs', path: '/mentors' }] : [])
     ];
 
@@ -481,7 +483,7 @@ const Layout = () => {
                 }}
             >
                 <NotificationPrompt onNavigateToSettings={handleNavigateToNotificationSettings} />
-                <AddToHomeScreenPrompt />
+// ...existing code...
                 <Outlet />
             </Container>
 
