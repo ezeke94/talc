@@ -8,6 +8,30 @@ button, .MuiButtonBase-root, input[type="checkbox"], input[type="radio"] {
   min-width: 44px;
   min-height: 44px;
 }
+
+/* Safari-specific fixes */
+input[type="date"], input[type="datetime-local"], input[type="time"] {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}
+
+/* Fix Safari flex issues */
+.MuiBox-root {
+  -webkit-box-sizing: border-box;
+  box-sizing: border-box;
+}
+
+/* Prevent zoom on input focus in Safari iOS */
+input, select, textarea {
+  font-size: 16px;
+}
+
+/* Fix Safari sticky positioning */
+.sticky-element {
+  position: -webkit-sticky;
+  position: sticky;
+}
 #root {
   max-width: 1280px;
   margin: 0 auto;

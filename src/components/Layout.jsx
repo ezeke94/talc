@@ -42,7 +42,19 @@ import NotificationPrompt from './NotificationPrompt';
 const Layout = () => {
     const navigate = useNavigate();
     const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+    const [isMobile, setIsMobile] = useState(false);
+
+    // More reliable mobile detection for Safari and Opera
+    useEffect(() => {
+        const checkMobile = () => {
+            const width = window.innerWidth;
+            setIsMobile(width < theme.breakpoints.values.md);
+        };
+        
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, [theme.breakpoints.values.md]);
     const [mobileOpen, setMobileOpen] = useState(false);
     const { currentUser } = useAuth();
     const [profileMenuEl, setProfileMenuEl] = useState(null);
