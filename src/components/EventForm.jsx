@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Box, TextField, Button, Typography, Checkbox, FormControlLabel, MenuItem, Select, InputLabel, FormControl, Paper, Stack } from '@mui/material';
+import React, { useState } from 'react';
+import { Box, TextField, Button, Typography, Checkbox, FormControlLabel, MenuItem, Select, InputLabel, FormControl, Paper, Stack, useMediaQuery } from '@mui/material';
 
 // Placeholder props: onSave, eventData, centers, mentors, users, sops
 const EventForm = ({ onSave, eventData = {}, centers = [], mentors = [], users = [], sops = [] }) => {
@@ -14,9 +14,7 @@ const EventForm = ({ onSave, eventData = {}, centers = [], mentors = [], users =
     // Firestore Timestamp
     if (typeof val?.toDate === 'function') val = val.toDate();
     if (val instanceof Date) {
-      // Safari needs specific format for datetime-local inputs
-      const isoString = val.toISOString();
-      return preferTime ? isoString.slice(0, 16) : isoString.slice(0, 10);
+      return preferTime ? val.toISOString().slice(0, 16) : val.toISOString().slice(0, 10);
     }
     if (typeof val === 'string') {
       // If string contains time component, return datetime-local format slice
@@ -168,19 +166,8 @@ const EventForm = ({ onSave, eventData = {}, centers = [], mentors = [], users =
     });
   };
 
-  // UI: Different for mobile and laptop - Safari-compatible mobile detection
-  const [isMobile, setIsMobile] = useState(false);
-  
-  useEffect(() => {
-    const checkMobile = () => {
-      const width = window.innerWidth;
-      setIsMobile(width <= 600);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  // UI: Different for mobile and laptop
+  const isMobile = useMediaQuery('(max-width:600px)');
 
   return (
     <Paper sx={{ p: isMobile ? 1 : 3, mb: 3 }}>

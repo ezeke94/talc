@@ -3,30 +3,85 @@
   "name": "TALC Management",
   "description": "TALC Management - Evaluator Dashboard for Managing Events, Tasks, and KPIs",
   "display": "standalone",
+  "orientation": "portrait-primary",
   "start_url": "/",
   "scope": "/",
-  "id": "/",
-  "orientation": "portrait-primary",
-  "background_color": "#DDEEDD", 
+  "background_color": "#DDEEDD",
   "theme_color": "#7BC678",
+  "prefer_related_applications": false,
+  "categories": ["productivity", "business"],
+  "lang": "en",
+  "dir": "ltr",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "edge_side_panel": {
+    "preferred_width": 480
+  },
   "icons": [
     {
-      "src": "/apple-touch-icon.png",
-      "type": "image/png",
-      "sizes": "180x180",
-      "purpose": "any"
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
     },
     {
-      "src": "/logo192.png",
+      "src": "logo192.png",
       "type": "image/png",
       "sizes": "192x192",
       "purpose": "any"
     },
     {
-      "src": "/logo512.png",
+      "src": "logo192.png",
+      "type": "image/png", 
+      "sizes": "192x192",
+      "purpose": "maskable"
+    },
+    {
+      "src": "logo512.png",
       "type": "image/png",
       "sizes": "512x512",
       "purpose": "any"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512", 
+      "purpose": "maskable"
+    },
+    {
+      "src": "apple-touch-icon.png",
+      "type": "image/png",
+      "sizes": "180x180",
+      "purpose": "any"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "form_factor": "wide"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Quick access to the main dashboard",
+      "url": "/dashboard",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Calendar",
+      "short_name": "Calendar",
+      "description": "View and manage events and tasks",
+      "url": "/calendar",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Mentors",
+      "short_name": "Mentors",
+      "description": "Manage mentor information",
+      "url": "/mentors",
+      "icons": [{ "src": "logo192.png", "sizes": "192x192" }]
     }
   ]
 }

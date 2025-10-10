@@ -57,39 +57,6 @@ export const AuthProvider = ({ children }) => {
                 console.debug('Auth persistence setup failed or was skipped:', e?.message || e);
             }
 
-            // Check if we have cached user state for PWA mode
-            const isStandalone = () => {
-                try {
-                    const isiOSStandalone = !!window.navigator?.standalone;
-                    const displayStandalone = window.matchMedia?.('(display-mode: standalone)')?.matches;
-                    return isiOSStandalone || displayStandalone;
-                } catch (e) {
-                    return false;
-                }
-            };
-
-            // For standalone PWA mode, try to restore cached auth state first
-            if (isStandalone()) {
-                console.debug('App is running in standalone mode - checking for cached auth state');
-                try {
-                    const cachedProfile = localStorage.getItem('talc_user_profile');
-                    const cachedAuthState = localStorage.getItem('talc_auth_state');
-                    
-                    if (cachedAuthState && cachedProfile) {
-                        const authData = JSON.parse(cachedAuthState);
-                        const profileData = JSON.parse(cachedProfile);
-                        console.debug('Found cached auth state for PWA mode');
-                        setCurrentUser({ ...authData, ...profileData });
-                        setLoading(false);
-                        setAuthInitialized(true);
-                    }
-                } catch (e) {
-                    console.debug('Failed to restore cached auth state:', e);
-                }
-            } else {
-                console.debug('App is running in browser mode.');
-            }
-
             // Keep loading true while we check for any redirect sign-in results
             try {
                 const redirectResult = await getRedirectResult(auth);
@@ -109,6 +76,23 @@ export const AuthProvider = ({ children }) => {
 
             // Log the current URL to confirm OAuth redirect parameters are received
             console.debug('Current URL:', window.location.href);
+
+            // Ensure auth persistence is configured for standalone PWA mode
+            const isStandalone = () => {
+                try {
+                    const isiOSStandalone = !!window.navigator?.standalone;
+                    const displayStandalone = window.matchMedia?.('(display-mode: standalone)')?.matches;
+                    return isiOSStandalone || displayStandalone;
+                } catch (e) {
+                    return false;
+                }
+            };
+
+            if (isStandalone()) {
+                console.debug('App is running in standalone mode.');
+            } else {
+                console.debug('App is running in browser mode.');
+            }
 
             // Set a timeout to prevent infinite loading in case Firebase auth doesn't respond
             authStateTimeout = setTimeout(() => {
@@ -132,20 +116,6 @@ export const AuthProvider = ({ children }) => {
 
                 // Start processing this change
                 if (user) {
-                    // Cache auth state for PWA mode
-                    try {
-                        const authStateCache = {
-                            uid: user.uid,
-                            email: user.email || '',
-                            name: user.displayName || '',
-                            displayName: user.displayName || '',
-                            photoURL: user.photoURL || '',
-                        };
-                        localStorage.setItem('talc_auth_state', JSON.stringify(authStateCache));
-                    } catch (e) {
-                        console.debug('Failed to cache auth state:', e);
-                    }
-
                     // Expose Firebase user immediately so routes can proceed
                     setCurrentUser(prev => prev || user);
                     // Stop blocking UI immediately; profile sync continues in background
@@ -202,10 +172,7 @@ export const AuthProvider = ({ children }) => {
                 } else {
                     // Signed out: clear state and any profile subscription/cache
                     stopUserDocSubscription();
-                    try { 
-                        localStorage.removeItem('talc_user_profile');
-                        localStorage.removeItem('talc_auth_state');
-                    } catch {}
+                    try { localStorage.removeItem('talc_user_profile'); } catch {}
                     setCurrentUser(null);
                     setLoading(false);
                 }
@@ -225,23 +192,6 @@ export const AuthProvider = ({ children }) => {
                 // Ensure live subscription is active
                 startUserDocSubscription(auth.currentUser.uid, auth.currentUser);
                 setLoading(false);
-            } else if (!auth.currentUser && currentUser) {
-                // Auth lost but we had a user - try to restore from cache
-                console.debug('AuthContext: Lost Firebase auth but had context user, attempting restore');
-                try {
-                    const cachedAuth = localStorage.getItem('talc_auth_state');
-                    const cachedProfile = localStorage.getItem('talc_user_profile');
-                    if (cachedAuth && cachedProfile) {
-                        const authData = JSON.parse(cachedAuth);
-                        const profileData = JSON.parse(cachedProfile);
-                        setCurrentUser({ ...authData, ...profileData });
-                        setLoading(false);
-                    }
-                } catch (e) {
-                    console.debug('Failed to restore from cache:', e);
-                    // Clear corrupted state
-                    setCurrentUser(null);
-                }
             }
         };
 

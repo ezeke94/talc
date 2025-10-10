@@ -94,19 +94,7 @@ import { getStatusColor, getPriorityColor, calculateProjectProgress } from '../u
 const Projects = () => {
   const { currentUser } = useAuth();
   const theme = useTheme();
-  const [isMobile, setIsMobile] = useState(false);
-
-  // More reliable mobile detection for Safari and Opera
-  useEffect(() => {
-    const checkMobile = () => {
-      const width = window.innerWidth;
-      setIsMobile(width < theme.breakpoints.values.md);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, [theme.breakpoints.values.md]);
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
   // Check user permissions
   const userRole = currentUser?.role?.toLowerCase() || '';

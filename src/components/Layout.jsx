@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Outlet, useNavigate, Link as RouterLink } from 'react-router-dom';
 import { 
     AppBar, 
@@ -37,23 +37,12 @@ import logo from '../assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 import ProfileSettingsDialog from './ProfileSettingsDialog';
 import NotificationPrompt from './NotificationPrompt';
+// ...existing code...
 
 const Layout = () => {
     const navigate = useNavigate();
     const theme = useTheme();
-    const [isMobile, setIsMobile] = useState(false);
-
-    // More reliable mobile detection for Safari and Opera
-    useEffect(() => {
-        const checkMobile = () => {
-            const width = window.innerWidth;
-            setIsMobile(width < theme.breakpoints.values.md);
-        };
-        
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-    }, [theme.breakpoints.values.md]);
+    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const [mobileOpen, setMobileOpen] = useState(false);
     const { currentUser } = useAuth();
     const [profileMenuEl, setProfileMenuEl] = useState(null);

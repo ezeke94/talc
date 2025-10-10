@@ -6,13 +6,7 @@ import './index.css';
 import { initializePWAHandlers } from './utils/pwaUtils.js';
 
 // Initialize PWA handlers early
-console.log('PWA: Initializing PWA handlers...');
-try {
-  initializePWAHandlers();
-  console.log('PWA: Handlers initialized successfully');
-} catch (error) {
-  console.error('PWA: Failed to initialize handlers:', error);
-}
+initializePWAHandlers();
 
 const ensureFirebaseMessagingServiceWorker = () => {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
@@ -336,50 +330,4 @@ if ('serviceWorker' in navigator) {
       });
     });
   }
-}
-
-// React app rendering
-console.log('PWA: Starting React app render...');
-const root = ReactDOM.createRoot(document.getElementById('root'));
-
-// Add error boundary for PWA startup issues
-try {
-  root.render(
-    <React.StrictMode>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <App />
-      </ThemeProvider>
-    </React.StrictMode>
-  );
-  console.log('PWA: React app rendered successfully');
-  
-  // Debug check for PWA mode
-  if (window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches) {
-    console.log('PWA: Running in standalone mode');
-    // Additional check for successful mount
-    setTimeout(() => {
-      const rootElement = document.getElementById('root');
-      if (rootElement && rootElement.children.length > 0) {
-        console.log('PWA: App successfully mounted in standalone mode');
-      } else {
-        console.error('PWA: App failed to mount in standalone mode');
-      }
-    }, 1000);
-  }
-} catch (error) {
-  console.error('PWA: Failed to render React app:', error);
-  // Fallback render attempt
-  setTimeout(() => {
-    try {
-      root.render(
-        <ThemeProvider theme={theme}>
-          <CssBaseline />
-          <App />
-        </ThemeProvider>
-      );
-    } catch (fallbackError) {
-      console.error('PWA: Fallback render also failed:', fallbackError);
-    }
-  }, 100);
 }
