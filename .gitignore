@@ -39,6 +39,16 @@ yarn-error.log*
 # Firebase schema documentation
 firebase-schema.md
 
+# Temporary documentation files (use docs/ folder instead)
+*_DEBUG*.md
+*_TEST_CHECKLIST.md
+*_FIX_SUMMARY.md
+DUPLICATE_*.md
+EVENT_NOTIFICATION_*.md
+PWA_LOGIN_*.md
+NOTIFICATION_*_SUMMARY.md
+DEBUG_*.md
+
 # Generated / temporary public files
 public/sw-version.js
 public/fcm-test.html
