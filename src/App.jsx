@@ -21,12 +21,14 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfUse from './pages/TermsOfUse';
 import Calendar from './pages/Calendar';
 import FormManagement from './pages/FormManagement';
+import NotificationDebugToast from './components/NotificationDebugToast';
 // ...existing code...
 
 function App() {
     return (
         <AuthProvider>
             <BrowserRouter>
+                <NotificationDebugToast />
                 <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route path="/privacy-policy" element={<PrivacyPolicy />} />

@@ -37,6 +37,7 @@ import logo from '../assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 import ProfileSettingsDialog from './ProfileSettingsDialog';
 import NotificationPrompt from './NotificationPrompt';
+import NotificationBell from './NotificationBell';
 // ...existing code...
 
 const Layout = () => {
@@ -377,6 +378,9 @@ const Layout = () => {
                                     </Menu>
                                 </>
                             )}
+                            
+                            {/* Notification Bell */}
+                            <NotificationBell />
                             
                             {currentUser && (
                                 <>

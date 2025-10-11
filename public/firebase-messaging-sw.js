@@ -32,7 +32,17 @@ function generateNotificationId(payload) {
     body || ''
   ].filter(Boolean);
   
-  return idParts.join('-');
+  const id = idParts.join('-');
+  
+  console.log('[SW] Generated notification ID:', {
+    id: id.substring(0, 100),
+    type,
+    eventId,
+    title: (title || '').substring(0, 50),
+    body: (body || '').substring(0, 50)
+  });
+  
+  return id;
 }
 
 /**
@@ -42,9 +52,15 @@ function generateNotificationId(payload) {
 function isDuplicateNotification(notificationId) {
   const now = Date.now();
   
+  console.log('[SW] Checking for duplicate:', {
+    notificationId: notificationId.substring(0, 100),
+    currentMapSize: notificationHistory.size
+  });
+  
   // Clean up old entries (older than dedup window)
   for (const [id, timestamp] of notificationHistory.entries()) {
     if (now - timestamp > DEDUP_WINDOW_MS) {
+      console.log(`[SW] Cleaning up old entry: ${id.substring(0, 50)}... (${now - timestamp}ms old)`);
       notificationHistory.delete(id);
     }
   }
@@ -55,13 +71,23 @@ function isDuplicateNotification(notificationId) {
     const timeSinceLastShown = now - lastShown;
     
     if (timeSinceLastShown < DEDUP_WINDOW_MS) {
-      console.log(`[SW] Skipping duplicate notification: ${notificationId} (shown ${timeSinceLastShown}ms ago)`);
+      console.warn('[SW] ⚠️ DUPLICATE DETECTED in service worker!', {
+        notificationId: notificationId.substring(0, 100),
+        timeSinceLastShown: `${timeSinceLastShown}ms`,
+        windowLimit: `${DEDUP_WINDOW_MS}ms`
+      });
       return true; // It's a duplicate
     }
   }
   
   // Record this notification
   notificationHistory.set(notificationId, now);
+  
+  console.log('[SW] ✅ NEW notification recorded in service worker:', {
+    notificationId: notificationId.substring(0, 100),
+    timestamp: new Date(now).toISOString(),
+    mapSize: notificationHistory.size
+  });
   
   // Also save to IndexedDB for persistence and history
   saveNotificationToHistory(notificationId, now);
@@ -89,16 +115,25 @@ function saveNotificationToHistory(notificationId, timestamp) {
 
 // Handle background messages
 messaging.onBackgroundMessage((payload) => {
-  console.log('[firebase-messaging-sw.js] Received background message ', payload);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('[SW] 📨 BACKGROUND MESSAGE RECEIVED');
+  console.log('[SW] Payload:', JSON.stringify(payload, null, 2));
+  console.log('[SW] Timestamp:', new Date().toISOString());
+  console.log('[SW] App is in background or closed');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   
   // Generate unique ID for this notification
   const notificationId = generateNotificationId(payload);
+  console.log('[SW] Generated ID:', notificationId.substring(0, 100));
   
   // Check for duplicates
   if (isDuplicateNotification(notificationId)) {
-    console.log('[SW] Duplicate notification blocked:', notificationId);
+    console.warn('[SW] ❌ Duplicate notification BLOCKED');
+    console.warn('[SW] This notification was already shown within the last 10 seconds');
     return; // Don't show duplicate
   }
+  
+  console.log('[SW] ✅ New notification - proceeding to show');
   
   const { title, body, icon } = payload.notification || {};
   const { type, url, eventId } = payload.data || {};
