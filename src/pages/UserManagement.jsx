@@ -24,12 +24,18 @@ import {
   CardActions,
   Stack,
   Grid,
+  IconButton,
+  Tooltip,
+  Snackbar,
+  Alert,
 } from '@mui/material';
+import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import { db } from '../firebase/config';
-import { collection, onSnapshot, updateDoc, doc } from 'firebase/firestore';
+import { collection, onSnapshot, updateDoc, doc, getDoc, getDocs } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const ROLES = ['Evaluator', 'Admin', 'Quality', 'Management', 'Coordinator'];
 
@@ -41,6 +47,8 @@ const UserManagement = () => {
   const [error, setError] = useState('');
   const [centers, setCenters] = useState([]);
   const [activeLoading, setActiveLoading] = useState({}); // Track loading per user
+  const [testNotifLoading, setTestNotifLoading] = useState({});
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const theme = useTheme();
   const isSmall = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -110,6 +118,36 @@ const UserManagement = () => {
       });
   };
 
+  const handleSendTestNotification = async (userId, userName) => {
+    setTestNotifLoading(prev => ({ ...prev, [userId]: true }));
+    try {
+      // Call Firebase callable function
+      const functions = getFunctions();
+      const sendTestNotif = httpsCallable(functions, 'sendTestNotification');
+      
+      const result = await sendTestNotif({ userId, userName });
+      
+      if (result.data.success) {
+        setSnackbar({ 
+          open: true, 
+          message: `Test notification sent to ${result.data.totalSent} device(s)`, 
+          severity: 'success' 
+        });
+      } else {
+        setSnackbar({ open: true, message: 'Failed to send notification', severity: 'error' });
+      }
+    } catch (err) {
+      console.error('Error sending test notification:', err);
+      setSnackbar({ 
+        open: true, 
+        message: err.message || 'Error sending test notification', 
+        severity: 'error' 
+      });
+    } finally {
+      setTestNotifLoading(prev => ({ ...prev, [userId]: false }));
+    }
+  };
+
   return (
     <Container maxWidth="lg">
       <Paper sx={{ p: 4, mt: 6 }}>
@@ -133,7 +171,27 @@ const UserManagement = () => {
               <Card key={user.id} variant="outlined" sx={{ boxShadow: 3, borderRadius: 3, bgcolor: 'grey.50', p: 2 }}>
                 <CardContent>
                   <Stack spacing={2}>
-                    <Typography variant="h6" sx={{ fontWeight: 700, color: 'primary.main' }}>{user.name || user.displayName || user.email || '-'}</Typography>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Typography variant="h6" sx={{ fontWeight: 700, color: 'primary.main' }}>
+                        {user.name || user.displayName || user.email || '-'}
+                      </Typography>
+                      {canManage && (
+                        <Tooltip title="Send Test Notification">
+                          <IconButton 
+                            color="primary" 
+                            size="small"
+                            onClick={() => handleSendTestNotification(user.id, user.name || user.displayName || user.email)}
+                            disabled={testNotifLoading[user.id]}
+                          >
+                            {testNotifLoading[user.id] ? (
+                              <CircularProgress size={20} />
+                            ) : (
+                              <NotificationsActiveIcon />
+                            )}
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                    </Box>
                     <Typography variant="body2" color="text.secondary">{user.email || '-'}</Typography>
 
                     <FormControl fullWidth size="medium">
@@ -206,6 +264,7 @@ const UserManagement = () => {
                 <TableCell sx={{ fontWeight: 700 }}>Role</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Status</TableCell>
                 <TableCell sx={{ fontWeight: 700 }}>Centers</TableCell>
+                {canManage && <TableCell sx={{ fontWeight: 700 }}>Actions</TableCell>}
               </TableRow>
             </TableHead>
             <TableBody>
@@ -266,12 +325,41 @@ const UserManagement = () => {
                           ? (centerOptions.find(c => c.value === user.assignedCenters[0])?.label || user.assignedCenters[0])
                           : '-')}
                   </TableCell>
+                  {canManage && (
+                    <TableCell>
+                      <Tooltip title="Send Test Notification">
+                        <IconButton 
+                          color="primary" 
+                          size="small"
+                          onClick={() => handleSendTestNotification(user.id, user.name || user.displayName || user.email)}
+                          disabled={testNotifLoading[user.id]}
+                        >
+                          {testNotifLoading[user.id] ? (
+                            <CircularProgress size={20} />
+                          ) : (
+                            <NotificationsActiveIcon />
+                          )}
+                        </IconButton>
+                      </Tooltip>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         )}
       </Paper>
+      
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={4000} 
+        onClose={() => setSnackbar({ ...snackbar, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSnackbar({ ...snackbar, open: false })} severity={snackbar.severity}>
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };

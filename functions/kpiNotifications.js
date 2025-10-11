@@ -72,25 +72,23 @@ exports.sendWeeklyKPIReminders = onSchedule({
       recentSubmissions.add(`${data.mentorId}_${data.kpiType || data.formName}`);
     });
 
-    // Get all potential evaluators (fallback for mentors without assigned evaluators)
-    const usersSnapshot = await db.collection('users')
-      .where('role', 'in', ['Admin', 'Quality'])
-      .get();
+    // Get ALL users (role-based filtering removed)
+    const usersSnapshot = await db.collection('users').get();
 
     const notifications = [];
     const evaluatorTokens = new Map();
 
-    // Cache evaluator FCM tokens (with multi-device support)
+    // Cache ALL user FCM tokens (with multi-device support)
     for (const userDoc of usersSnapshot.docs) {
       const userData = userDoc.data();
       const tokens = await getAllUserTokens(userDoc.id);
       
       if (tokens.length > 0) {
         evaluatorTokens.set(userDoc.id, {
-          tokens: tokens, // Changed from single token to array of tokens
+          tokens: tokens,
           centers: userData.assignedCenters || [],
           name: userData.name || userData.email,
-          role: userData.role
+          role: userData.role || 'User'
         });
       }
     }

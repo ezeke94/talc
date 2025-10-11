@@ -15,6 +15,7 @@ const eventNotifications = require('./eventNotifications');
 const kpiNotifications = require('./kpiNotifications');
 const eventChangeNotifications = require('./eventChangeNotifications');
 const operationalNotifications = require('./operationalNotifications');
+const { sendTestNotification } = require('./sendTestNotification');
 
 // Export all notification functions
 exports.sendOwnerEventReminders = eventNotifications.sendOwnerEventReminders;
@@ -29,6 +30,7 @@ exports.notifyEventCompletion = eventChangeNotifications.notifyEventCompletion;
 exports.notifyEventDelete = eventChangeNotifications.notifyEventDelete;
 exports.sendMonthlyOperationalSummary = operationalNotifications.sendMonthlyOperationalSummary;
 exports.sendCriticalSystemAlert = operationalNotifications.sendCriticalSystemAlert;
+exports.sendTestNotification = sendTestNotification;
 
 // Keep the hello world function for testing
 exports.helloWorld = onRequest((request, response) => {

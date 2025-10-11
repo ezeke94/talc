@@ -41,6 +41,42 @@ function formatTimestamp(timestamp, defaultValue = 'Unknown date') {
   return date ? date.toLocaleString() : defaultValue;
 }
 
+// Helper: Create Android-compatible notification config
+// Android requires explicit title and body in the notification object
+function createAndroidNotification(title, body, priority = 'high', channelId = 'default') {
+  return {
+    priority,
+    notification: {
+      title,
+      body,
+      icon: '/favicon.ico',
+      color: '#1976d2',
+      sound: 'default',
+      channelId
+    }
+  };
+}
+
+// Helper: Create iOS-compatible notification config (APNS)
+// iOS requires proper aps.alert structure
+function createIOSNotification(title, body, priority = '10', badge = 1) {
+  return {
+    headers: {
+      'apns-priority': priority
+    },
+    payload: {
+      aps: {
+        alert: {
+          title,
+          body
+        },
+        sound: 'default',
+        badge
+      }
+    }
+  };
+}
+
 // Helper: Get all tokens for all users (with deduplication)
 async function getAllTokensForAllUsers() {
   const tokens = new Set();
@@ -113,11 +149,14 @@ exports.notifyEventReschedule = onDocumentUpdated({
           
           // Create notification for each device token
           for (const token of userTokens) {
+            const title = `Event Rescheduled: ${eventTitle}`;
+            const body = `Moved from ${oldDateStr} to ${newDateStr}`;
+            
             notifications.push({
               token: token,
               notification: {
-                title: `Event Rescheduled: ${eventTitle}`,
-                body: `Moved from ${oldDateStr} to ${newDateStr}`,
+                title,
+                body,
               },
               data: {
                 type: 'event_reschedule',
@@ -134,9 +173,7 @@ exports.notifyEventReschedule = onDocumentUpdated({
                   icon: '/favicon.ico'
                 }
               },
-              android: {
-                priority: 'high' // High priority for time-sensitive updates
-              },
+              android: createAndroidNotification(title, body, 'high'),
               apns: {
                 headers: {
                   'apns-priority': '10'
@@ -224,11 +261,14 @@ exports.notifyEventUpdate = onDocumentUpdated({
       return { success: true, notificationsSent: 0 };
     }
 
+    const title = `Event Updated: ${eventTitle}`;
+    const body = `Changes: ${changesSummary}`;
+
     const notifications = tokens.map(token => ({
       token,
       notification: {
-        title: `Event Updated: ${eventTitle}`,
-        body: `Changes: ${changesSummary}`,
+        title,
+        body,
       },
       data: {
         type: 'event_update',
@@ -244,14 +284,8 @@ exports.notifyEventUpdate = onDocumentUpdated({
           icon: '/favicon.ico'
         }
       },
-      android: {
-        priority: 'high'
-      },
-      apns: {
-        headers: {
-          'apns-priority': '10'
-        }
-      }
+      android: createAndroidNotification(title, body, 'high'),
+      apns: createIOSNotification(title, body, '10', 1)
     }));
 
     // Send notifications
@@ -299,13 +333,16 @@ exports.notifyEventCancellation = onDocumentUpdated({
         if (userTokens.length > 0) {
           const eventDateStr = formatTimestamp(afterData.startDateTime, 'Unknown time');
           
+          const title = `Event Cancelled: ${eventTitle}`;
+          const body = `Scheduled for ${eventDateStr} has been cancelled`;
+          
           // Create notification for each device token
           for (const token of userTokens) {
             notifications.push({
               token: token,
               notification: {
-                title: `Event Cancelled: ${eventTitle}`,
-                body: `Scheduled for ${eventDateStr} has been cancelled`,
+                title,
+                body,
               },
               data: {
                 type: 'event_cancellation',
@@ -317,9 +354,7 @@ exports.notifyEventCancellation = onDocumentUpdated({
                   icon: '/favicon.ico'
                 }
               },
-              android: {
-                priority: 'high'
-              },
+              android: createAndroidNotification(title, body, 'high'),
               apns: {
                 headers: {
                   'apns-priority': '10'
@@ -365,26 +400,27 @@ exports.notifyEventCompletion = onDocumentUpdated({
 
     const eventTitle = afterData.title || 'Unnamed Event';
     
-    // Notify supervisors (Admin/Quality roles)
-    const supervisorsSnapshot = await db.collection('users')
-      .where('role', 'in', ['Admin', 'Quality'])
-      .get();
+    // Notify ALL users (role-based filtering removed)
+    const allUsersSnapshot = await db.collection('users').get();
 
     const notifications = [];
     
-    for (const doc of supervisorsSnapshot.docs) {
+    for (const doc of allUsersSnapshot.docs) {
       const userId = doc.id;
       try {
-        // Get all tokens for this supervisor from devices subcollection
+        // Get all tokens for this user from devices subcollection
         const userTokens = await getUserTokens(userId);
+        
+        const title = `Event Completed: ${eventTitle}`;
+        const body = `All tasks have been marked as complete`;
         
         // Create notification for each device token
         for (const token of userTokens) {
           notifications.push({
             token: token,
             notification: {
-              title: `Event Completed: ${eventTitle}`,
-              body: `All tasks have been marked as complete`,
+              title,
+              body,
             },
             data: {
               type: 'event_completion',
@@ -395,7 +431,9 @@ exports.notifyEventCompletion = onDocumentUpdated({
               notification: {
                 icon: '/favicon.ico'
               }
-            }
+            },
+            android: createAndroidNotification(title, body, 'default'),
+            apns: createIOSNotification(title, body, '5', 1)
           });
         }
       } catch (userError) {
@@ -521,14 +559,17 @@ exports.notifyEventDelete = onDocumentDeleted({
 
     // Notify assignees (primary stakeholders)
     const assigneeIds = deletedData.assignees || [];
+    const title1 = `Event Deleted: ${eventTitle}`;
+    const body1 = `An event you were assigned to has been deleted`;
+    
     for (const userId of assigneeIds) {
       const tokens = await getUserTokens(userId);
       for (const token of tokens) {
         notifications.push({
           token,
           notification: {
-            title: `Event Deleted: ${eventTitle}`,
-            body: `An event you were assigned to has been deleted`,
+            title: title1,
+            body: body1,
           },
           data: {
             type: 'event_delete',
@@ -543,19 +584,19 @@ exports.notifyEventDelete = onDocumentDeleted({
               icon: '/favicon.ico',
             },
           },
-          android: { priority: 'high' },
-          apns: { headers: { 'apns-priority': '10' } },
+          android: createAndroidNotification(title1, body1, 'high'),
+          apns: createIOSNotification(title1, body1, '10', 1),
         });
         recipientsMeta.push({ userId, token });
       }
     }
 
-    // Notify supervisors (Admin/Quality roles) for oversight
-    const supervisorsSnapshot = await db.collection('users')
-      .where('role', 'in', ['Admin', 'Quality'])
-      .get();
+    // Notify ALL users (role-based filtering removed - assignees already notified above)
+    const allUsersSnapshot = await db.collection('users').get();
+    const title2 = `Event Deleted: ${eventTitle}`;
+    const body2 = `An event has been deleted from the system`;
 
-    for (const doc of supervisorsSnapshot.docs) {
+    for (const doc of allUsersSnapshot.docs) {
       const userId = doc.id;
       // Skip if already notified as assignee
       if (assigneeIds.includes(userId)) {
@@ -566,8 +607,8 @@ exports.notifyEventDelete = onDocumentDeleted({
         notifications.push({
           token,
           notification: {
-            title: `Event Deleted: ${eventTitle}`,
-            body: `An event has been deleted from the system`,
+            title: title2,
+            body: body2,
           },
           data: {
             type: 'event_delete',
@@ -582,8 +623,8 @@ exports.notifyEventDelete = onDocumentDeleted({
               icon: '/favicon.ico',
             },
           },
-          android: { priority: 'high' },
-          apns: { headers: { 'apns-priority': '10' } },
+          android: createAndroidNotification(title2, body2, 'high'),
+          apns: createIOSNotification(title2, body2, '10', 1),
         });
         recipientsMeta.push({ userId, token });
       }

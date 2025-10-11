@@ -48,6 +48,42 @@ function formatTimestampTime(timestamp, defaultValue = 'Unknown time') {
   return date ? date.toLocaleTimeString() : defaultValue;
 }
 
+// Helper: Create Android-compatible notification config
+// Android requires explicit title and body in the notification object
+function createAndroidNotification(title, body, priority = 'high', channelId = 'default') {
+  return {
+    priority,
+    notification: {
+      title,
+      body,
+      icon: '/favicon.ico',
+      color: '#1976d2',
+      sound: 'default',
+      channelId
+    }
+  };
+}
+
+// Helper: Create iOS-compatible notification config (APNS)
+// iOS requires proper aps.alert structure
+function createIOSNotification(title, body, priority = '10', badge = 1) {
+  return {
+    headers: {
+      'apns-priority': priority
+    },
+    payload: {
+      aps: {
+        alert: {
+          title,
+          body
+        },
+        sound: 'default',
+        badge
+      }
+    }
+  };
+}
+
 // Helper: fetch all device tokens for a user (main fcmToken + devices subcollection)
 async function getAllUserTokens(userId) {
   const tokens = new Set();
@@ -261,19 +297,17 @@ exports.sendQualityTeamEventReminders = onSchedule({
   const notifications = [];
   const recipientsMeta = [];
 
-    // Get all Quality team members
-    const qualityUsersSnapshot = await db.collection('users')
-      .where('role', 'in', ['Quality', 'quality'])
-      .get();
+    // Get ALL users (role-based filtering removed)
+    const allUsersSnapshot = await db.collection('users').get();
 
-    // Build quality members with centers and tokens (multi-device)
-    const qualityMembers = [];
-    for (const docSnap of qualityUsersSnapshot.docs) {
+    // Build all users with centers and tokens (multi-device)
+    const allMembers = [];
+    for (const docSnap of allUsersSnapshot.docs) {
       const data = docSnap.data();
       const centers = data.assignedCenters || [];
       const tokens = await getAllUserTokens(docSnap.id);
       if (tokens.length) {
-        qualityMembers.push({ userId: docSnap.id, centers, tokens });
+        allMembers.push({ userId: docSnap.id, centers, tokens });
       }
     }
 
@@ -299,8 +333,8 @@ exports.sendQualityTeamEventReminders = onSchedule({
         continue;
       }
 
-      // Notify Quality team members
-      for (const member of qualityMembers) {
+      // Notify ALL users (role-based filtering removed)
+      for (const member of allMembers) {
         const shouldNotify = member.centers.length === 0 ||
           (event.center && member.centers.includes(event.center)) ||
           (event.assignedCenters && event.assignedCenters.some(center => member.centers.includes(center)));
@@ -313,7 +347,7 @@ exports.sendQualityTeamEventReminders = onSchedule({
               body: `Due today at ${eventTime.toLocaleTimeString()}`,
             },
             data: {
-              type: 'event_reminder_quality',
+              type: 'event_reminder',
               eventId: eventDoc.id,
               url: `/calendar`,
               timing: 'same_day'
@@ -473,14 +507,12 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
       }
     }
 
-    // Notify Quality team members for oversight (excluding those already notified as assignees)
-    const qualityUsersSnapshot = await db.collection('users')
-      .where('role', 'in', ['Quality', 'quality'])
-      .get();
-
-    for (const docSnap of qualityUsersSnapshot.docs) {
+    // Notify ALL users (role-based filtering removed - assignees already notified above)
+    const allUsersSnapshot = await db.collection('users').get();
+    
+    for (const docSnap of allUsersSnapshot.docs) {
       const userId = docSnap.id;
-      // Skip if this quality team member is already being notified as an assignee
+      // Skip if this user is already being notified as an assignee
       if (assigneeIds.includes(userId)) {
         continue;
       }

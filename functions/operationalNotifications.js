@@ -92,14 +92,12 @@ exports.sendMonthlyOperationalSummary = onSchedule({
     
     const overdueCount = overdueEventsSnapshot.size;
 
-    // Get admin users
-    const adminsSnapshot = await db.collection('users')
-      .where('role', '==', 'Admin')
-      .get();
+    // Get ALL users (role-based filtering removed)
+    const allUsersSnapshot = await db.collection('users').get();
 
     const notifications = [];
     
-    for (const doc of adminsSnapshot.docs) {
+    for (const doc of allUsersSnapshot.docs) {
       const userData = doc.data();
       const tokens = await getAllUserTokens(doc.id);
       
@@ -178,14 +176,12 @@ exports.sendCriticalSystemAlert = onSchedule({
     const ERROR_THRESHOLD = 10; // Adjust based on your needs
 
     if (errorCount >= ERROR_THRESHOLD) {
-      // Get admin users
-      const adminsSnapshot = await db.collection('users')
-        .where('role', '==', 'Admin')
-        .get();
+      // Get ALL users (role-based filtering removed)
+      const allUsersSnapshot = await db.collection('users').get();
 
       const notifications = [];
       
-      for (const doc of adminsSnapshot.docs) {
+      for (const doc of allUsersSnapshot.docs) {
         const userData = doc.data();
         const tokens = await getAllUserTokens(doc.id);
         
