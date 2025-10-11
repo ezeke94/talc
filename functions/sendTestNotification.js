@@ -18,6 +18,7 @@ const messaging = getMessaging();
 exports.sendTestNotification = onCall({
   region: "us-central1",
   memory: "256MiB",
+  cors: true, // Enable CORS for all origins
 }, async (request) => {
   try {
     const { userId, userName } = request.data;

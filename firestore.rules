@@ -4,9 +4,10 @@ service cloud.firestore {
     // Users: Admins manage all, users manage their own profile and notifications (updated 2025-10-10)
     match /users/{userId} {
       allow read, write: if isAuthed();
-      // Devices subcollection: users can only manage their own devices
+      // Devices subcollection: users can manage their own devices, admins can read all devices
       match /devices/{deviceId} {
-        allow read, write: if isAuthed() && request.auth.uid == userId;
+        allow read: if isAuthed() && (request.auth.uid == userId || isAdmin());
+        allow write: if isAuthed() && request.auth.uid == userId;
       }
     }
     // Events: Authenticated users can read/create, update/delete by owner/admin/quality
@@ -59,6 +60,10 @@ service cloud.firestore {
     match /projects/{projectId} {
       allow read, write: if isAdmin() || isQuality();
       allow read: if isCoordinator();
+    }
+    // Notification Log: Only accessible by Cloud Functions (not by clients)
+    match /_notificationLog/{logId} {
+      allow read, write: if false; // Only Cloud Functions with admin SDK can access
     }
     // Default: Authenticated users can read
     match /{document=**} {

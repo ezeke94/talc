@@ -28,8 +28,24 @@ import {
   Tooltip,
   Snackbar,
   Alert,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Button,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemIcon,
+  Divider,
 } from '@mui/material';
 import NotificationsActiveIcon from '@mui/icons-material/NotificationsActive';
+import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
+import PhoneIphoneIcon from '@mui/icons-material/PhoneIphone';
+import LaptopIcon from '@mui/icons-material/Laptop';
+import DevicesIcon from '@mui/icons-material/Devices';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
 import { db } from '../firebase/config';
@@ -49,6 +65,7 @@ const UserManagement = () => {
   const [activeLoading, setActiveLoading] = useState({}); // Track loading per user
   const [testNotifLoading, setTestNotifLoading] = useState({});
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [deviceDialog, setDeviceDialog] = useState({ open: false, userId: null, userName: '', devices: [] });
   const theme = useTheme();
   const isSmall = useMediaQuery(theme.breakpoints.down('sm'));
 
@@ -118,8 +135,62 @@ const UserManagement = () => {
       });
   };
 
-  const handleSendTestNotification = async (userId, userName) => {
+  const handleOpenDeviceDialog = async (userId, userName) => {
+    try {
+      // Fetch user's devices
+      const devices = [];
+      
+      // Get from devices subcollection
+      const devicesRef = collection(db, 'users', userId, 'devices');
+      const devicesSnap = await getDocs(devicesRef);
+      
+      devicesSnap.forEach(deviceDoc => {
+        const deviceData = deviceDoc.data();
+        devices.push({
+          token: deviceDoc.id,
+          enabled: deviceData?.enabled !== false,
+          deviceType: deviceData?.deviceType || 'Unknown',
+          browser: deviceData?.browser || 'Unknown',
+          os: deviceData?.os || 'Unknown',
+          registeredAt: deviceData?.registeredAt?.toDate?.() || deviceData?.registeredAt || new Date(),
+          lastUsed: deviceData?.lastUsed?.toDate?.() || deviceData?.lastUsed || new Date()
+        });
+      });
+
+      // Also check for legacy fcmToken
+      const userDoc = await getDoc(doc(db, 'users', userId));
+      const userData = userDoc.data();
+      if (userData?.fcmToken && devices.length === 0) {
+        devices.push({
+          token: userData.fcmToken,
+          enabled: true,
+          deviceType: 'Legacy',
+          browser: 'Unknown',
+          os: 'Unknown',
+          registeredAt: new Date(),
+          lastUsed: new Date()
+        });
+      }
+
+      setDeviceDialog({ open: true, userId, userName, devices });
+    } catch (err) {
+      console.error('Error fetching devices:', err);
+      setSnackbar({ open: true, message: 'Error fetching devices', severity: 'error' });
+    }
+  };
+
+  const handleCloseDeviceDialog = () => {
+    setDeviceDialog({ open: false, userId: null, userName: '', devices: [] });
+  };
+
+  const handleSendTestNotification = async () => {
+    const { userId, userName } = deviceDialog;
+    
+    if (!userId) return;
+    
     setTestNotifLoading(prev => ({ ...prev, [userId]: true }));
+    handleCloseDeviceDialog();
+    
     try {
       // Call Firebase callable function
       const functions = getFunctions();
@@ -130,7 +201,7 @@ const UserManagement = () => {
       if (result.data.success) {
         setSnackbar({ 
           open: true, 
-          message: `Test notification sent to ${result.data.totalSent} device(s)`, 
+          message: `Test notification sent to ${result.data.totalSent} device(s) successfully!`, 
           severity: 'success' 
         });
       } else {
@@ -146,6 +217,22 @@ const UserManagement = () => {
     } finally {
       setTestNotifLoading(prev => ({ ...prev, [userId]: false }));
     }
+  };
+
+  const getDeviceIcon = (deviceType, os) => {
+    const osLower = (os || '').toLowerCase();
+    const typeLower = (deviceType || '').toLowerCase();
+    
+    if (osLower.includes('ios') || osLower.includes('iphone') || osLower.includes('ipad')) {
+      return <PhoneIphoneIcon />;
+    } else if (osLower.includes('android')) {
+      return <PhoneAndroidIcon />;
+    } else if (typeLower.includes('mobile')) {
+      return <PhoneAndroidIcon />;
+    } else if (typeLower.includes('desktop') || typeLower.includes('laptop')) {
+      return <LaptopIcon />;
+    }
+    return <DevicesIcon />;
   };
 
   return (
@@ -176,11 +263,11 @@ const UserManagement = () => {
                         {user.name || user.displayName || user.email || '-'}
                       </Typography>
                       {canManage && (
-                        <Tooltip title="Send Test Notification">
+                        <Tooltip title="View Devices & Send Test Notification">
                           <IconButton 
                             color="primary" 
                             size="small"
-                            onClick={() => handleSendTestNotification(user.id, user.name || user.displayName || user.email)}
+                            onClick={() => handleOpenDeviceDialog(user.id, user.name || user.displayName || user.email)}
                             disabled={testNotifLoading[user.id]}
                           >
                             {testNotifLoading[user.id] ? (
@@ -327,11 +414,11 @@ const UserManagement = () => {
                   </TableCell>
                   {canManage && (
                     <TableCell>
-                      <Tooltip title="Send Test Notification">
+                      <Tooltip title="View Devices & Send Test Notification">
                         <IconButton 
                           color="primary" 
                           size="small"
-                          onClick={() => handleSendTestNotification(user.id, user.name || user.displayName || user.email)}
+                          onClick={() => handleOpenDeviceDialog(user.id, user.name || user.displayName || user.email)}
                           disabled={testNotifLoading[user.id]}
                         >
                           {testNotifLoading[user.id] ? (
@@ -360,6 +447,75 @@ const UserManagement = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
+
+      {/* Device Dialog */}
+      <Dialog 
+        open={deviceDialog.open} 
+        onClose={handleCloseDeviceDialog}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          Devices for {deviceDialog.userName}
+        </DialogTitle>
+        <DialogContent>
+          {deviceDialog.devices.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ py: 2 }}>
+              No devices registered for this user.
+            </Typography>
+          ) : (
+            <List>
+              {deviceDialog.devices.map((device, index) => (
+                <React.Fragment key={device.token}>
+                  {index > 0 && <Divider />}
+                  <ListItem>
+                    <ListItemIcon>
+                      {getDeviceIcon(device.deviceType, device.os)}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body1">
+                            {device.deviceType} - {device.os}
+                          </Typography>
+                          {device.enabled ? (
+                            <CheckCircleIcon color="success" fontSize="small" />
+                          ) : (
+                            <CancelIcon color="error" fontSize="small" />
+                          )}
+                        </Box>
+                      }
+                      secondary={
+                        <>
+                          <Typography variant="caption" display="block">
+                            Browser: {device.browser}
+                          </Typography>
+                          <Typography variant="caption" display="block">
+                            Status: {device.enabled ? 'Enabled' : 'Disabled'}
+                          </Typography>
+                          <Typography variant="caption" display="block">
+                            Last Used: {device.lastUsed?.toLocaleString?.() || 'Unknown'}
+                          </Typography>
+                        </>
+                      }
+                    />
+                  </ListItem>
+                </React.Fragment>
+              ))}
+            </List>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDeviceDialog}>Cancel</Button>
+          <Button 
+            onClick={handleSendTestNotification} 
+            variant="contained" 
+            disabled={deviceDialog.devices.length === 0}
+          >
+            Send Test Notification
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };

@@ -12,6 +12,45 @@ if (!getApps().length) {
 const db = getFirestore();
 const messaging = getMessaging();
 
+/**
+ * Check if notification was already sent recently (within last 60 seconds)
+ * Prevents duplicate notifications from being sent to the same user for the same event
+ */
+async function wasNotificationRecentlySent(userId, eventId, notificationType) {
+  const notificationKey = `${userId}-${eventId}-${notificationType}`;
+  const sentRef = db.collection('_notificationLog').doc(notificationKey);
+  
+  try {
+    const doc = await sentRef.get();
+    if (doc.exists()) {
+      const data = doc.data();
+      const sentAt = data.sentAt.toDate ? data.sentAt.toDate() : new Date(data.sentAt);
+      const now = new Date();
+      const diffSeconds = (now - sentAt) / 1000;
+      
+      // If sent within last 60 seconds, consider it a duplicate
+      if (diffSeconds < 60) {
+        console.log(`⏭️  Skipping duplicate: ${notificationKey} (sent ${Math.round(diffSeconds)}s ago)`);
+        return true;
+      }
+    }
+    
+    // Record this notification send
+    await sentRef.set({
+      userId,
+      eventId,
+      notificationType,
+      sentAt: new Date()
+    }, { merge: true });
+    
+    return false;
+  } catch (error) {
+    console.error('Error checking notification log:', error);
+    // On error, allow notification (fail open)
+    return false;
+  }
+}
+
 // Helper: Safely convert Firestore Timestamp to JavaScript Date
 function timestampToDate(timestamp) {
   if (!timestamp) return null;
@@ -273,9 +312,9 @@ exports.sendOwnerEventReminders = onSchedule({
   }
 });
 
-// Quality team and owner reminders - same day at 4 PM UTC
+// Quality team and owner reminders - same day at 8 AM UTC
 exports.sendQualityTeamEventReminders = onSchedule({
-  schedule: "0 16 * * *", // Daily at 4 PM UTC
+  schedule: "0 8 * * *", // Daily at 8 AM UTC (changed from 4 PM to avoid overlap with owner reminders)
   timeZone: "UTC",
   region: "us-central1",
   memory: "256MiB",
@@ -481,6 +520,11 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
     // Notify event assignees
     const assigneeIds = eventData.assignees || [];
     for (const userId of assigneeIds) {
+      // Check for duplicate notification
+      if (await wasNotificationRecentlySent(userId, eventId, 'event_assigned')) {
+        continue; // Skip - already sent recently
+      }
+      
       const tokens = await getAllUserTokens(userId);
       for (const token of tokens) {
         notifications.push({
@@ -516,6 +560,12 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
       if (assigneeIds.includes(userId)) {
         continue;
       }
+      
+      // Check for duplicate notification
+      if (await wasNotificationRecentlySent(userId, eventId, 'event_created')) {
+        continue; // Skip - already sent recently
+      }
+      
       const tokens = await getAllUserTokens(userId);
       for (const token of tokens) {
         notifications.push({

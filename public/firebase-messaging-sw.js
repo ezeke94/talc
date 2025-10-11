@@ -11,12 +11,97 @@ firebase.initializeApp(firebaseConfig);
 // Initialize Firebase Messaging
 const messaging = firebase.messaging();
 
+// Notification deduplication tracking
+// Store notification IDs with timestamps to prevent duplicates
+const notificationHistory = new Map();
+const DEDUP_WINDOW_MS = 10000; // 10 seconds window for deduplication
+
+/**
+ * Generate unique notification ID based on content
+ * This ensures same notification content doesn't show twice
+ */
+function generateNotificationId(payload) {
+  const { type, eventId, url } = payload.data || {};
+  const { title, body } = payload.notification || {};
+  
+  // Create unique ID from notification characteristics
+  const idParts = [
+    type || 'general',
+    eventId || '',
+    title || '',
+    body || ''
+  ].filter(Boolean);
+  
+  return idParts.join('-');
+}
+
+/**
+ * Check if notification was already shown recently
+ * Returns true if duplicate, false if should be shown
+ */
+function isDuplicateNotification(notificationId) {
+  const now = Date.now();
+  
+  // Clean up old entries (older than dedup window)
+  for (const [id, timestamp] of notificationHistory.entries()) {
+    if (now - timestamp > DEDUP_WINDOW_MS) {
+      notificationHistory.delete(id);
+    }
+  }
+  
+  // Check if this notification was already shown
+  if (notificationHistory.has(notificationId)) {
+    const lastShown = notificationHistory.get(notificationId);
+    const timeSinceLastShown = now - lastShown;
+    
+    if (timeSinceLastShown < DEDUP_WINDOW_MS) {
+      console.log(`[SW] Skipping duplicate notification: ${notificationId} (shown ${timeSinceLastShown}ms ago)`);
+      return true; // It's a duplicate
+    }
+  }
+  
+  // Record this notification
+  notificationHistory.set(notificationId, now);
+  
+  // Also save to IndexedDB for persistence and history
+  saveNotificationToHistory(notificationId, now);
+  
+  return false; // Not a duplicate
+}
+
+/**
+ * Save notification to IndexedDB for history tracking
+ */
+function saveNotificationToHistory(notificationId, timestamp) {
+  // We'll use a simple approach with postMessage to main app
+  // The main app will handle localStorage storage
+  self.clients.matchAll({ includeUncontrolled: true, type: 'window' }).then(clients => {
+    clients.forEach(client => {
+      client.postMessage({
+        type: 'NOTIFICATION_RECEIVED',
+        notificationId,
+        timestamp,
+        source: 'background'
+      });
+    });
+  });
+}
+
 // Handle background messages
 messaging.onBackgroundMessage((payload) => {
   console.log('[firebase-messaging-sw.js] Received background message ', payload);
   
+  // Generate unique ID for this notification
+  const notificationId = generateNotificationId(payload);
+  
+  // Check for duplicates
+  if (isDuplicateNotification(notificationId)) {
+    console.log('[SW] Duplicate notification blocked:', notificationId);
+    return; // Don't show duplicate
+  }
+  
   const { title, body, icon } = payload.notification || {};
-  const { type, url } = payload.data || {};
+  const { type, url, eventId } = payload.data || {};
 
   // Customize notification based on type
   let notificationTitle = title || 'TALC Notification';
@@ -24,10 +109,12 @@ messaging.onBackgroundMessage((payload) => {
     body: body || 'You have a new notification',
     icon: icon || '/favicon.ico',
     badge: '/favicon.ico',
-    tag: type || 'general', // Prevents duplicate notifications of same type
+    tag: `${type || 'general'}-${eventId || Date.now()}`, // Unique tag per notification
     data: {
       url: url || '/',
       type: type,
+      eventId: eventId,
+      notificationId: notificationId, // Store for tracking
       timestamp: Date.now()
     },
     requireInteraction: false, // Don't require user interaction for most notifications

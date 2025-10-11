@@ -3,6 +3,12 @@ import { getMessaging, getToken, onMessage } from 'firebase/messaging';
 import { doc, setDoc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { isIOS, isPWA } from './pwaUtils';
+import { 
+  generateNotificationId, 
+  isDuplicateNotification, 
+  saveNotificationToHistory,
+  cleanupDedupData 
+} from './notificationHistory';
 
 let messaging = null;
 
@@ -156,18 +162,35 @@ export async function setupNotifications(currentUser, deviceName = null) {
       console.warn('Failed to update user notification status (non-fatal):', firestoreError);
     }
 
-    // Setup foreground message handler
+    // Setup foreground message handler with deduplication
     // NOTE: On Android, we want the service worker to handle notifications even when the app is open
     // so they appear as system notifications. Only show custom in-app UI for iOS in certain cases.
     onMessage(msg, (payload) => {
-      console.log('Foreground message received:', payload);
+      console.log('[Foreground] Message received:', payload);
+      
+      // Generate notification ID
+      const notificationId = generateNotificationId(payload);
+      
+      // Check for duplicates
+      if (isDuplicateNotification(notificationId, 'foreground')) {
+        console.log('[Foreground] Duplicate notification blocked:', notificationId);
+        return; // Don't show duplicate
+      }
+      
+      // Save to history
+      saveNotificationToHistory({
+        ...payload,
+        id: notificationId,
+        source: 'foreground'
+      });
       
       // Let service worker handle it for system notifications on Android
       if (navigator.serviceWorker && navigator.serviceWorker.controller) {
         // Forward to service worker to display as system notification
         navigator.serviceWorker.controller.postMessage({
           type: 'NOTIFICATION_RECEIVED',
-          payload: payload
+          payload: payload,
+          notificationId: notificationId
         });
       } else {
         // Fallback: show custom notification if no service worker
@@ -177,6 +200,25 @@ export async function setupNotifications(currentUser, deviceName = null) {
         }
       }
     });
+    
+    // Listen for service worker messages about notifications
+    if (navigator.serviceWorker) {
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data.type === 'NOTIFICATION_RECEIVED') {
+          const { notificationId, timestamp, source } = event.data;
+          
+          // Service worker received a notification, mark it in our dedup system
+          if (notificationId && !isDuplicateNotification(notificationId, source)) {
+            console.log(`[App] Notification received by ${source}:`, notificationId);
+          }
+        }
+      });
+    }
+    
+    // Cleanup old dedup data periodically
+    setInterval(() => {
+      cleanupDedupData();
+    }, 60000); // Every minute
 
     return token;
 

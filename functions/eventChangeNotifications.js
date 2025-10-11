@@ -11,6 +11,45 @@ if (!getApps().length) {
 const db = getFirestore();
 const messaging = getMessaging();
 
+/**
+ * Check if notification was already sent recently (within last 60 seconds)
+ * Prevents duplicate notifications from being sent to the same user for the same event
+ */
+async function wasNotificationRecentlySent(userId, eventId, notificationType) {
+  const notificationKey = `${userId}-${eventId}-${notificationType}`;
+  const sentRef = db.collection('_notificationLog').doc(notificationKey);
+  
+  try {
+    const doc = await sentRef.get();
+    if (doc.exists()) {
+      const data = doc.data();
+      const sentAt = data.sentAt.toDate ? data.sentAt.toDate() : new Date(data.sentAt);
+      const now = new Date();
+      const diffSeconds = (now - sentAt) / 1000;
+      
+      // If sent within last 60 seconds, consider it a duplicate
+      if (diffSeconds < 60) {
+        console.log(`⏭️  Skipping duplicate: ${notificationKey} (sent ${Math.round(diffSeconds)}s ago)`);
+        return true;
+      }
+    }
+    
+    // Record this notification send
+    await sentRef.set({
+      userId,
+      eventId,
+      notificationType,
+      sentAt: new Date()
+    }, { merge: true });
+    
+    return false;
+  } catch (error) {
+    console.error('Error checking notification log:', error);
+    // On error, allow notification (fail open)
+    return false;
+  }
+}
+
 // Helper: Safely convert Firestore Timestamp to JavaScript Date
 function timestampToDate(timestamp) {
   if (!timestamp) return null;
@@ -563,6 +602,11 @@ exports.notifyEventDelete = onDocumentDeleted({
     const body1 = `An event you were assigned to has been deleted`;
     
     for (const userId of assigneeIds) {
+      // Check for duplicate notification
+      if (await wasNotificationRecentlySent(userId, eventId, 'event_delete_assignee')) {
+        continue; // Skip - already sent recently
+      }
+      
       const tokens = await getUserTokens(userId);
       for (const token of tokens) {
         notifications.push({
@@ -602,6 +646,12 @@ exports.notifyEventDelete = onDocumentDeleted({
       if (assigneeIds.includes(userId)) {
         continue;
       }
+      
+      // Check for duplicate notification
+      if (await wasNotificationRecentlySent(userId, eventId, 'event_delete')) {
+        continue; // Skip - already sent recently
+      }
+      
       const tokens = await getUserTokens(userId);
       for (const token of tokens) {
         notifications.push({
