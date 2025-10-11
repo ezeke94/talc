@@ -166,24 +166,24 @@ export async function setupNotifications(currentUser, deviceName = null) {
     // NOTE: On Android, we want the service worker to handle notifications even when the app is open
     // so they appear as system notifications. Only show custom in-app UI for iOS in certain cases.
     onMessage(msg, (payload) => {
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('[Foreground] 📨 MESSAGE RECEIVED');
-      console.log('[Foreground] Payload:', JSON.stringify(payload, null, 2));
-      console.log('[Foreground] Timestamp:', new Date().toISOString());
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('[Foreground] Message received');
+      
+      // Check if document is actually visible (not in background tab)
+      if (document.hidden || document.visibilityState !== 'visible') {
+        console.log('[Foreground] Document not visible, letting service worker handle it');
+        return; // Let service worker handle it
+      }
+      
+      console.log('[Foreground] Document is visible, handling notification in foreground');
       
       // Generate notification ID
       const notificationId = generateNotificationId(payload);
-      console.log('[Foreground] Generated ID:', notificationId.substring(0, 100));
       
       // Check for duplicates
       if (isDuplicateNotification(notificationId, 'foreground', payload)) {
-        console.warn('[Foreground] ❌ Duplicate notification BLOCKED');
-        console.warn('[Foreground] This notification was already shown within the last 10 seconds');
+        console.log('[Foreground] Duplicate blocked');
         return; // Don't show duplicate
       }
-      
-      console.log('[Foreground] ✅ New notification - proceeding to show');
       
       // Save to history
       saveNotificationToHistory({
@@ -194,7 +194,6 @@ export async function setupNotifications(currentUser, deviceName = null) {
       
       // Let service worker handle it for system notifications on Android
       if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-        console.log('[Foreground] Forwarding to service worker for system notification');
         // Forward to service worker to display as system notification
         navigator.serviceWorker.controller.postMessage({
           type: 'NOTIFICATION_RECEIVED',
@@ -202,7 +201,6 @@ export async function setupNotifications(currentUser, deviceName = null) {
           notificationId: notificationId
         });
       } else {
-        console.log('[Foreground] No service worker - showing custom notification');
         // Fallback: show custom notification if no service worker
         const { title, body, icon } = payload.notification || {};
         if (title) {

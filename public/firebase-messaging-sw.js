@@ -32,17 +32,7 @@ function generateNotificationId(payload) {
     body || ''
   ].filter(Boolean);
   
-  const id = idParts.join('-');
-  
-  console.log('[SW] Generated notification ID:', {
-    id: id.substring(0, 100),
-    type,
-    eventId,
-    title: (title || '').substring(0, 50),
-    body: (body || '').substring(0, 50)
-  });
-  
-  return id;
+  return idParts.join('-');
 }
 
 /**
@@ -52,15 +42,9 @@ function generateNotificationId(payload) {
 function isDuplicateNotification(notificationId) {
   const now = Date.now();
   
-  console.log('[SW] Checking for duplicate:', {
-    notificationId: notificationId.substring(0, 100),
-    currentMapSize: notificationHistory.size
-  });
-  
   // Clean up old entries (older than dedup window)
   for (const [id, timestamp] of notificationHistory.entries()) {
     if (now - timestamp > DEDUP_WINDOW_MS) {
-      console.log(`[SW] Cleaning up old entry: ${id.substring(0, 50)}... (${now - timestamp}ms old)`);
       notificationHistory.delete(id);
     }
   }
@@ -71,23 +55,13 @@ function isDuplicateNotification(notificationId) {
     const timeSinceLastShown = now - lastShown;
     
     if (timeSinceLastShown < DEDUP_WINDOW_MS) {
-      console.warn('[SW] ⚠️ DUPLICATE DETECTED in service worker!', {
-        notificationId: notificationId.substring(0, 100),
-        timeSinceLastShown: `${timeSinceLastShown}ms`,
-        windowLimit: `${DEDUP_WINDOW_MS}ms`
-      });
-      return true; // It's a duplicate
+      // Duplicate detected
+      return true;
     }
   }
   
   // Record this notification
   notificationHistory.set(notificationId, now);
-  
-  console.log('[SW] ✅ NEW notification recorded in service worker:', {
-    notificationId: notificationId.substring(0, 100),
-    timestamp: new Date(now).toISOString(),
-    mapSize: notificationHistory.size
-  });
   
   // Also save to IndexedDB for persistence and history
   saveNotificationToHistory(notificationId, now);
@@ -115,28 +89,32 @@ function saveNotificationToHistory(notificationId, timestamp) {
 
 // Handle background messages
 messaging.onBackgroundMessage((payload) => {
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-  console.log('[SW] 📨 BACKGROUND MESSAGE RECEIVED');
-  console.log('[SW] Payload:', JSON.stringify(payload, null, 2));
-  console.log('[SW] Timestamp:', new Date().toISOString());
-  console.log('[SW] App is in background or closed');
-  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('[SW] Background message received');
   
-  // Generate unique ID for this notification
-  const notificationId = generateNotificationId(payload);
-  console.log('[SW] Generated ID:', notificationId.substring(0, 100));
-  
-  // Check for duplicates
-  if (isDuplicateNotification(notificationId)) {
-    console.warn('[SW] ❌ Duplicate notification BLOCKED');
-    console.warn('[SW] This notification was already shown within the last 10 seconds');
-    return; // Don't show duplicate
-  }
-  
-  console.log('[SW] ✅ New notification - proceeding to show');
-  
-  const { title, body, icon } = payload.notification || {};
-  const { type, url, eventId } = payload.data || {};
+  // Check if any client (browser tab) is currently visible/focused
+  // If so, let the foreground handler deal with it
+  return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
+    const hasVisibleClient = clients.some(client => client.visibilityState === 'visible');
+    
+    if (hasVisibleClient) {
+      console.log('[SW] App is visible in foreground - letting foreground handler show notification');
+      return Promise.resolve(); // Let foreground handler show it
+    }
+    
+    // App is not visible, proceed with background notification
+    console.log('[SW] App in background - showing background notification');
+    
+    // Generate unique ID for this notification
+    const notificationId = generateNotificationId(payload);
+    
+    // Check for duplicates
+    if (isDuplicateNotification(notificationId)) {
+      console.log('[SW] Duplicate blocked');
+      return Promise.resolve(); // Don't show duplicate
+    }
+    
+    const { title, body, icon } = payload.notification || {};
+    const { type, url, eventId } = payload.data || {};
 
   // Customize notification based on type
   let notificationTitle = title || 'TALC Notification';
@@ -213,6 +191,7 @@ messaging.onBackgroundMessage((payload) => {
 
   // Show the notification
   return self.registration.showNotification(notificationTitle, notificationOptions);
+  });
 });
 
 // Handle notification clicks

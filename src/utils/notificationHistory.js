@@ -26,14 +26,6 @@ export function generateNotificationId(payload) {
   
   const id = idParts.join('-').replace(/[^a-zA-Z0-9-]/g, '');
   
-  console.log('[NotifHistory] Generated notification ID:', {
-    id,
-    type,
-    eventId,
-    title: (title || '').substring(0, 50),
-    body: (body || '').substring(0, 50)
-  });
-  
   return id;
 }
 
@@ -46,17 +38,9 @@ export function isDuplicateNotification(notificationId, source = 'unknown', payl
     const dedupData = JSON.parse(localStorage.getItem(DEDUP_KEY) || '{}');
     const now = Date.now();
     
-    console.log(`[NotifHistory] Checking duplicate for: ${notificationId} from ${source}`);
-    console.log(`[NotifHistory] Current dedup registry:`, Object.keys(dedupData).map(id => ({
-      id: id.substring(0, 50) + '...',
-      age: now - dedupData[id].timestamp,
-      source: dedupData[id].source
-    })));
-    
     // Clean up old entries
     Object.keys(dedupData).forEach(id => {
       if (now - dedupData[id].timestamp > DEDUP_WINDOW_MS) {
-        console.log(`[NotifHistory] Cleaning up old entry: ${id.substring(0, 50)}... (${now - dedupData[id].timestamp}ms old)`);
         delete dedupData[id];
       }
     });
@@ -64,30 +48,7 @@ export function isDuplicateNotification(notificationId, source = 'unknown', payl
     // Check if this notification exists
     if (dedupData[notificationId]) {
       const timeSince = now - dedupData[notificationId].timestamp;
-      console.warn(`[NotifHistory] ⚠️ DUPLICATE DETECTED!`, {
-        notificationId: notificationId.substring(0, 100),
-        currentSource: source,
-        previousSource: dedupData[notificationId].source,
-        timeSinceFirst: `${timeSince}ms`,
-        windowLimit: `${DEDUP_WINDOW_MS}ms`
-      });
-      
-      // Dispatch debug event for UI
-      window.dispatchEvent(new CustomEvent('notification-debug', {
-        detail: {
-          isDuplicate: true,
-          notificationId,
-          source,
-          previousSource: dedupData[notificationId].source,
-          timeSince,
-          timestamp: now,
-          title: payload.notification?.title || payload.title,
-          body: payload.notification?.body || payload.body,
-          type: payload.data?.type,
-          eventId: payload.data?.eventId
-        }
-      }));
-      
+      // Duplicate detected - block it
       return true; // Duplicate
     }
     
@@ -98,27 +59,6 @@ export function isDuplicateNotification(notificationId, source = 'unknown', payl
     };
     
     localStorage.setItem(DEDUP_KEY, JSON.stringify(dedupData));
-    
-    console.log(`[NotifHistory] ✅ NEW notification registered:`, {
-      notificationId: notificationId.substring(0, 100),
-      source,
-      timestamp: new Date(now).toISOString(),
-      totalTracked: Object.keys(dedupData).length
-    });
-    
-    // Dispatch debug event for UI
-    window.dispatchEvent(new CustomEvent('notification-debug', {
-      detail: {
-        isDuplicate: false,
-        notificationId,
-        source,
-        timestamp: now,
-        title: payload.notification?.title || payload.title,
-        body: payload.notification?.body || payload.body,
-        type: payload.data?.type,
-        eventId: payload.data?.eventId
-      }
-    }));
     
     return false; // Not a duplicate
     

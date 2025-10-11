@@ -37,7 +37,6 @@ import logo from '../assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 import ProfileSettingsDialog from './ProfileSettingsDialog';
 import NotificationPrompt from './NotificationPrompt';
-import NotificationBell from './NotificationBell';
 // ...existing code...
 
 const Layout = () => {
@@ -379,9 +378,6 @@ const Layout = () => {
                                 </>
                             )}
                             
-                            {/* Notification Bell */}
-                            <NotificationBell />
-                            
                             {currentUser && (
                                 <>
                                     <Tooltip title={currentUser.displayName || currentUser.email || 'Profile'}>
@@ -411,20 +407,10 @@ const Layout = () => {
                             )}
                         </Box>
                     )}
-                    {isMobile && (
-                        <IconButton
-                            color="inherit"
-                            edge="end"
-                            onClick={handleDrawerToggle}
-                            sx={{ ml: 2 }}
-                        >
-                            <MenuIcon />
-                        </IconButton>
-                    )}
                     {isMobile && currentUser && (
                         <>
                             <Tooltip title={currentUser.displayName || currentUser.email || 'Profile'}>
-                                <IconButton color="inherit" onClick={openProfileMenu} sx={{ ml: 1, p: 0.5 }}>
+                                <IconButton color="inherit" onClick={openProfileMenu} sx={{ ml: 'auto', p: 0.5 }}>
                                     <Avatar 
                                         src={currentUser.photoURL || undefined} 
                                         alt={currentUser.displayName || currentUser.email || 'User'}
@@ -447,6 +433,16 @@ const Layout = () => {
                                 <MenuItem onClick={logoutFromMenu}>Logout</MenuItem>
                             </Menu>
                         </>
+                    )}
+                    {isMobile && (
+                        <IconButton
+                            color="inherit"
+                            edge="end"
+                            onClick={handleDrawerToggle}
+                            sx={{ ml: 1 }}
+                        >
+                            <MenuIcon />
+                        </IconButton>
                     )}
                 </Toolbar>
             </AppBar>
