@@ -37,6 +37,7 @@ import logo from '../assets/logo.png';
 import { useAuth } from '../context/AuthContext';
 import ProfileSettingsDialog from './ProfileSettingsDialog';
 import NotificationPrompt from './NotificationPrompt';
+import { resetAppCache } from '../utils/cacheManager';
 // ...existing code...
 
 const Layout = () => {
@@ -116,44 +117,7 @@ const Layout = () => {
     const canRecordKPIs = ['admin', 'quality', 'evaluator'].includes(normalizedRole);
     
     // Organized menu structure
-    const hardReload = useCallback(() => {
-        const performReload = () => {
-            try {
-                const url = new URL(window.location.href);
-                url.searchParams.set('r', String(Date.now()));
-                window.location.replace(url.toString());
-            } catch (err) {
-                const { href, search, hash } = window.location;
-                const base = href.split('#')[0].split('?')[0];
-                const sep = search ? '&' : '?';
-                window.location.replace(`${base}${search}${sep}r=${Date.now()}${hash || ''}`);
-            }
-        };
-
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistrations()
-                .then((regs) => {
-                    const waiting = regs.find(reg => reg && reg.waiting)?.waiting;
-                    if (waiting) {
-                        const onStateChange = (event) => {
-                            if (event.target?.state === 'activated') {
-                                performReload();
-                            }
-                        };
-                        waiting.addEventListener('statechange', onStateChange, { once: true });
-                        waiting.postMessage({ type: 'SKIP_WAITING' });
-                        setTimeout(performReload, 500);
-                    } else {
-                        performReload();
-                    }
-                })
-                .catch(() => {
-                    performReload();
-                });
-        } else {
-            performReload();
-        }
-    }, []);
+    // hardReload removed in favor of Reset App Cache which handles SW + caches
 
     const dashboardItems = showDashboards ? [
         { text: 'Projects', path: '/projects' },
@@ -161,13 +125,24 @@ const Layout = () => {
         { text: 'Operational', path: '/operational-dashboard' }
     ] : [];
     
+    const resetApp = useCallback(async () => {
+        try {
+            // Clear caches and ask SWs to clear theirs. Keep it shallow by default.
+            await resetAppCache({ deep: false });
+        } catch {}
+        // Force a reload with a cache-busting param
+        const url = new URL(window.location.href);
+        url.searchParams.set('r', String(Date.now()));
+        window.location.replace(url.toString());
+    }, []);
+
     const appSetupItems = [
         { text: 'SOPs', path: '/sop-management' },
         ...(showUserManagement ? [
             { text: 'Forms', path: '/form-management' },
             { text: 'Users', path: '/user-management' }
         ] : []),
-        { text: 'Reload Application', action: hardReload, icon: <RefreshIcon fontSize="small" /> }
+        { text: 'Reset App Cache', action: resetApp, icon: <RefreshIcon fontSize="small" /> }
     ];
     
     const standaloneItems = [
