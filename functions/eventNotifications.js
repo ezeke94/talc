@@ -17,6 +17,11 @@ if (!getApps().length) {
 const db = getFirestore();
 const messaging = getMessaging();
 
+// Absolute URLs for WebPush assets
+const baseUrl = (process.env.FRONTEND_URL || 'https://kpitalc.netlify.app').replace(/\/$/, '');
+const absIcon = `${baseUrl}/favicon.ico`;
+const absBadge = `${baseUrl}/favicon.ico`;
+
 /**
  * Check if notification was already sent recently (within last 60 seconds)
  * Prevents duplicate notifications from being sent to the same user for the same event
@@ -272,30 +277,44 @@ exports.sendOwnerEventReminders = onSchedule({
         const tokens = await getAllUserTokens(userId);
         for (const token of tokens) {
           const isWeb = isWebToken(token);
-          const notifPayload = {
-            token,
-            data: {
-              type: 'event_reminder_owner',
-              eventId: eventDoc.id,
-              url: `/calendar`,
-              timing: 'day_before'
-            },
-            webpush: {
-              fcmOptions: {
-                link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`
+          if (isWeb) {
+            notifications.push({
+              token,
+              data: {
+                type: 'event_reminder_owner',
+                eventId: eventDoc.id,
+                url: `/calendar`,
+                timing: 'day_before'
               },
-              notification: {
-                icon: '/favicon.ico'
+              webpush: {
+                fcmOptions: { link: `${baseUrl}/calendar` },
+                notification: {
+                  title: `Event Tomorrow: ${event.title}`,
+                  body: `Due tomorrow at ${formatTimestampTime(event.startDateTime)}`,
+                  icon: absIcon,
+                  badge: absBadge
+                }
               }
-            }
-          };
-          if (!isWeb) {
-            notifPayload.notification = {
-              title: `Event Tomorrow: ${event.title}`,
-              body: `Due tomorrow at ${formatTimestampTime(event.startDateTime)}`,
-            };
+            });
+          } else {
+            notifications.push({
+              token,
+              notification: {
+                title: `Event Tomorrow: ${event.title}`,
+                body: `Due tomorrow at ${formatTimestampTime(event.startDateTime)}`,
+              },
+              data: {
+                type: 'event_reminder_owner',
+                eventId: eventDoc.id,
+                url: `/calendar`,
+                timing: 'day_before'
+              },
+              webpush: {
+                fcmOptions: { link: `${baseUrl}/calendar` },
+                notification: { icon: absIcon, badge: absBadge }
+              }
+            });
           }
-          notifications.push(notifPayload);
           recipientsMeta.push({ userId, token });
         }
       }
@@ -388,27 +407,45 @@ exports.sendQualityTeamEventReminders = onSchedule({
           (event.assignedCenters && event.assignedCenters.some(center => member.centers.includes(center)));
         if (!shouldNotify) continue;
         for (const token of member.tokens) {
-          notifications.push({
-            token,
-            notification: {
-              title: `Event Today: ${event.title}`,
-              body: `Due today at ${eventTime.toLocaleTimeString()}`,
-            },
-            data: {
-              type: 'event_reminder',
-              eventId: eventDoc.id,
-              url: `/calendar`,
-              timing: 'same_day'
-            },
-            webpush: {
-              fcmOptions: {
-                link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`
+          const isWeb = isWebToken(token);
+          if (isWeb) {
+            notifications.push({
+              token,
+              data: {
+                type: 'event_reminder',
+                eventId: eventDoc.id,
+                url: `/calendar`,
+                timing: 'same_day'
               },
-              notification: {
-                icon: '/favicon.ico'
+              webpush: {
+                fcmOptions: { link: `${baseUrl}/calendar` },
+                notification: {
+                  title: `Event Today: ${event.title}`,
+                  body: `Due today at ${eventTime.toLocaleTimeString()}`,
+                  icon: absIcon,
+                  badge: absBadge
+                }
               }
-            }
-          });
+            });
+          } else {
+            notifications.push({
+              token,
+              notification: {
+                title: `Event Today: ${event.title}`,
+                body: `Due today at ${eventTime.toLocaleTimeString()}`,
+              },
+              data: {
+                type: 'event_reminder',
+                eventId: eventDoc.id,
+                url: `/calendar`,
+                timing: 'same_day'
+              },
+              webpush: {
+                fcmOptions: { link: `${baseUrl}/calendar` },
+                notification: { icon: absIcon, badge: absBadge }
+              }
+            });
+          }
           recipientsMeta.push({ userId: member.userId, token });
         }
       }
@@ -466,24 +503,45 @@ exports.sendWeeklyOverdueTaskReminders = onSchedule({
         for (const token of tokens) {
           const eventDate = timestampToDate(event.startDateTime);
           const daysOverdue = eventDate ? Math.ceil((now - eventDate) / (1000 * 60 * 60 * 24)) : 0;
-          notifications.push({
-            token,
-            notification: {
-              title: `Overdue Task: ${event.title}`,
-              body: `This task is ${daysOverdue} days overdue`,
-            },
-            data: {
-              type: 'task_overdue',
-              eventId: eventDoc.id,
-              daysOverdue: daysOverdue.toString(),
-              url: '/calendar'
-            },
-            webpush: {
-              notification: {
-                icon: '/favicon.ico'
+          const isWeb = isWebToken(token);
+          if (isWeb) {
+            notifications.push({
+              token,
+              data: {
+                type: 'task_overdue',
+                eventId: eventDoc.id,
+                daysOverdue: daysOverdue.toString(),
+                url: '/calendar'
+              },
+              webpush: {
+                fcmOptions: { link: `${baseUrl}/calendar` },
+                notification: {
+                  title: `Overdue Task: ${event.title}`,
+                  body: `This task is ${daysOverdue} days overdue`,
+                  icon: absIcon,
+                  badge: absBadge
+                }
               }
-            }
-          });
+            });
+          } else {
+            notifications.push({
+              token,
+              notification: {
+                title: `Overdue Task: ${event.title}`,
+                body: `This task is ${daysOverdue} days overdue`,
+              },
+              data: {
+                type: 'task_overdue',
+                eventId: eventDoc.id,
+                daysOverdue: daysOverdue.toString(),
+                url: '/calendar'
+              },
+              webpush: {
+                fcmOptions: { link: `${baseUrl}/calendar` },
+                notification: { icon: absIcon, badge: absBadge }
+              }
+            });
+          }
           recipientsMeta.push({ userId, token });
         }
       }
@@ -536,26 +594,43 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
       
       const tokens = await getAllUserTokens(userId);
       for (const token of tokens) {
-        notifications.push({
-          token,
-          notification: {
-            title: `New Event Assigned: ${eventData.title}`,
-            body: `You have been assigned to this event`,
-          },
-          data: {
-            type: 'event_assigned',
-            eventId: eventId,
-            url: `/calendar`,
-          },
-          webpush: {
-            fcmOptions: {
-              link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`
+        const isWeb = isWebToken(token);
+        if (isWeb) {
+          notifications.push({
+            token,
+            data: {
+              type: 'event_assigned',
+              eventId: eventId,
+              url: `/calendar`,
             },
-            notification: {
-              icon: '/favicon.ico'
+            webpush: {
+              fcmOptions: { link: `${baseUrl}/calendar` },
+              notification: {
+                title: `New Event Assigned: ${eventData.title}`,
+                body: `You have been assigned to this event`,
+                icon: absIcon,
+                badge: absBadge
+              }
             }
-          }
-        });
+          });
+        } else {
+          notifications.push({
+            token,
+            notification: {
+              title: `New Event Assigned: ${eventData.title}`,
+              body: `You have been assigned to this event`,
+            },
+            data: {
+              type: 'event_assigned',
+              eventId: eventId,
+              url: `/calendar`,
+            },
+            webpush: {
+              fcmOptions: { link: `${baseUrl}/calendar` },
+              notification: { icon: absIcon, badge: absBadge }
+            }
+          });
+        }
         recipientsMeta.push({ userId, token });
       }
     }
@@ -577,26 +652,43 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
       
       const tokens = await getAllUserTokens(userId);
       for (const token of tokens) {
-        notifications.push({
-          token,
-          notification: {
-            title: `New Event Created: ${eventData.title}`,
-            body: `A new event has been created in the system`,
-          },
-          data: {
-            type: 'event_created',
-            eventId: eventId,
-            url: `/calendar`,
-          },
-          webpush: {
-            fcmOptions: {
-              link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`
+        const isWeb = isWebToken(token);
+        if (isWeb) {
+          notifications.push({
+            token,
+            data: {
+              type: 'event_created',
+              eventId: eventId,
+              url: `/calendar`,
             },
-            notification: {
-              icon: '/favicon.ico'
+            webpush: {
+              fcmOptions: { link: `${baseUrl}/calendar` },
+              notification: {
+                title: `New Event Created: ${eventData.title}`,
+                body: `A new event has been created in the system`,
+                icon: absIcon,
+                badge: absBadge
+              }
             }
-          }
-        });
+          });
+        } else {
+          notifications.push({
+            token,
+            notification: {
+              title: `New Event Created: ${eventData.title}`,
+              body: `A new event has been created in the system`,
+            },
+            data: {
+              type: 'event_created',
+              eventId: eventId,
+              url: `/calendar`,
+            },
+            webpush: {
+              fcmOptions: { link: `${baseUrl}/calendar` },
+              notification: { icon: absIcon, badge: absBadge }
+            }
+          });
+        }
         recipientsMeta.push({ userId, token });
       }
     }

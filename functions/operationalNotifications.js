@@ -11,6 +11,16 @@ if (!getApps().length) {
 const db = getFirestore();
 const messaging = getMessaging();
 
+// Heuristic: detect Web FCM tokens (long, includes colon). Adjust if storing platform separately.
+function isWebToken(token) {
+  return typeof token === 'string' && token.length > 150 && token.includes(':');
+}
+
+// Absolute asset URLs for WebPush icons/badges
+const baseUrl = (process.env.FRONTEND_URL || 'https://kpitalc.netlify.app').replace(/\/$/, '');
+const absIcon = `${baseUrl}/favicon.ico`;
+const absBadge = `${baseUrl}/favicon.ico`;
+
 // Helper: fetch all device tokens for a user (devices subcollection with fallback to fcmToken)
 async function getAllUserTokens(userId) {
   const tokens = new Set();
@@ -103,32 +113,48 @@ exports.sendMonthlyOperationalSummary = onSchedule({
       
       for (const token of tokens) {
         const monthName = lastMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
-        
-        notifications.push({
-          token: token,
-          notification: {
-            title: `Monthly Summary - ${monthName}`,
-            body: `${completedEvents}/${totalEvents} events completed (${completionRate}%). ${overdueCount} overdue.`,
-          },
-          data: {
-            type: 'monthly_summary',
-            totalEvents: totalEvents.toString(),
-            completedEvents: completedEvents.toString(),
-            completionRate: completionRate.toString(),
-            kpiSubmissions: totalKpiSubmissions.toString(),
-            overdueEvents: overdueCount.toString(),
-            auditActions: totalAuditActions.toString(),
-            url: '/operational-dashboard'
-          },
-          webpush: {
-            fcmOptions: {
-              link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/operational-dashboard`
+        const title = `Monthly Summary - ${monthName}`;
+        const body = `${completedEvents}/${totalEvents} events completed (${completionRate}%). ${overdueCount} overdue.`;
+        const web = isWebToken(token);
+
+        if (web) {
+          notifications.push({
+            token,
+            data: {
+              type: 'monthly_summary',
+              totalEvents: totalEvents.toString(),
+              completedEvents: completedEvents.toString(),
+              completionRate: completionRate.toString(),
+              kpiSubmissions: totalKpiSubmissions.toString(),
+              overdueEvents: overdueCount.toString(),
+              auditActions: totalAuditActions.toString(),
+              url: '/operational-dashboard'
             },
-            notification: {
-              icon: '/favicon.ico'
+            webpush: {
+              fcmOptions: { link: `${baseUrl}/operational-dashboard` },
+              notification: { title, body, icon: absIcon, badge: absBadge }
             }
-          }
-        });
+          });
+        } else {
+          notifications.push({
+            token,
+            notification: { title, body },
+            data: {
+              type: 'monthly_summary',
+              totalEvents: totalEvents.toString(),
+              completedEvents: completedEvents.toString(),
+              completionRate: completionRate.toString(),
+              kpiSubmissions: totalKpiSubmissions.toString(),
+              overdueEvents: overdueCount.toString(),
+              auditActions: totalAuditActions.toString(),
+              url: '/operational-dashboard'
+            },
+            webpush: {
+              fcmOptions: { link: `${baseUrl}/operational-dashboard` },
+              notification: { icon: absIcon, badge: absBadge }
+            }
+          });
+        }
       }
     }
 
@@ -186,32 +212,41 @@ exports.sendCriticalSystemAlert = onSchedule({
         const tokens = await getAllUserTokens(doc.id);
         
         for (const token of tokens) {
-          notifications.push({
-            token: token,
-            notification: {
-              title: `🚨 System Alert`,
-              body: `${errorCount} errors detected in the last 6 hours`,
-            },
-            data: {
-              type: 'system_alert',
-              errorCount: errorCount.toString(),
-              timeframe: '6_hours',
-              url: '/operational-dashboard'
-            },
-            webpush: {
-              notification: {
-                icon: '/favicon.ico'
+          const title = `🚨 System Alert`;
+          const body = `${errorCount} errors detected in the last 6 hours`;
+          const web = isWebToken(token);
+          if (web) {
+            notifications.push({
+              token,
+              data: {
+                type: 'system_alert',
+                errorCount: errorCount.toString(),
+                timeframe: '6_hours',
+                url: '/operational-dashboard'
+              },
+              webpush: {
+                fcmOptions: { link: `${baseUrl}/operational-dashboard` },
+                notification: { title, body, icon: absIcon, badge: absBadge }
               }
-            },
-            android: {
-              priority: 'high'
-            },
-            apns: {
-              headers: {
-                'apns-priority': '10'
-              }
-            }
-          });
+            });
+          } else {
+            notifications.push({
+              token,
+              notification: { title, body },
+              data: {
+                type: 'system_alert',
+                errorCount: errorCount.toString(),
+                timeframe: '6_hours',
+                url: '/operational-dashboard'
+              },
+              webpush: {
+                fcmOptions: { link: `${baseUrl}/operational-dashboard` },
+                notification: { icon: absIcon, badge: absBadge }
+              },
+              android: { priority: 'high' },
+              apns: { headers: { 'apns-priority': '10' } }
+            });
+          }
         }
       }
 

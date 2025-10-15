@@ -11,6 +11,11 @@ if (!getApps().length) {
 const db = getFirestore();
 const messaging = getMessaging();
 
+// Heuristic: detect Web FCM tokens (long, includes colon). Adjust as needed if you store platform.
+function isWebToken(token) {
+  return typeof token === 'string' && token.length > 150 && token.includes(':');
+}
+
 /**
  * Firebase Callable Function: Send Test Notification
  * Sends a test notification to a specific user's registered devices
@@ -71,55 +76,65 @@ exports.sendTestNotification = onCall({
     const body = `Hi ${displayName}! This is a test notification sent at ${timestamp}`;
 
     // Create notifications for each token with proper iOS/Android formatting
-    const messages = tokenList.map(token => ({
-      token,
-      notification: {
-        title,
-        body,
-      },
-      data: {
-        type: 'test_notification',
-        timestamp: new Date().toISOString(),
-        url: '/'
-      },
-      webpush: {
-        fcmOptions: {
-          link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/`
-        },
-        notification: {
-          icon: '/favicon.ico',
-          badge: '/favicon.ico'
-        }
-      },
-      // Android-specific config
-      android: {
-        priority: 'high',
-        notification: {
-          title,
-          body,
-          icon: '/favicon.ico',
-          color: '#1976d2',
-          sound: 'default',
-          channelId: 'default'
-        }
-      },
-      // iOS-specific config
-      apns: {
-        headers: {
-          'apns-priority': '10'
-        },
-        payload: {
-          aps: {
-            alert: {
-              title,
-              body
+    const baseUrl = (process.env.FRONTEND_URL || 'https://kpitalc.netlify.app').replace(/\/$/, '');
+    const absIcon = `${baseUrl}/favicon.ico`;
+    const absBadge = `${baseUrl}/favicon.ico`;
+
+    const messages = tokenList.map(token => {
+      const web = isWebToken(token);
+      if (web) {
+        // Web: send data-only + WebPush notification (service worker will also handle)
+        return {
+          token,
+          data: {
+            type: 'test_notification',
+            timestamp: new Date().toISOString(),
+            url: '/'
+          },
+          webpush: {
+            fcmOptions: {
+              link: `${baseUrl}/`
             },
-            sound: 'default',
-            badge: 1
+            notification: {
+              title,
+              body,
+              icon: absIcon,
+              badge: absBadge
+            }
           }
-        }
+        };
       }
-    }));
+
+      // Non-web (kept for completeness): include platform-specific configs
+      return {
+        token,
+        notification: { title, body },
+        data: {
+          type: 'test_notification',
+          timestamp: new Date().toISOString(),
+          url: '/'
+        },
+        webpush: {
+          fcmOptions: { link: `${baseUrl}/` },
+          notification: { icon: absIcon, badge: absBadge }
+        },
+        android: {
+          priority: 'high',
+          notification: {
+            title,
+            body,
+            icon: absIcon,
+            color: '#1976d2',
+            sound: 'default',
+            channelId: 'default'
+          }
+        },
+        apns: {
+          headers: { 'apns-priority': '10' },
+          payload: { aps: { alert: { title, body }, sound: 'default', badge: 1 } }
+        }
+      };
+    });
 
     // Send notifications
     const results = await messaging.sendEach(messages);

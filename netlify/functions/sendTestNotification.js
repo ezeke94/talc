@@ -19,6 +19,11 @@ function initAdmin() {
   appInitialized = true;
 }
 
+// Heuristic for Web FCM tokens
+function isWebToken(token) {
+  return typeof token === 'string' && token.length > 150 && token.includes(':');
+}
+
 exports.handler = async function (event) {
   try {
     initAdmin();
@@ -38,48 +43,55 @@ exports.handler = async function (event) {
       ? `Hi ${userName}! This is a test notification sent at ${timestamp}` 
       : 'Test notification from TALC Management');
 
-    // Create notifications for each token
-    const messages = tokenList.map(tkn => ({
-      token: tkn,
-      notification: {
-        title: notificationTitle,
-        body: notificationBody,
-      },
-      data: {
-        type: 'test_notification',
-        timestamp: timestamp || new Date().toISOString(),
-        ...Object.keys(data).reduce((acc, k) => ({ ...acc, [k]: String(data[k]) }), {})
-      },
-      webpush: {
-        fcmOptions: {
-          link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/`
-        },
-        notification: {
-          icon: '/favicon.ico',
-          badge: '/favicon.ico'
-        }
-      },
-      android: {
-        priority: 'high',
-        notification: {
-          icon: '/favicon.ico',
-          color: '#1976d2',
-          sound: 'default',
-          channelId: 'default'
-        }
-      },
-      apns: {
-        headers: {
-          'apns-priority': '10'
-        },
-        payload: {
-          aps: {
-            sound: 'default',
-            badge: 1
+    // Absolute URLs for WebPush assets
+    const baseUrl = (process.env.FRONTEND_URL || 'https://kpitalc.netlify.app').replace(/\/$/, '');
+    const absIcon = `${baseUrl}/favicon.ico`;
+    const absBadge = `${baseUrl}/favicon.ico`;
+
+    // Create notifications for each token with web-specific handling
+    const messages = tokenList.map(tkn => {
+      const web = isWebToken(tkn);
+      if (web) {
+        return {
+          token: tkn,
+          data: {
+            type: 'test_notification',
+            timestamp: timestamp || new Date().toISOString(),
+            ...Object.keys(data).reduce((acc, k) => ({ ...acc, [k]: String(data[k]) }), {})
+          },
+          webpush: {
+            fcmOptions: { link: `${baseUrl}/` },
+            notification: { title: notificationTitle, body: notificationBody, icon: absIcon, badge: absBadge }
           }
-        }
+        };
       }
-    }));
+      return {
+        token: tkn,
+        notification: { title: notificationTitle, body: notificationBody },
+        data: {
+          type: 'test_notification',
+          timestamp: timestamp || new Date().toISOString(),
+          ...Object.keys(data).reduce((acc, k) => ({ ...acc, [k]: String(data[k]) }), {})
+        },
+        webpush: {
+          fcmOptions: { link: `${baseUrl}/` },
+          notification: { icon: absIcon, badge: absBadge }
+        },
+        android: {
+          priority: 'high',
+          notification: {
+            icon: absIcon,
+            color: '#1976d2',
+            sound: 'default',
+            channelId: 'default'
+          }
+        },
+        apns: {
+          headers: { 'apns-priority': '10' },
+          payload: { aps: { alert: { title: notificationTitle, body: notificationBody }, sound: 'default', badge: 1 } }
+        }
+      };
+    });
 
     // Send all notifications
     const results = await admin.messaging().sendEach(messages);

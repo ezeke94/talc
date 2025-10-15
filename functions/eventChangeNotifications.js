@@ -11,6 +11,16 @@ if (!getApps().length) {
 const db = getFirestore();
 const messaging = getMessaging();
 
+// Heuristic to detect Web FCM tokens
+function isWebToken(token) {
+  return typeof token === 'string' && token.length > 150 && token.includes(':');
+}
+
+// Absolute asset URLs for WebPush
+const baseUrl = (process.env.FRONTEND_URL || 'https://kpitalc.netlify.app').replace(/\/$/, '');
+const absIcon = `${baseUrl}/favicon.ico`;
+const absBadge = `${baseUrl}/favicon.ico`;
+
 /**
  * Check if notification was already sent recently (within last 60 seconds)
  * Prevents duplicate notifications from being sent to the same user for the same event
@@ -190,35 +200,41 @@ exports.notifyEventReschedule = onDocumentUpdated({
           for (const token of userTokens) {
             const title = `Event Rescheduled: ${eventTitle}`;
             const body = `Moved from ${oldDateStr} to ${newDateStr}`;
-            
-            notifications.push({
-              token: token,
-              notification: {
-                title,
-                body,
-              },
-              data: {
-                type: 'event_reschedule',
-                eventId: eventId,
-                oldDateTime: oldDateStr,
-                newDateTime: newDateStr,
-                url: '/calendar'
-              },
-              webpush: {
-                fcmOptions: {
-                  link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`
+            const web = isWebToken(token);
+            if (web) {
+              notifications.push({
+                token,
+                data: {
+                  type: 'event_reschedule',
+                  eventId: eventId,
+                  oldDateTime: oldDateStr,
+                  newDateTime: newDateStr,
+                  url: '/calendar'
                 },
-                notification: {
-                  icon: '/favicon.ico'
+                webpush: {
+                  fcmOptions: { link: `${baseUrl}/calendar` },
+                  notification: { title, body, icon: absIcon, badge: absBadge }
                 }
-              },
-              android: createAndroidNotification(title, body, 'high'),
-              apns: {
-                headers: {
-                  'apns-priority': '10'
-                }
-              }
-            });
+              });
+            } else {
+              notifications.push({
+                token,
+                notification: { title, body },
+                data: {
+                  type: 'event_reschedule',
+                  eventId: eventId,
+                  oldDateTime: oldDateStr,
+                  newDateTime: newDateStr,
+                  url: '/calendar'
+                },
+                webpush: {
+                  fcmOptions: { link: `${baseUrl}/calendar` },
+                  notification: { icon: absIcon, badge: absBadge }
+                },
+                android: createAndroidNotification(title, body, 'high'),
+                apns: { headers: { 'apns-priority': '10' } }
+              });
+            }
           }
         }
       } catch (userError) {
@@ -303,29 +319,40 @@ exports.notifyEventUpdate = onDocumentUpdated({
     const title = `Event Updated: ${eventTitle}`;
     const body = `Changes: ${changesSummary}`;
 
-    const notifications = tokens.map(token => ({
-      token,
-      notification: {
-        title,
-        body,
-      },
-      data: {
-        type: 'event_update',
-        eventId: eventId,
-        changes: changesSummary,
-        url: '/calendar'
-      },
-      webpush: {
-        fcmOptions: {
-          link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`
+    const notifications = tokens.map(token => {
+      const web = isWebToken(token);
+      if (web) {
+        return {
+          token,
+          data: {
+            type: 'event_update',
+            eventId: eventId,
+            changes: changesSummary,
+            url: '/calendar'
+          },
+          webpush: {
+            fcmOptions: { link: `${baseUrl}/calendar` },
+            notification: { title, body, icon: absIcon, badge: absBadge }
+          }
+        };
+      }
+      return {
+        token,
+        notification: { title, body },
+        data: {
+          type: 'event_update',
+          eventId: eventId,
+          changes: changesSummary,
+          url: '/calendar'
         },
-        notification: {
-          icon: '/favicon.ico'
-        }
-      },
-      android: createAndroidNotification(title, body, 'high'),
-      apns: createIOSNotification(title, body, '10', 1)
-    }));
+        webpush: {
+          fcmOptions: { link: `${baseUrl}/calendar` },
+          notification: { icon: absIcon, badge: absBadge }
+        },
+        android: createAndroidNotification(title, body, 'high'),
+        apns: createIOSNotification(title, body, '10', 1)
+      };
+    });
 
     // Send notifications
     if (notifications.length > 0) {
@@ -377,29 +404,37 @@ exports.notifyEventCancellation = onDocumentUpdated({
           
           // Create notification for each device token
           for (const token of userTokens) {
-            notifications.push({
-              token: token,
-              notification: {
-                title,
-                body,
-              },
-              data: {
-                type: 'event_cancellation',
-                eventId: eventId,
-                url: '/calendar'
-              },
-              webpush: {
-                notification: {
-                  icon: '/favicon.ico'
+            const web = isWebToken(token);
+            if (web) {
+              notifications.push({
+                token,
+                data: {
+                  type: 'event_cancellation',
+                  eventId: eventId,
+                  url: '/calendar'
+                },
+                webpush: {
+                  fcmOptions: { link: `${baseUrl}/calendar` },
+                  notification: { title, body, icon: absIcon, badge: absBadge }
                 }
-              },
-              android: createAndroidNotification(title, body, 'high'),
-              apns: {
-                headers: {
-                  'apns-priority': '10'
-                }
-              }
-            });
+              });
+            } else {
+              notifications.push({
+                token,
+                notification: { title, body },
+                data: {
+                  type: 'event_cancellation',
+                  eventId: eventId,
+                  url: '/calendar'
+                },
+                webpush: {
+                  fcmOptions: { link: `${baseUrl}/calendar` },
+                  notification: { icon: absIcon, badge: absBadge }
+                },
+                android: createAndroidNotification(title, body, 'high'),
+                apns: { headers: { 'apns-priority': '10' } }
+              });
+            }
           }
         }
       } catch (userError) {
@@ -455,25 +490,37 @@ exports.notifyEventCompletion = onDocumentUpdated({
         
         // Create notification for each device token
         for (const token of userTokens) {
-          notifications.push({
-            token: token,
-            notification: {
-              title,
-              body,
-            },
-            data: {
-              type: 'event_completion',
-              eventId: event.params.eventId,
-              url: '/operational-dashboard'
-            },
-            webpush: {
-              notification: {
-                icon: '/favicon.ico'
+          const web = isWebToken(token);
+          if (web) {
+            notifications.push({
+              token,
+              data: {
+                type: 'event_completion',
+                eventId: event.params.eventId,
+                url: '/operational-dashboard'
+              },
+              webpush: {
+                fcmOptions: { link: `${baseUrl}/operational-dashboard` },
+                notification: { title, body, icon: absIcon, badge: absBadge }
               }
-            },
-            android: createAndroidNotification(title, body, 'default'),
-            apns: createIOSNotification(title, body, '5', 1)
-          });
+            });
+          } else {
+            notifications.push({
+              token,
+              notification: { title, body },
+              data: {
+                type: 'event_completion',
+                eventId: event.params.eventId,
+                url: '/operational-dashboard'
+              },
+              webpush: {
+                fcmOptions: { link: `${baseUrl}/operational-dashboard` },
+                notification: { icon: absIcon, badge: absBadge }
+              },
+              android: createAndroidNotification(title, body, 'default'),
+              apns: createIOSNotification(title, body, '5', 1)
+            });
+          }
         }
       } catch (userError) {
         console.error(`Error getting tokens for supervisor ${userId}:`, userError);
@@ -609,28 +656,37 @@ exports.notifyEventDelete = onDocumentDeleted({
       
       const tokens = await getUserTokens(userId);
       for (const token of tokens) {
-        notifications.push({
-          token,
-          notification: {
-            title: title1,
-            body: body1,
-          },
-          data: {
-            type: 'event_delete',
-            eventId,
-            url: '/calendar',
-          },
-          webpush: {
-            fcmOptions: {
-              link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`,
+        const web = isWebToken(token);
+        if (web) {
+          notifications.push({
+            token,
+            data: {
+              type: 'event_delete',
+              eventId,
+              url: '/calendar',
             },
-            notification: {
-              icon: '/favicon.ico',
+            webpush: {
+              fcmOptions: { link: `${baseUrl}/calendar` },
+              notification: { title: title1, body: body1, icon: absIcon, badge: absBadge },
+            }
+          });
+        } else {
+          notifications.push({
+            token,
+            notification: { title: title1, body: body1 },
+            data: {
+              type: 'event_delete',
+              eventId,
+              url: '/calendar',
             },
-          },
-          android: createAndroidNotification(title1, body1, 'high'),
-          apns: createIOSNotification(title1, body1, '10', 1),
-        });
+            webpush: {
+              fcmOptions: { link: `${baseUrl}/calendar` },
+              notification: { icon: absIcon, badge: absBadge },
+            },
+            android: createAndroidNotification(title1, body1, 'high'),
+            apns: createIOSNotification(title1, body1, '10', 1),
+          });
+        }
         recipientsMeta.push({ userId, token });
       }
     }
@@ -654,28 +710,37 @@ exports.notifyEventDelete = onDocumentDeleted({
       
       const tokens = await getUserTokens(userId);
       for (const token of tokens) {
-        notifications.push({
-          token,
-          notification: {
-            title: title2,
-            body: body2,
-          },
-          data: {
-            type: 'event_delete',
-            eventId,
-            url: '/calendar',
-          },
-          webpush: {
-            fcmOptions: {
-              link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/calendar`,
+        const web = isWebToken(token);
+        if (web) {
+          notifications.push({
+            token,
+            data: {
+              type: 'event_delete',
+              eventId,
+              url: '/calendar',
             },
-            notification: {
-              icon: '/favicon.ico',
+            webpush: {
+              fcmOptions: { link: `${baseUrl}/calendar` },
+              notification: { title: title2, body: body2, icon: absIcon, badge: absBadge },
             },
-          },
-          android: createAndroidNotification(title2, body2, 'high'),
-          apns: createIOSNotification(title2, body2, '10', 1),
-        });
+          });
+        } else {
+          notifications.push({
+            token,
+            notification: { title: title2, body: body2 },
+            data: {
+              type: 'event_delete',
+              eventId,
+              url: '/calendar',
+            },
+            webpush: {
+              fcmOptions: { link: `${baseUrl}/calendar` },
+              notification: { icon: absIcon, badge: absBadge },
+            },
+            android: createAndroidNotification(title2, body2, 'high'),
+            apns: createIOSNotification(title2, body2, '10', 1),
+          });
+        }
         recipientsMeta.push({ userId, token });
       }
     }

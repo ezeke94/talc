@@ -11,6 +11,16 @@ if (!getApps().length) {
 const db = getFirestore();
 const messaging = getMessaging();
 
+// Heuristic to detect Web FCM tokens
+function isWebToken(token) {
+  return typeof token === 'string' && token.length > 150 && token.includes(':');
+}
+
+// Absolute asset URLs for WebPush
+const baseUrl = (process.env.FRONTEND_URL || 'https://kpitalc.netlify.app').replace(/\/$/, '');
+const absIcon = `${baseUrl}/favicon.ico`;
+const absBadge = `${baseUrl}/favicon.ico`;
+
 // Helper: fetch all device tokens for a user (devices subcollection with fallback to fcmToken)
 async function getAllUserTokens(userId) {
   const tokens = new Set();
@@ -183,28 +193,41 @@ exports.sendWeeklyKPIReminders = onSchedule({
       
       // Send to all devices for this evaluator
       for (const token of evaluatorData.tokens) {
-        notifications.push({
-          token: token,
-          notification: {
-            title: `KPI Assessments Pending`,
-            body: `${mentorCount} mentor(s) need evaluation (${formCount} forms)`,
-          },
-          data: {
-            type: 'kpi_reminder',
-            pendingCount: formCount.toString(),
-            mentorCount: mentorCount.toString(),
-            evaluatorRole: evaluatorData.role,
-            url: '/mentors'
-          },
-          webpush: {
-            fcmOptions: {
-              link: `${process.env.FRONTEND_URL || 'https://your-app-domain.com'}/mentors`
+        const title = `KPI Assessments Pending`;
+        const body = `${mentorCount} mentor(s) need evaluation (${formCount} forms)`;
+        const web = isWebToken(token);
+        if (web) {
+          notifications.push({
+            token,
+            data: {
+              type: 'kpi_reminder',
+              pendingCount: formCount.toString(),
+              mentorCount: mentorCount.toString(),
+              evaluatorRole: evaluatorData.role,
+              url: '/mentors'
             },
-            notification: {
-              icon: '/favicon.ico'
+            webpush: {
+              fcmOptions: { link: `${baseUrl}/mentors` },
+              notification: { title, body, icon: absIcon, badge: absBadge }
             }
-          }
-        });
+          });
+        } else {
+          notifications.push({
+            token,
+            notification: { title, body },
+            data: {
+              type: 'kpi_reminder',
+              pendingCount: formCount.toString(),
+              mentorCount: mentorCount.toString(),
+              evaluatorRole: evaluatorData.role,
+              url: '/mentors'
+            },
+            webpush: {
+              fcmOptions: { link: `${baseUrl}/mentors` },
+              notification: { icon: absIcon, badge: absBadge }
+            }
+          });
+        }
       }
     }
 
