@@ -1,3 +1,30 @@
+import { setDoc } from 'firebase/firestore';
+/**
+ * Remove all device tokens for a user and add a new one
+ * @param {string} userId
+ * @param {string} newToken
+ * @param {object} deviceData (optional)
+ */
+export async function replaceAllDevicesWithToken(userId, newToken, deviceData = {}) {
+  if (!userId || !newToken) return false;
+  try {
+    // Remove all existing devices
+    const devices = await getUserDevices(userId);
+    await Promise.all(devices.map(d => deleteDoc(doc(db, 'users', userId, 'devices', d.token))));
+    // Add the new device
+    await setDoc(doc(db, 'users', userId, 'devices', newToken), {
+      ...deviceData,
+      token: newToken,
+      enabled: true,
+      lastSeenAt: new Date(),
+      createdAt: new Date(),
+    });
+    return true;
+  } catch (e) {
+    console.error('replaceAllDevicesWithToken failed:', e);
+    return false;
+  }
+}
 // Device management utilities for notification devices
 import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase/config';
