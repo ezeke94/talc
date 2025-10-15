@@ -1,3 +1,8 @@
+// Helper: Detect if a token is a web token (FCM web tokens are usually longer, start with 'd' or 'e', and contain a colon)
+function isWebToken(token) {
+  // Heuristic: Web tokens are usually >150 chars and contain a colon
+  return typeof token === 'string' && token.length > 150 && token.includes(':');
+}
 const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { initializeApp, getApps } = require("firebase-admin/app");
@@ -266,17 +271,14 @@ exports.sendOwnerEventReminders = onSchedule({
       for (const userId of uniqueOwnerIds) {
         const tokens = await getAllUserTokens(userId);
         for (const token of tokens) {
-          // If token looks like a web token (contains ":APA91"), omit top-level notification
-          const isWebToken = token.startsWith('d:') || token.includes(':APA91');
+          const isWeb = isWebToken(token);
           const notifPayload = {
             token,
             data: {
               type: 'event_reminder_owner',
               eventId: eventDoc.id,
               url: `/calendar`,
-              timing: 'day_before',
-              title: `Event Tomorrow: ${event.title}`,
-              body: `Due tomorrow at ${formatTimestampTime(event.startDateTime)}`
+              timing: 'day_before'
             },
             webpush: {
               fcmOptions: {
@@ -287,10 +289,10 @@ exports.sendOwnerEventReminders = onSchedule({
               }
             }
           };
-          if (!isWebToken) {
+          if (!isWeb) {
             notifPayload.notification = {
               title: `Event Tomorrow: ${event.title}`,
-              body: `Due tomorrow at ${formatTimestampTime(event.startDateTime)}`
+              body: `Due tomorrow at ${formatTimestampTime(event.startDateTime)}`,
             };
           }
           notifications.push(notifPayload);
@@ -386,17 +388,17 @@ exports.sendQualityTeamEventReminders = onSchedule({
           (event.assignedCenters && event.assignedCenters.some(center => member.centers.includes(center)));
         if (!shouldNotify) continue;
         for (const token of member.tokens) {
-          // If token looks like a web token (contains ":APA91"), omit top-level notification
-          const isWebToken = token.startsWith('d:') || token.includes(':APA91');
-          const notifPayload = {
+          notifications.push({
             token,
+            notification: {
+              title: `Event Today: ${event.title}`,
+              body: `Due today at ${eventTime.toLocaleTimeString()}`,
+            },
             data: {
               type: 'event_reminder',
               eventId: eventDoc.id,
               url: `/calendar`,
-              timing: 'same_day',
-              title: `Event Today: ${event.title}`,
-              body: `Due today at ${eventTime.toLocaleTimeString()}`
+              timing: 'same_day'
             },
             webpush: {
               fcmOptions: {
@@ -406,14 +408,7 @@ exports.sendQualityTeamEventReminders = onSchedule({
                 icon: '/favicon.ico'
               }
             }
-          };
-          if (!isWebToken) {
-            notifPayload.notification = {
-              title: `Event Today: ${event.title}`,
-              body: `Due today at ${eventTime.toLocaleTimeString()}`
-            };
-          }
-          notifications.push(notifPayload);
+          });
           recipientsMeta.push({ userId: member.userId, token });
         }
       }
@@ -471,30 +466,24 @@ exports.sendWeeklyOverdueTaskReminders = onSchedule({
         for (const token of tokens) {
           const eventDate = timestampToDate(event.startDateTime);
           const daysOverdue = eventDate ? Math.ceil((now - eventDate) / (1000 * 60 * 60 * 24)) : 0;
-          const isWebToken = token.startsWith('d:') || token.includes(':APA91');
-          const notifPayload = {
+          notifications.push({
             token,
+            notification: {
+              title: `Overdue Task: ${event.title}`,
+              body: `This task is ${daysOverdue} days overdue`,
+            },
             data: {
               type: 'task_overdue',
               eventId: eventDoc.id,
               daysOverdue: daysOverdue.toString(),
-              url: '/calendar',
-              title: `Overdue Task: ${event.title}`,
-              body: `This task is ${daysOverdue} days overdue`
+              url: '/calendar'
             },
             webpush: {
               notification: {
                 icon: '/favicon.ico'
               }
             }
-          };
-          if (!isWebToken) {
-            notifPayload.notification = {
-              title: `Overdue Task: ${event.title}`,
-              body: `This task is ${daysOverdue} days overdue`
-            };
-          }
-          notifications.push(notifPayload);
+          });
           recipientsMeta.push({ userId, token });
         }
       }
@@ -547,15 +536,16 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
       
       const tokens = await getAllUserTokens(userId);
       for (const token of tokens) {
-        const isWebToken = token.startsWith('d:') || token.includes(':APA91');
-        const notifPayload = {
+        notifications.push({
           token,
+          notification: {
+            title: `New Event Assigned: ${eventData.title}`,
+            body: `You have been assigned to this event`,
+          },
           data: {
             type: 'event_assigned',
             eventId: eventId,
             url: `/calendar`,
-            title: `New Event Assigned: ${eventData.title}`,
-            body: `You have been assigned to this event`
           },
           webpush: {
             fcmOptions: {
@@ -565,14 +555,7 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
               icon: '/favicon.ico'
             }
           }
-        };
-        if (!isWebToken) {
-          notifPayload.notification = {
-            title: `New Event Assigned: ${eventData.title}`,
-            body: `You have been assigned to this event`
-          };
-        }
-        notifications.push(notifPayload);
+        });
         recipientsMeta.push({ userId, token });
       }
     }
@@ -594,15 +577,16 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
       
       const tokens = await getAllUserTokens(userId);
       for (const token of tokens) {
-        const isWebToken = token.startsWith('d:') || token.includes(':APA91');
-        const notifPayload = {
+        notifications.push({
           token,
+          notification: {
+            title: `New Event Created: ${eventData.title}`,
+            body: `A new event has been created in the system`,
+          },
           data: {
             type: 'event_created',
             eventId: eventId,
             url: `/calendar`,
-            title: `New Event Created: ${eventData.title}`,
-            body: `A new event has been created in the system`
           },
           webpush: {
             fcmOptions: {
@@ -612,14 +596,7 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
               icon: '/favicon.ico'
             }
           }
-        };
-        if (!isWebToken) {
-          notifPayload.notification = {
-            title: `New Event Created: ${eventData.title}`,
-            body: `A new event has been created in the system`
-          };
-        }
-        notifications.push(notifPayload);
+        });
         recipientsMeta.push({ userId, token });
       }
     }

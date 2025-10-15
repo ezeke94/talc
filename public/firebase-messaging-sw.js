@@ -22,7 +22,10 @@ const DEDUP_WINDOW_MS = 10000; // 10 seconds window for deduplication
  */
 function generateNotificationId(payload) {
   const { type, eventId, url } = payload.data || {};
-  const { title, body } = payload.notification || {};
+  let { title, body } = payload.notification || {};
+  // Ensure title/body are always strings (never objects/JSON)
+  if (typeof title !== 'string') title = 'TALC Notification';
+  if (typeof body !== 'string') body = 'You have a new notification';
   
   // Create unique ID from notification characteristics
   const idParts = [
@@ -253,9 +256,11 @@ self.addEventListener('message', (event) => {
     }
 
     // Show notification using the same logic as background messages
-    let notificationTitle = title || 'TALC Notification';
+    let safeTitle = typeof title === 'string' ? title : 'TALC Notification';
+    let safeBody = typeof body === 'string' ? body : 'You have a new notification';
+    let notificationTitle = safeTitle || 'TALC Notification';
     let notificationOptions = {
-      body: body || 'You have a new notification',
+      body: safeBody || 'You have a new notification',
       icon: icon || '/favicon.ico',
       badge: '/favicon.ico',
       tag: `${type || 'general'}-${eventId || Date.now()}`,
