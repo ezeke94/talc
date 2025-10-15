@@ -3,8 +3,24 @@ service cloud.firestore {
   match /databases/{database}/documents {
     // Users: Admins manage all, users manage their own profile and notifications (updated 2025-10-10)
     match /users/{userId} {
-      allow read, write: if isAuthed();
-      // Devices subcollection: users can manage their own devices, admins can read all devices
+      // All authed users can read user profiles
+      allow read: if isAuthed();
+
+      // Create allowed for the user themselves or admin
+      allow create: if isSelf() || isAdmin();
+
+      // Delete only by admin
+      allow delete: if isAdmin();
+
+      // Update rules:
+      //  - Admins and Quality can update any fields
+      //  - The user can only update notification-related fields (fcmToken, notificationsEnabled, lastTokenUpdate)
+      allow update: if (
+        isAdmin() || isQuality() ||
+        (isSelf() && request.resource.data.diff(resource.data).changedKeys().hasOnly(['fcmToken', 'notificationsEnabled', 'lastTokenUpdate']))
+      );
+
+      // Devices subcollection: users can manage their own devices; admins can read all devices
       match /devices/{deviceId} {
         allow read: if isAuthed() && (request.auth.uid == userId || isAdmin());
         allow write: if isAuthed() && request.auth.uid == userId;

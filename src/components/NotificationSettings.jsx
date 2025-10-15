@@ -1,22 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getMessaging, getToken } from 'firebase/messaging';
 import { replaceAllDevicesWithToken } from '../utils/deviceManager';
-
-      };
-      const ok = await replaceAllDevicesWithToken(currentUser.uid, newToken, deviceData);
-      if (!ok) throw new Error('Failed to update device in Firestore');
-      setCurrentDeviceToken(newToken);
-      setNotificationsEnabled(true);
-      await loadDevices();
-      setErrorMsg('✅ Notification token refreshed!');
-      setTimeout(() => setErrorMsg(''), 4000);
-    } catch (e) {
-      setErrorMsg('Failed to refresh notification token: ' + (e?.message || e));
-    } finally {
-      setRefreshingToken(false);
-    }
-  };
-import React, { useState, useEffect } from 'react';
 import {
   Card,
   CardContent,
@@ -141,6 +125,41 @@ const NotificationSettings = ({ compact = false }) => {
     } finally {
       setLoadingDevices(false);
       console.log('NotificationSettings: Loading complete');
+    }
+  };
+
+  // Refresh token state
+  const [refreshingToken, setRefreshingToken] = useState(false);
+
+  // Force refresh FCM token and replace all devices
+  const handleRefreshToken = async () => {
+    if (!currentUser) return;
+    setRefreshingToken(true);
+    setErrorMsg("");
+    try {
+      const messaging = getMessaging();
+      // Force a new token
+      const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+      const newToken = await getToken(messaging, { vapidKey, forceRefresh: true });
+      if (!newToken) throw new Error('Failed to get new FCM token');
+      // Remove all old devices and add new one
+      const info = parseDeviceInfo(navigator.userAgent);
+      const deviceData = {
+        name: deviceName || `${info.os} - ${info.browser}`,
+        platform: navigator?.platform || 'web',
+        userAgent: navigator?.userAgent || '',
+      };
+      const ok = await replaceAllDevicesWithToken(currentUser.uid, newToken, deviceData);
+      if (!ok) throw new Error('Failed to update device in Firestore');
+      setCurrentDeviceToken(newToken);
+      setNotificationsEnabled(true);
+      await loadDevices();
+      setErrorMsg('✅ Notification token refreshed!');
+      setTimeout(() => setErrorMsg(''), 4000);
+    } catch (e) {
+      setErrorMsg('Failed to refresh notification token: ' + (e?.message || e));
+    } finally {
+      setRefreshingToken(false);
     }
   };
 
