@@ -21,6 +21,33 @@ const baseUrl = (process.env.FRONTEND_URL || 'https://kpitalc.netlify.app').repl
 const absIcon = `${baseUrl}/favicon.ico`;
 const absBadge = `${baseUrl}/favicon.ico`;
 
+// Firestore-based deduplication: log and skip if recently sent
+async function wasNotificationRecentlySent(userId, dedupKey, ttlSeconds = 3600) {
+  try {
+    const key = `${userId}-${dedupKey}`;
+    const ref = db.collection('_notificationLog').doc(key);
+    const snap = await ref.get();
+    if (snap.exists) {
+      const data = snap.data() || {};
+      const sentAt = data.sentAt?.toDate ? data.sentAt.toDate() : (data.sentAt ? new Date(data.sentAt) : null);
+      if (sentAt) {
+        const ageSec = (Date.now() - sentAt.getTime()) / 1000;
+        if (ageSec < ttlSeconds) {
+          return true;
+        }
+      } else {
+        // If no timestamp, treat as duplicate to be safe
+        return true;
+      }
+    }
+    await ref.set({ userId, dedupKey, sentAt: new Date() }, { merge: true });
+    return false;
+  } catch (e) {
+    console.error('wasNotificationRecentlySent error', e);
+    return false; // fail open
+  }
+}
+
 // Helper: fetch all device tokens for a user (devices subcollection with fallback to fcmToken)
 async function getAllUserTokens(userId) {
   const tokens = new Set();
@@ -110,6 +137,12 @@ exports.sendMonthlyOperationalSummary = onSchedule({
     for (const doc of allUsersSnapshot.docs) {
       const userData = doc.data();
       const tokens = await getAllUserTokens(doc.id);
+      // Dedup key: monthly summary for lastMonth (YYYY-MM)
+      const monthKey = `${lastMonth.getUTCFullYear()}-${String(lastMonth.getUTCMonth() + 1).padStart(2, '0')}`;
+      const dedupKey = `monthly_summary_${monthKey}`;
+      if (await wasNotificationRecentlySent(doc.id, dedupKey, 7 * 24 * 3600)) {
+        continue; // already sent this monthly summary to the user
+      }
       
       for (const token of tokens) {
         const monthName = lastMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
@@ -211,6 +244,14 @@ exports.sendCriticalSystemAlert = onSchedule({
         const userData = doc.data();
         const tokens = await getAllUserTokens(doc.id);
         
+        // Dedup per 6-hour window (keyed by start hour)
+        const windowKey = new Date(sixHoursAgo);
+        windowKey.setUTCMinutes(0, 0, 0);
+        const dedupKey = `system_alert_${windowKey.toISOString().slice(0,13)}`;
+        if (await wasNotificationRecentlySent(doc.id, dedupKey, 6 * 3600)) {
+          continue;
+        }
+
         for (const token of tokens) {
           const title = `🚨 System Alert`;
           const body = `${errorCount} errors detected in the last 6 hours`;

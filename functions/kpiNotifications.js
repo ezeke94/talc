@@ -21,6 +21,30 @@ const baseUrl = (process.env.FRONTEND_URL || 'https://kpitalc.netlify.app').repl
 const absIcon = `${baseUrl}/favicon.ico`;
 const absBadge = `${baseUrl}/favicon.ico`;
 
+// Firestore-based deduplication helper
+async function wasNotificationRecentlySent(userId, dedupKey, ttlSeconds = 24 * 3600) {
+  try {
+    const key = `${userId}-${dedupKey}`;
+    const ref = db.collection('_notificationLog').doc(key);
+    const snap = await ref.get();
+    if (snap.exists) {
+      const data = snap.data() || {};
+      const sentAt = data.sentAt?.toDate ? data.sentAt.toDate() : (data.sentAt ? new Date(data.sentAt) : null);
+      if (sentAt) {
+        const ageSec = (Date.now() - sentAt.getTime()) / 1000;
+        if (ageSec < ttlSeconds) return true;
+      } else {
+        return true;
+      }
+    }
+    await ref.set({ userId, dedupKey, sentAt: new Date() }, { merge: true });
+    return false;
+  } catch (e) {
+    console.error('wasNotificationRecentlySent error', e);
+    return false;
+  }
+}
+
 // Helper: fetch all device tokens for a user (devices subcollection with fallback to fcmToken)
 async function getAllUserTokens(userId) {
   const tokens = new Set();
@@ -190,6 +214,12 @@ exports.sendWeeklyKPIReminders = onSchedule({
 
       const mentorCount = new Set(pendingList.map(p => p.mentorId)).size;
       const formCount = pendingList.length;
+      // Dedup per day per evaluator for KPI reminders
+      const todayKey = new Date();
+      todayKey.setUTCHours(0,0,0,0);
+      const dedupKey = `kpi_reminder_${todayKey.toISOString().slice(0,10)}`;
+      const skipEvaluator = await wasNotificationRecentlySent(evaluatorId, dedupKey, 24 * 3600);
+      if (skipEvaluator) continue;
       
       // Send to all devices for this evaluator
       for (const token of evaluatorData.tokens) {
