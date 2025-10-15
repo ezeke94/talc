@@ -116,12 +116,7 @@ self.addEventListener('fetch', event => {
 });
 
 // Notification logic placeholder
-self.addEventListener('push', event => {
-  const data = event.data ? event.data.text() : 'New notification';
-  event.waitUntil(
-    self.registration.showNotification('TALC Management', {
-      body: data,
-      icon: '/logo192.png',
-    })
-  );
-});
+// IMPORTANT: Do not handle 'push' events here.
+// Firebase Cloud Messaging notifications are handled exclusively by
+// '/firebase-messaging-sw.js'. Having a generic push handler here can cause
+// duplicate notifications (one from FCM SW and one from this SW).

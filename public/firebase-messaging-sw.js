@@ -243,7 +243,14 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'NOTIFICATION_RECEIVED') {
     const payload = event.data.payload;
     const { title, body, icon } = payload.notification || {};
-    const { type, url } = payload.data || {};
+    const { type, url, eventId } = payload.data || {};
+
+    // Generate unique ID and check for duplicates (foreground relay)
+    const notificationId = generateNotificationId(payload);
+    if (isDuplicateNotification(notificationId)) {
+      console.log('[SW] Foreground relay duplicate blocked');
+      return;
+    }
 
     // Show notification using the same logic as background messages
     let notificationTitle = title || 'TALC Notification';
@@ -251,10 +258,12 @@ self.addEventListener('message', (event) => {
       body: body || 'You have a new notification',
       icon: icon || '/favicon.ico',
       badge: '/favicon.ico',
-      tag: type || 'general',
+      tag: `${type || 'general'}-${eventId || Date.now()}`,
       data: {
         url: url || '/',
         type: type,
+        eventId: eventId,
+        notificationId: notificationId,
         timestamp: Date.now()
       },
       requireInteraction: false,
