@@ -167,45 +167,34 @@ export async function setupNotifications(currentUser, deviceName = null) {
     // so they appear as system notifications. Only show custom in-app UI for iOS in certain cases.
     onMessage(msg, (payload) => {
       console.log('[Foreground] Message received');
-      
+      // If service worker is active, skip foreground notification to avoid duplicate
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        console.log('[Foreground] Service worker is active, skipping foreground notification to avoid duplicate.');
+        return; // Service worker will handle notification
+      }
       // Check if document is actually visible (not in background tab)
       if (document.hidden || document.visibilityState !== 'visible') {
         console.log('[Foreground] Document not visible, letting service worker handle it');
         return; // Let service worker handle it
       }
-      
       console.log('[Foreground] Document is visible, handling notification in foreground');
-      
       // Generate notification ID
       const notificationId = generateNotificationId(payload);
-      
       // Check for duplicates
       if (isDuplicateNotification(notificationId, 'foreground', payload)) {
         console.log('[Foreground] Duplicate blocked');
         return; // Don't show duplicate
       }
-      
       // Save to history
       saveNotificationToHistory({
         ...payload,
         id: notificationId,
         source: 'foreground'
       });
-      
-      // Let service worker handle it for system notifications on Android
-      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-        // Forward to service worker to display as system notification
-        navigator.serviceWorker.controller.postMessage({
-          type: 'NOTIFICATION_RECEIVED',
-          payload: payload,
-          notificationId: notificationId
-        });
-      } else {
-        // Fallback: show custom notification if no service worker
-        const { title, body, icon } = payload.notification || {};
-        if (title) {
-          showCustomNotification(title, body, icon, payload.data);
-        }
+      // Show custom notification in foreground only if no service worker
+      const { title, body, icon } = payload.notification || {};
+      if (title) {
+        showCustomNotification(title, body, icon, payload.data);
       }
     });
     

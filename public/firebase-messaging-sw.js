@@ -92,7 +92,7 @@ function saveNotificationToHistory(notificationId, timestamp) {
 
 // Handle background messages
 messaging.onBackgroundMessage((payload) => {
-  console.log('[SW] Background message received');
+  console.log('[SW] Background message received:', JSON.stringify(payload));
   
   // Check if any client (browser tab) is currently visible/focused
   // If so, let the foreground handler deal with it
@@ -108,11 +108,12 @@ messaging.onBackgroundMessage((payload) => {
     console.log('[SW] App in background - showing background notification');
     
     // Generate unique ID for this notification
-    const notificationId = generateNotificationId(payload);
+  const notificationId = generateNotificationId(payload);
+  console.log('[SW] Generated notificationId:', notificationId);
     
     // Check for duplicates
     if (isDuplicateNotification(notificationId)) {
-      console.log('[SW] Duplicate blocked');
+      console.log('[SW] Duplicate blocked for ID:', notificationId);
       return Promise.resolve(); // Don't show duplicate
     }
     
@@ -193,6 +194,7 @@ messaging.onBackgroundMessage((payload) => {
   }
 
   // Show the notification
+  console.log('[SW] Showing notification:', notificationTitle, notificationOptions);
   return self.registration.showNotification(notificationTitle, notificationOptions);
   });
 });
