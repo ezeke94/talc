@@ -104,6 +104,13 @@ messaging.onBackgroundMessage((payload) => {
       return Promise.resolve(); // Let foreground handler show it
     }
     
+    // If message contains a `notification` payload, many browsers (via FCM) will auto-display it.
+    // To avoid duplicates, do NOT call showNotification in that case.
+    if (payload && payload.notification && (payload.notification.title || payload.notification.body)) {
+      console.log('[SW] Notification field present in payload - deferring to FCM/browser auto-display to avoid duplicates');
+      return Promise.resolve();
+    }
+
     // App is not visible, proceed with background notification
     console.log('[SW] App in background - showing background notification');
     
