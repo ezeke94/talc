@@ -126,7 +126,7 @@ messaging.onBackgroundMessage((payload) => {
     body: body || 'You have a new notification',
     icon: icon || '/favicon.ico',
     badge: '/favicon.ico',
-    tag: `${type || 'general'}-${eventId || Date.now()}`, // Unique tag per notification
+    tag: notificationId, // Stable tag to dedupe
     data: {
       url: url || '/',
       type: type,
@@ -135,7 +135,8 @@ messaging.onBackgroundMessage((payload) => {
       timestamp: Date.now()
     },
     requireInteraction: false, // Don't require user interaction for most notifications
-    silent: false
+    silent: false,
+    renotify: false
   };
 
   // Customize based on notification type
@@ -193,9 +194,16 @@ messaging.onBackgroundMessage((payload) => {
       break;
   }
 
-  // Show the notification
-  console.log('[SW] Showing notification:', notificationTitle, notificationOptions);
-  return self.registration.showNotification(notificationTitle, notificationOptions);
+  // Show the notification (close any existing with same tag first)
+  return self.registration.getNotifications({ tag: notificationOptions.tag, includeTriggered: true })
+    .then(existing => {
+      if (existing && existing.length) {
+        console.log('[SW] Closing existing notifications with same tag:', existing.length);
+        existing.forEach(n => n.close());
+      }
+      console.log('[SW] Showing notification:', notificationTitle, notificationOptions);
+      return self.registration.showNotification(notificationTitle, notificationOptions);
+    });
   });
 });
 
@@ -265,7 +273,7 @@ self.addEventListener('message', (event) => {
       body: safeBody || 'You have a new notification',
       icon: icon || '/favicon.ico',
       badge: '/favicon.ico',
-      tag: `${type || 'general'}-${eventId || Date.now()}`,
+      tag: notificationId,
       data: {
         url: url || '/',
         type: type,
@@ -274,7 +282,8 @@ self.addEventListener('message', (event) => {
         timestamp: Date.now()
       },
       requireInteraction: false,
-      silent: false
+      silent: false,
+      renotify: false
     };
 
     // Customize based on notification type (same as background handler)
