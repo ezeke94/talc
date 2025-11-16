@@ -115,6 +115,7 @@ const Layout = () => {
     const showUserManagement = ['admin', 'quality'].includes(normalizedRole);
     const showDashboards = ['admin', 'quality'].includes(normalizedRole);
     const canRecordKPIs = ['admin', 'quality', 'evaluator'].includes(normalizedRole);
+    const canViewProjects = ['admin', 'quality', 'coordinator'].includes(normalizedRole);
     
     // Organized menu structure
     // hardReload removed in favor of Reset App Cache which handles SW + caches
@@ -147,7 +148,7 @@ const Layout = () => {
     
     const standaloneItems = [
         { text: 'Calendar', path: '/calendar' },
-        { text: 'Boards', path: '/boards' },
+        ...(canViewProjects ? [{ text: 'Boards', path: '/boards' }] : []),
         ...(canRecordKPIs ? [{ text: 'Record KPIs', path: '/mentors' }] : [])
     ];
 

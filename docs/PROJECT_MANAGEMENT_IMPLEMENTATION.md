@@ -16,16 +16,19 @@ This implementation adds a comprehensive project management system to the TALC M
 - **Team Assignment**: Assign project owners and team members
 - **Progress Tracking**: Visual progress indicators and completion percentages
 - **Priority & Status Management**: Priority levels (High/Medium/Low) and status tracking
-- **Dependencies**: Project dependency tracking
+- **Dependencies**: Project dependency relationships are stored in project documents, but interactive linking via the Gantt chart has been removed from the UI. Update dependencies directly in Firestore or via import.
 - **Reminders**: Configurable reminder notifications
 - **Tags**: Flexible tagging system for project categorization
 
 ### 2. Gantt Chart View (Projects Page)
 - **Interactive Timeline**: Drag and drop to adjust project timelines
 - **Visual Progress**: Color-coded status indicators
-- **Time Range Selection**: View projects over 30 days to 1 year
+- **Time Range Selection**: View projects over 1 month to 1 year (30 days, 90 days, 180 days, 365 days)
+  - 1 Month & 3 Months will show a centered window around today and will not auto-expand to include outlying projects.
+  - 6 Months & 1 Year expand to include all projects so you can see project context.
 - **Project Details**: Click on any project for detailed information
 - **Mobile Responsive**: Optimized for mobile and tablet viewing
+ - **Timeline Scrolling & Zooming**: When viewing 1/3/6 month views, the timeline can be scrolled horizontally; use header pan and zoom buttons or Ctrl/Cmd + wheel to zoom in/out. Use Reset to center on today.
 
 ### 3. Kanban Board View (Boards Page)
 - **Three Column Layout**: Planning → In Progress → Completed
@@ -166,7 +169,7 @@ match /projects/{projectId} {
 4. **Seed Sample Data**:
    - Navigate to existing Seed Data page
    - Click "Seed Projects" button
-   - This adds 5 sample projects with full data
+  - This adds 6 sample projects with full data
 
 ### For Coordinators:
 - **View-Only Access**: Can view both Projects and Boards

@@ -1,27 +1,4 @@
-// Remove a dependency between two projects
-  const handleRemoveDependency = async (sourceProjectId, targetProjectId) => {
-    try {
-      const targetProject = projects.find(p => p.id === targetProjectId);
-      if (!targetProject) return;
-      const updatedDependencies = (targetProject.dependencies || []).filter(id => id !== sourceProjectId);
-      await updateDoc(doc(db, 'projects', targetProjectId), {
-        dependencies: updatedDependencies,
-        updatedAt: Timestamp.now()
-      });
-      setSnackbar({
-        open: true,
-        message: 'Dependency removed successfully!',
-        severity: 'success'
-      });
-    } catch (error) {
-      console.error('Error removing dependency:', error);
-      setSnackbar({
-        open: true,
-        message: 'Error removing dependency: ' + error.message,
-        severity: 'error'
-      });
-    }
-  };
+// Dependency management via UI has been removed. Use Firestore directly for now.
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Container,
@@ -52,13 +29,15 @@ import {
   Autocomplete,
   Switch,
   FormControlLabel,
-  Tabs,
-  Tab,
   List,
   ListItem,
   ListItemText,
   ListItemSecondaryAction,
-  Checkbox
+  Checkbox,
+  Avatar,
+  AvatarGroup,
+  ListItemIcon,
+  Divider
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -70,8 +49,18 @@ import {
   Group as GroupIcon,
   DateRange as DateRangeIcon,
   Save as SaveIcon,
-  Close as CloseIcon
+  Close as CloseIcon,
+  CheckCircle as CheckCircleIcon,
+  Schedule as ScheduleIcon,
+  Warning as WarningIcon,
+  RadioButtonUnchecked as RadioButtonUncheckedIcon,
+  PauseCircleOutline as PauseCircleOutlineIcon
 } from '@mui/icons-material';
+import ZoomInIcon from '@mui/icons-material/ZoomIn';
+import ZoomOutIcon from '@mui/icons-material/ZoomOut';
+import ReplayIcon from '@mui/icons-material/Replay';
+import ArrowBackIosIcon from '@mui/icons-material/ArrowBackIos';
+import ArrowForwardIosIcon from '@mui/icons-material/ArrowForwardIos';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -95,11 +84,11 @@ const Projects = () => {
   const { currentUser } = useAuth();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  const NAME_COL_WIDTH = isMobile ? 120 : 250;
   
   // Check user permissions
   const userRole = currentUser?.role?.toLowerCase() || '';
   const canEdit = ['admin', 'quality'].includes(userRole);
-  const canView = ['admin', 'quality', 'coordinator'].includes(userRole);
   
   // State management
   const [projects, setProjects] = useState([]);
@@ -110,11 +99,10 @@ const Projects = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState('view'); // 'view', 'add', 'edit'
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  const [ganttTimeRange, setGanttTimeRange] = useState(90); // days
-  const [currentTab, setCurrentTab] = useState(0);
+  // Default to 1 year view (365 days) per user request
+  const [ganttTimeRange, setGanttTimeRange] = useState(365); // days
   const [draggedProject, setDraggedProject] = useState(null);
-  const [connectionMode, setConnectionMode] = useState(false);
-  const [sourceProject, setSourceProject] = useState(null);
+  // Connection mode removed — dependency drawing is now handled outside UI
 
   // Form state
   const [formData, setFormData] = useState({
@@ -133,21 +121,7 @@ const Projects = () => {
     tasks: []
   });
 
-  // Check access permission
-  if (!canView) {
-    return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Paper elevation={3} sx={{ p: 4, textAlign: 'center' }}>
-          <Typography variant="h5" color="error" gutterBottom>
-            Access Denied
-          </Typography>
-          <Typography variant="body1" color="text.secondary">
-            You don't have permission to view projects. Only Admin, Quality, and Coordinator roles can access this page.
-          </Typography>
-        </Paper>
-      </Container>
-    );
-  }
+  // Page visibility is enforced through the navigation; no role check required here.
 
   // Fetch data
   useEffect(() => {
@@ -217,12 +191,41 @@ const Projects = () => {
   }, []);
 
   // Gantt chart calculations
+  // Helper to calculate ISO week number and roll it over at 52
+  const getIsoWeekNumber = (date) => {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+    // ISO week date weeks start on Monday, so correct day number
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+    // Normalize to 1..52
+    return ((weekNo - 1) % 52) + 1;
+  };
+  const scrollRef = React.useRef(null);
+  const timelineRef = React.useRef(null);
+  // Preferred scaling for each time-range so zooming feels meaningful
+  const SCALE_BY_RANGE = {
+    30: 22,
+    90: 12,
+    180: 6,
+    365: 3
+  };
+
+  const DEFAULT_PIXELS_PER_DAY = SCALE_BY_RANGE[ganttTimeRange] || 12; // default to current range
+  const [scale, setScale] = useState(DEFAULT_PIXELS_PER_DAY);
+  const scaleRef = React.useRef(scale);
+  useEffect(() => { scaleRef.current = scale; }, [scale]);
+  // (SCALE_BY_RANGE moved above sequence to initialize scale correctly)
+  const MIN_SCALE = Math.min(...Object.values(SCALE_BY_RANGE));
+  const MAX_SCALE = Math.max(...Object.values(SCALE_BY_RANGE));
   const ganttData = useMemo(() => {
     if (projects.length === 0) {
       const now = new Date();
       const startDate = new Date(now.getTime() - (ganttTimeRange / 2) * 24 * 60 * 60 * 1000);
       const endDate = new Date(now.getTime() + (ganttTimeRange / 2) * 24 * 60 * 60 * 1000);
-      return { projects: [], timePeriods: [], startDate, endDate, totalDays: 0 };
+      const totalDays = (endDate - startDate) / (24 * 60 * 60 * 1000);
+      return { projects: [], timePeriods: [], startDate, endDate, totalDays };
     }
     
     // Calculate the actual range needed to show all projects
@@ -230,15 +233,15 @@ const Projects = () => {
     const actualStartDate = new Date(Math.min(...projectDates));
     const actualEndDate = new Date(Math.max(...projectDates));
     
-    // Use either the calculated range or the user-selected range, whichever is larger
+    // Load the full timeline (one year before and after now) regardless of selected view
     const now = new Date();
-    const baseStartDate = new Date(now.getTime() - (ganttTimeRange / 2) * 24 * 60 * 60 * 1000);
-    const baseEndDate = new Date(now.getTime() + (ganttTimeRange / 2) * 24 * 60 * 60 * 1000);
-    
-    // Expand the range to include all projects with some padding
+    const yearDays = 365 * 24 * 60 * 60 * 1000;
+    const fullStartDate = new Date(now.getTime() - yearDays);
+    const fullEndDate = new Date(now.getTime() + yearDays);
+    // We will render projects across the full two-year span and let the UI scroll/zoom
     const padding = 7 * 24 * 60 * 60 * 1000; // 7 days padding
-    const startDate = new Date(Math.min(actualStartDate.getTime() - padding, baseStartDate.getTime()));
-    const endDate = new Date(Math.max(actualEndDate.getTime() + padding, baseEndDate.getTime()));
+    const startDate = new Date(Math.min(actualStartDate.getTime() - padding, fullStartDate.getTime()));
+    const endDate = new Date(Math.max(actualEndDate.getTime() + padding, fullEndDate.getTime()));
     
     // Generate time periods for the header
     const timePeriods = [];
@@ -252,14 +255,14 @@ const Projects = () => {
       timePeriods.push({
         start: periodStart,
         end: periodEnd,
-        label: ganttTimeRange <= 60 
-          ? `Week ${i + 1}` 
-          : periodStart.toLocaleDateString('en-US', { month: 'short', year: ganttTimeRange > 180 ? '2-digit' : undefined }),
+        label: ganttTimeRange <= 60
+          ? `Week ${getIsoWeekNumber(periodStart)} ${periodStart.toLocaleDateString('en-US', { month: 'short' })}`
+          : periodStart.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
         width: (ganttTimeRange <= 60 ? 7 : 30) / totalDays * 100
       });
     }
     
-    const projectsData = projects.map(project => {
+  const projectsData = projects.map(project => {
       const projectStart = new Date(project.startDate);
       const projectEnd = new Date(project.endDate);
       
@@ -284,6 +287,145 @@ const Projects = () => {
       totalDays
     };
   }, [projects, ganttTimeRange]);
+
+  // Add wheel gesture to zoom in/out when Ctrl is pressed
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container) return;
+
+    // Continuous zoom while Ctrl/Cmd + wheel is pressed. We will update scale on each wheel
+    // and debounce to snap to discrete ranges once wheel stops.
+    let lastCenterRatio = 0.5;
+    const wheelTimer = { id: null };
+
+  let wheelTimerID = null;
+  const onWheel = (e) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+
+      // compute center ratio so when scaling we preserve the current viewport center
+      const oldWidth = timelineRef.current?.clientWidth || (ganttData?.totalDays || 90) * scale;
+      lastCenterRatio = oldWidth > 0 ? (container.scrollLeft + container.clientWidth / 2) / oldWidth : 0.5;
+
+      // compute new scale using an exponential factor for smooth zoom
+      const zoomSpeed = 0.0025; // smaller = slower zoom
+      const factor = Math.exp(-e.deltaY * zoomSpeed);
+  const newScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, scaleRef.current * factor));
+      setScale(newScale);
+
+      // Immediately reposition so zoom feels anchored to viewport center
+      requestAnimationFrame(() => {
+  const newWidth = (ganttData?.totalDays || 90) * newScale;
+        const left = Math.max(0, Math.min(1, lastCenterRatio)) * newWidth - container.clientWidth / 2;
+        container.scrollLeft = Math.max(0, Math.round(left));
+      });
+
+      // debounce and snap to nearest range
+  if (wheelTimerID) clearTimeout(wheelTimerID);
+  wheelTimerID = setTimeout(() => {
+        // snap to nearest scale (which maps to ganttTimeRange)
+        const ranges = Object.keys(SCALE_BY_RANGE).map(k => parseInt(k, 10));
+        let nearest = ranges[0];
+        let nearestDiff = Math.abs(SCALE_BY_RANGE[nearest] - newScale);
+        for (const r of ranges) {
+          const diff = Math.abs(SCALE_BY_RANGE[r] - newScale);
+          if (diff < nearestDiff) { nearest = r; nearestDiff = diff; }
+        }
+        setGanttTimeRange(nearest);
+        setScale(SCALE_BY_RANGE[nearest]);
+        wheelTimerID = null;
+      }, 250);
+    };
+
+    container.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      container.removeEventListener('wheel', onWheel);
+      if (wheelTimerID) clearTimeout(wheelTimerID);
+    };
+  }, [ganttTimeRange, ganttData?.totalDays]);
+
+  // Helpers for zoom/pan/reset
+  const TIME_RANGES = [30, 90, 180, 365];
+
+  const handleZoomIn = () => {
+    const idx = TIME_RANGES.indexOf(ganttTimeRange);
+    if (idx > 0) setGanttTimeRange(TIME_RANGES[idx - 1]);
+  };
+
+  const handleZoomOut = () => {
+    const idx = TIME_RANGES.indexOf(ganttTimeRange);
+    if (idx < TIME_RANGES.length - 1) setGanttTimeRange(TIME_RANGES[idx + 1]);
+  };
+
+  // Preserve viewport center on zoom and update scale
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || !timelineRef.current) {
+      setScale(SCALE_BY_RANGE[ganttTimeRange] || DEFAULT_PIXELS_PER_DAY);
+      return;
+    }
+
+    const oldWidth = timelineRef.current.clientWidth;
+    const centerLeft = container.scrollLeft + container.clientWidth / 2;
+    const centerRatio = oldWidth > 0 ? centerLeft / oldWidth : 0.5;
+
+    const newScale = SCALE_BY_RANGE[ganttTimeRange] || DEFAULT_PIXELS_PER_DAY;
+    setScale(newScale);
+
+    // Wait for layout to recalculate new width and then adjust scroll to keep center
+    requestAnimationFrame(() => {
+      const newWidth = (ganttData?.totalDays || 90) * (newScale);
+      const newCenterLeft = Math.max(0, Math.min(1, centerRatio)) * newWidth;
+      container.scrollTo({ left: Math.max(0, newCenterLeft - container.clientWidth / 2), behavior: 'smooth' });
+    });
+  }, [ganttTimeRange, ganttData?.totalDays]);
+
+  const resetToToday = () => {
+    if (!scrollRef.current || !timelineRef.current || !ganttData?.totalDays) return;
+    const now = new Date();
+    const todayOffset = ((now - ganttData.startDate) / (24 * 60 * 60 * 1000)) / ganttData.totalDays;
+    const contentWidth = timelineRef.current.clientWidth;
+    const leftPx = Math.max(0, Math.min(1, todayOffset)) * contentWidth;
+    const container = scrollRef.current;
+    container.scrollTo({ left: Math.max(0, leftPx - container.clientWidth / 2), behavior: 'smooth' });
+  };
+
+  // Ensure on the very first load we center the timeline on today so the default view
+  // shows the current date in the middle (user-requested default behavior).
+  const hasCenteredOnMountRef = React.useRef(false);
+  useEffect(() => {
+    if (hasCenteredOnMountRef.current) return;
+    if (!ganttData?.totalDays) return;
+
+    // Slight delay to allow DOM widths to be calculated so centering is accurate
+    setTimeout(() => {
+      resetToToday();
+      hasCenteredOnMountRef.current = true;
+    }, 80);
+  }, [ganttData?.totalDays]);
+
+  // On mount and when ganttTimeRange changes, center the visible viewport to the selected range around today
+  // Remove auto reset on zoom — zoom preserves viewport center.
+
+  // Helper functions for task display
+  const getTaskStatusIcon = (status) => {
+    switch (status?.toLowerCase()) {
+      case 'completed':
+        return <CheckCircleIcon color="success" fontSize="small" />;
+      case 'in progress':
+        return <ScheduleIcon color="primary" fontSize="small" />;
+      case 'planning':
+        return <TimelineIcon color="action" fontSize="small" />;
+      default:
+        return <AssignmentIcon color="disabled" fontSize="small" />;
+    }
+  };
+
+  const isTaskOverdue = (task) => {
+    if (!task?.dueDate || (task.status || '').toLowerCase() === 'completed') return false;
+    const due = task.dueDate?.toDate ? task.dueDate.toDate() : task.dueDate;
+    return new Date(due) < new Date();
+  };
 
   // Handle project operations
   const handleAddProject = () => {
@@ -398,92 +540,12 @@ const Projects = () => {
     }
   };
 
-  const handleConnectProjects = async (sourceProjectId, targetProjectId) => {
-    try {
-      const sourceProject = projects.find(p => p.id === sourceProjectId);
-      const targetProject = projects.find(p => p.id === targetProjectId);
-      
-      if (!sourceProject || !targetProject) return;
-
-      // Update target project to start after source project ends
-      const newStartDate = new Date(sourceProject.endDate);
-      const currentDuration = targetProject.endDate - targetProject.startDate;
-      const newEndDate = new Date(newStartDate.getTime() + currentDuration);
-
-      // Update dependencies
-      const updatedDependencies = [...(targetProject.dependencies || [])];
-      if (!updatedDependencies.includes(sourceProjectId)) {
-        updatedDependencies.push(sourceProjectId);
-      }
-
-      await updateDoc(doc(db, 'projects', targetProjectId), {
-        startDate: Timestamp.fromDate(newStartDate),
-        endDate: Timestamp.fromDate(newEndDate),
-        dependencies: updatedDependencies,
-        updatedAt: Timestamp.now()
-      });
-
-      setSnackbar({
-        open: true,
-        message: `"${targetProject.name}" has been rescheduled to start after "${sourceProject.name}" ends`,
-        severity: 'success'
-      });
-    } catch (error) {
-      console.error('Error connecting projects:', error);
-      setSnackbar({
-        open: true,
-        message: 'Error connecting projects: ' + error.message,
-        severity: 'error'
-      });
-    }
-  };
+  // Project connection functionality removed — scheduling via dependencies is no longer supported in the UI.
 
   // Connection handlers
-  const handleConnectionStart = (projectId, nodeType) => {
-    if (connectionMode && sourceProject) {
-      // If already in connection mode and clicking a different project, connect them
-      if (sourceProject.id !== projectId) {
-        handleConnectProjects(sourceProject.id, projectId);
-        setConnectionMode(false);
-        setSourceProject(null);
-      } else {
-        // Cancel connection mode if clicking the same project
-        setConnectionMode(false);
-        setSourceProject(null);
-      }
-    } else {
-      // Start connection mode
-      const project = projects.find(p => p.id === projectId);
-      setConnectionMode(true);
-      setSourceProject(project);
-      setSnackbar({
-        open: true,
-        message: `Select the target project to reschedule after "${project.name}" ends`,
-        severity: 'info'
-      });
-    }
-  };
+  // Connection UI removed — the functions for starting/ending connections are deprecated.
 
-  const handleConnectionEnd = (projectId, nodeType) => {
-    if (connectionMode && sourceProject && sourceProject.id !== projectId) {
-      // Connect the source project to this target project
-      handleConnectProjects(sourceProject.id, projectId);
-      setConnectionMode(false);
-      setSourceProject(null);
-    } else if (connectionMode && sourceProject && sourceProject.id === projectId) {
-      // Cancel connection mode if clicking the same project
-      setConnectionMode(false);
-      setSourceProject(null);
-      setSnackbar({
-        open: true,
-        message: 'Connection cancelled',
-        severity: 'info'
-      });
-    } else {
-      // Start connection mode from end node
-      handleConnectionStart(projectId, nodeType);
-    }
-  };
+  // Connection End handler removed (no-op)
 
   // Render Gantt Chart
   const renderGanttChart = () => (
@@ -492,32 +554,32 @@ const Projects = () => {
         <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <TimelineIcon />
           Project Timeline
-          <Tooltip 
-            title={
-              <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-                  Project Dependencies
-                </Typography>
-                <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
-                  • Click the blue dot (start) or orange dot (end) on any project bar
-                </Typography>
-                <Typography variant="caption" display="block" sx={{ mb: 0.5 }}>
-                  • Then click on another project to create a dependency
-                </Typography>
-                <Typography variant="caption" display="block">
-                  • The target project will be rescheduled to start after the source project ends (keeping its duration)
-                </Typography>
-              </Box>
-            }
-            arrow
-            placement="bottom-start"
-          >
-            <IconButton size="small" sx={{ ml: 1 }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,17A1.5,1.5 0 0,1 10.5,15.5A1.5,1.5 0 0,1 12,14A1.5,1.5 0 0,1 13.5,15.5A1.5,1.5 0 0,1 12,17M12,10.5A1.5,1.5 0 0,1 10.5,9A1.5,1.5 0 0,1 12,7.5A1.5,1.5 0 0,1 13.5,9A1.5,1.5 0 0,1 12,10.5Z"/>
-              </svg>
+          {/* Header controls: pan, reset, zoom */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <IconButton size="small" onClick={() => {
+              if (timelineRef.current && scrollRef.current) {
+                scrollRef.current.scrollBy({ left: -Math.round(scrollRef.current.clientWidth * 0.25), behavior: 'smooth' });
+              }
+            }}>
+              <ArrowBackIosIcon />
             </IconButton>
-          </Tooltip>
+            <IconButton size="small" onClick={() => {
+              if (timelineRef.current && scrollRef.current) {
+                scrollRef.current.scrollBy({ left: Math.round(scrollRef.current.clientWidth * 0.25), behavior: 'smooth' });
+              }
+            }}>
+              <ArrowForwardIosIcon />
+            </IconButton>
+            <IconButton size="small" onClick={() => resetToToday()}>
+              <ReplayIcon />
+            </IconButton>
+            <IconButton size="small" onClick={() => handleZoomIn()}>
+              <ZoomInIcon />
+            </IconButton>
+            <IconButton size="small" onClick={() => handleZoomOut()}>
+              <ZoomOutIcon />
+            </IconButton>
+          </Box>
         </Typography>
         <FormControl size="small" sx={{ minWidth: 120 }}>
           <InputLabel>Time Range</InputLabel>
@@ -526,44 +588,19 @@ const Projects = () => {
             onChange={(e) => setGanttTimeRange(e.target.value)}
             label="Time Range"
           >
-            <MenuItem value={30}>30 Days</MenuItem>
-            <MenuItem value={60}>60 Days</MenuItem>
-            <MenuItem value={90}>90 Days</MenuItem>
+            <MenuItem value={30}>1 Month</MenuItem>
+            <MenuItem value={90}>3 Months</MenuItem>
             <MenuItem value={180}>6 Months</MenuItem>
             <MenuItem value={365}>1 Year</MenuItem>
           </Select>
         </FormControl>
       </Box>
       
-      {/* Connection Mode Indicator */}
-      {connectionMode && sourceProject && (
-        <Alert 
-          severity="info" 
-          sx={{ mb: 2 }}
-          action={
-            <IconButton
-              color="inherit"
-              size="small"
-              onClick={() => {
-                setConnectionMode(false);
-                setSourceProject(null);
-              }}
-            >
-              <CloseIcon fontSize="inherit" />
-            </IconButton>
-          }
-        >
-          <strong>Dependency Mode:</strong> Click on any project's connection node to schedule it after "{sourceProject.name}" ends.
-          <br />
-          <Typography variant="caption" component="span">
-            The target project will be rescheduled to start when "{sourceProject.name}" finishes, maintaining its original duration.
-          </Typography>
-        </Alert>
-      )}
+      {/* Connection/Dependency mode removed from UI */}
       
-      <Box sx={{ overflowX: 'auto', minHeight: isMobile ? 300 : 400, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+  <Box ref={scrollRef} sx={{ overflowX: 'auto', minHeight: isMobile ? 300 : 400, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
         {/* Gantt Chart Container */}
-        <Box sx={{ minWidth: isMobile ? 400 : 800, height: '100%' }}>
+  <Box ref={timelineRef} sx={{ minWidth: isMobile ? 400 : 800, height: '100%', width: Math.max(isMobile ? 400 : 800, (ganttData?.totalDays || 90) * scale) }}>
           
           {/* Header Row - Time Periods */}
           <Box sx={{ 
@@ -578,14 +615,18 @@ const Projects = () => {
           }}>
             {/* Project Name Column Header */}
             <Box sx={{ 
-              width: isMobile ? 120 : 250, 
+              width: NAME_COL_WIDTH,
+              position: 'sticky',
+              left: 0,
+              top: 0,
+              zIndex: 12,
+              bgcolor: 'grey.100',
               p: isMobile ? 0.5 : 2, 
               borderRight: '1px solid', 
               borderColor: 'divider',
               display: 'flex',
               alignItems: 'center',
               fontWeight: 600,
-              bgcolor: 'grey.100'
             }}>
               <Typography variant={isMobile ? "caption" : "subtitle1"} sx={{ fontWeight: 600, fontSize: isMobile ? '0.7rem' : '1rem' }}>
                 Projects
@@ -632,7 +673,12 @@ const Projects = () => {
               >
                 {/* Project Name Column */}
                 <Box sx={{ 
-                  width: isMobile ? 180 : 250, 
+                  width: NAME_COL_WIDTH, 
+                  position: 'sticky',
+                  left: 0,
+                  top: 0,
+                  zIndex: 5,
+                  bgcolor: 'background.paper',
                   p: isMobile ? 1 : 2, 
                   borderRight: '1px solid', 
                   borderColor: 'divider',
@@ -793,63 +839,9 @@ const Projects = () => {
                       zIndex: 12
                     }}
                   >
-                    {/* Start Connection Node */}
-                    <Tooltip title={connectionMode ? "Click to connect projects" : "Click to start connecting projects"} arrow>
-                      <Box
-                        sx={{
-                          position: 'absolute',
-                          left: isMobile ? -3 : -4,
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          width: isMobile ? 6 : 8,
-                          height: isMobile ? 6 : 8,
-                          bgcolor: connectionMode && sourceProject?.id === project.id ? 'warning.main' : 'primary.main',
-                          borderRadius: '50%',
-                          border: connectionMode ? '3px solid white' : '2px solid white',
-                          cursor: 'pointer',
-                          pointerEvents: 'auto',
-                          transition: 'all 0.2s ease-in-out',
-                          boxShadow: connectionMode ? 2 : 0,
-                          '&:hover': {
-                            transform: 'translateY(-50%) scale(1.3)',
-                            bgcolor: connectionMode && sourceProject?.id === project.id ? 'warning.dark' : 'primary.dark'
-                          }
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleConnectionStart(project.id, 'start');
-                        }}
-                      />
-                    </Tooltip>
+                    {/* Connection nodes removed */}
 
-                    {/* End Connection Node */}
-                    <Tooltip title={connectionMode ? "Click to connect projects" : "Click to start connecting projects"} arrow>
-                      <Box
-                        sx={{
-                          position: 'absolute',
-                          right: isMobile ? -3 : -4,
-                          top: '50%',
-                          transform: 'translateY(-50%)',
-                          width: isMobile ? 6 : 8,
-                          height: isMobile ? 6 : 8,
-                          bgcolor: connectionMode && sourceProject?.id === project.id ? 'warning.main' : 'secondary.main',
-                          borderRadius: '50%',
-                          border: connectionMode ? '3px solid white' : '2px solid white',
-                          cursor: 'pointer',
-                          pointerEvents: 'auto',
-                          transition: 'all 0.2s ease-in-out',
-                          boxShadow: connectionMode ? 2 : 0,
-                          '&:hover': {
-                            transform: 'translateY(-50%) scale(1.3)',
-                            bgcolor: connectionMode && sourceProject?.id === project.id ? 'warning.dark' : 'secondary.dark'
-                          }
-                        }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleConnectionEnd(project.id, 'end');
-                        }}
-                      />
-                    </Tooltip>
+                    {/* Connection nodes removed */}
                   </Box>
                   
                   {/* Today indicator line */}
@@ -1050,31 +1042,12 @@ const Projects = () => {
         {/* Header */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
           <Typography variant="h4" component="h1" sx={{ fontWeight: 600 }}>
-            Projects Management
+            Projects Timeline
           </Typography>
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            {canEdit && (
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={handleAddProject}
-                size={isMobile ? 'small' : 'medium'}
-              >
-                Add Project
-              </Button>
-            )}
-          </Box>
         </Box>
 
-        {/* Tabs */}
-        <Tabs value={currentTab} onChange={(e, newValue) => setCurrentTab(newValue)} sx={{ mb: 3 }}>
-          <Tab label="Gantt Chart" icon={<TimelineIcon />} />
-          <Tab label="Project Cards" icon={<AssignmentIcon />} />
-        </Tabs>
-
-        {/* Content */}
-        {currentTab === 0 && renderGanttChart()}
-        {currentTab === 1 && renderProjectCards()}
+        {/* Gantt Chart */}
+        {renderGanttChart()}
 
         {/* Project Dialog */}
         <Dialog
@@ -1085,92 +1058,250 @@ const Projects = () => {
           fullScreen={isMobile}
         >
           <DialogTitle>
-            {dialogMode === 'add' ? 'Add New Project' : 
-             dialogMode === 'edit' ? 'Edit Project' : 'Project Details'}
+            Project Details
           </DialogTitle>
           <DialogContent>
-            {/* Project Form Content - Continuing in next part due to length */}
-            <Box sx={{ mt: 2 }}>
-              <Grid container spacing={3}>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Project Name"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    disabled={dialogMode === 'view'}
-                  />
+            {/* View Mode - Read-only display with good UI */}
+            {selectedProject && (
+              <Box sx={{ mt: 2 }}>
+                <Grid container spacing={3}>
+                  <Grid item xs={12}>
+                    <Typography variant="h5" gutterBottom>
+                      {selectedProject.name}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap' }}>
+                      <Chip
+                        label={selectedProject.status}
+                        sx={{ 
+                          bgcolor: getStatusColor(selectedProject.status),
+                          color: 'white'
+                        }}
+                      />
+                      <Chip
+                        label={selectedProject.priority}
+                        sx={{ 
+                          bgcolor: getPriorityColor(selectedProject.priority),
+                          color: 'white'
+                        }}
+                      />
+                    </Box>
+                  </Grid>
+                  
+                  <Grid item xs={12}>
+                    <Typography variant="body1" paragraph>
+                      {selectedProject.description || 'No description provided'}
+                    </Typography>
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      Start Date
+                    </Typography>
+                    <Typography variant="body1">
+                      {new Date(selectedProject.startDate).toLocaleDateString()}
+                    </Typography>
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <Typography variant="subtitle2" color="text.secondary">
+                      End Date
+                    </Typography>
+                    <Typography variant="body1">
+                      {new Date(selectedProject.endDate).toLocaleDateString()}
+                    </Typography>
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                      Progress
+                    </Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <LinearProgress 
+                        variant="determinate" 
+                        value={selectedProject.progress || 0} 
+                        sx={{ 
+                          flex: 1,
+                          height: 10, 
+                          borderRadius: 5,
+                          bgcolor: 'grey.200',
+                          '& .MuiLinearProgress-bar': {
+                            bgcolor: getStatusColor(selectedProject.status)
+                          }
+                        }}
+                      />
+                      <Typography variant="body2" sx={{ fontWeight: 600, minWidth: 45 }}>
+                        {selectedProject.progress || 0}%
+                      </Typography>
+                    </Box>
+                  </Grid>
+
+                  {selectedProject.owner && (
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Project Owner
+                      </Typography>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 1 }}>
+                        <Avatar src={selectedProject.owner.photoURL} sx={{ width: 32, height: 32 }}>
+                          {(selectedProject.owner.name || selectedProject.owner.email || 'U').charAt(0).toUpperCase()}
+                        </Avatar>
+                        <Typography variant="body1">
+                          {selectedProject.owner.name || selectedProject.owner.email}
+                        </Typography>
+                      </Box>
+                    </Grid>
+                  )}
+
+                  {selectedProject.center && (
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Center
+                      </Typography>
+                      <Typography variant="body1">
+                        {selectedProject.center.name || selectedProject.center.id}
+                      </Typography>
+                    </Grid>
+                  )}
+
+                  {selectedProject.assignedUsers && selectedProject.assignedUsers.length > 0 && (
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        Assigned Team Members ({selectedProject.assignedUsers.length})
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        {selectedProject.assignedUsers.map((user, index) => (
+                          <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, bgcolor: 'grey.100', borderRadius: 1 }}>
+                            <Avatar src={user.photoURL} sx={{ width: 24, height: 24 }}>
+                              {(user.name || user.email || 'U').charAt(0).toUpperCase()}
+                            </Avatar>
+                            <Typography variant="body2">
+                              {user.name || user.email}
+                            </Typography>
+                          </Box>
+                        ))}
+                      </Box>
+                    </Grid>
+                  )}
+
+                  {selectedProject.tasks && selectedProject.tasks.length > 0 && (
+                    <Grid item xs={12}>
+                      <Divider sx={{ my: 2 }} />
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        Tasks ({selectedProject.tasks.filter(t => (t.status || '').toLowerCase() === 'completed').length}/{selectedProject.tasks.length} completed)
+                      </Typography>
+                      <List dense sx={{ maxHeight: 400, overflowY: 'auto' }}>
+                        {selectedProject.tasks.map((task, index) => (
+                          <ListItem 
+                            key={index}
+                            sx={{ 
+                              bgcolor: (task.status || '').toLowerCase() === 'completed' ? 'success.light' : 
+                                      isTaskOverdue(task) ? 'error.light' : 'transparent',
+                              borderRadius: 1,
+                              mb: 0.5
+                            }}
+                          >
+                            <ListItemIcon sx={{ minWidth: 32 }}>
+                              {getTaskStatusIcon(task.status)}
+                            </ListItemIcon>
+                            <ListItemText
+                              primary={task.name}
+                              secondary={
+                                <Box>
+                                  <Typography variant="caption" color="text.secondary">
+                                    Status: {task.status || 'Planning'}
+                                  </Typography>
+                                  {task.dueDate && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
+                                      Due: {new Date(task.dueDate.toDate ? task.dueDate.toDate() : task.dueDate).toLocaleDateString()}
+                                    </Typography>
+                                  )}
+                                  {task.priority && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
+                                      Priority: {task.priority}
+                                    </Typography>
+                                  )}
+                                  {task.assignedTo && task.assignedTo.name && (
+                                    <Typography variant="caption" color="text.secondary" sx={{ ml: 2 }}>
+                                      Assigned: {task.assignedTo.name || task.assignedTo.email}
+                                    </Typography>
+                                  )}
+                                  {task.description && (
+                                    <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                                      {task.description}
+                                    </Typography>
+                                  )}
+                                </Box>
+                              }
+                              sx={{
+                                '& .MuiListItemText-primary': {
+                                  textDecoration: (task.status || '').toLowerCase() === 'completed' ? 'line-through' : 'none',
+                                  color: (task.status || '').toLowerCase() === 'completed' ? 'text.disabled' : 'text.primary',
+                                  fontWeight: 500
+                                }
+                              }}
+                            />
+                            {isTaskOverdue(task) && (
+                              <WarningIcon color="error" fontSize="small" />
+                            )}
+                          </ListItem>
+                        ))}
+                      </List>
+                    </Grid>
+                  )}
+
+                  {selectedProject.tags && selectedProject.tags.length > 0 && (
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        Tags
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        {selectedProject.tags.map((tag, index) => (
+                          <Chip key={index} label={tag} size="small" variant="outlined" />
+                        ))}
+                      </Box>
+                    </Grid>
+                  )}
+
+                  {selectedProject.dependencies && selectedProject.dependencies.length > 0 && (
+                    <Grid item xs={12}>
+                      <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+                        Dependencies
+                      </Typography>
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                        {selectedProject.dependencies.map((dep, index) => {
+                          const depProject = projects.find(p => p.id === dep);
+                          return depProject ? (
+                            <Chip 
+                              key={index} 
+                              label={depProject.name} 
+                              size="small" 
+                              icon={<TimelineIcon />}
+                              variant="outlined"
+                              color="primary"
+                            />
+                          ) : null;
+                        })}
+                      </Box>
+                    </Grid>
+                  )}
+
+                  {selectedProject.reminderDays !== undefined && (
+                    <Grid item xs={12} sm={6}>
+                      <Typography variant="subtitle2" color="text.secondary">
+                        Reminder
+                      </Typography>
+                      <Typography variant="body1">
+                        {selectedProject.reminderDays} days before deadline
+                      </Typography>
+                    </Grid>
+                  )}
                 </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    multiline
-                    rows={3}
-                    label="Description"
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    disabled={dialogMode === 'view'}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Status</InputLabel>
-                    <Select
-                      value={formData.status}
-                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                      disabled={dialogMode === 'view'}
-                    >
-                      <MenuItem value="Planning">Planning</MenuItem>
-                      <MenuItem value="In Progress">In Progress</MenuItem>
-                      <MenuItem value="Completed">Completed</MenuItem>
-                      <MenuItem value="On Hold">On Hold</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Priority</InputLabel>
-                    <Select
-                      value={formData.priority}
-                      onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
-                      disabled={dialogMode === 'view'}
-                    >
-                      <MenuItem value="Low">Low</MenuItem>
-                      <MenuItem value="Medium">Medium</MenuItem>
-                      <MenuItem value="High">High</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <DatePicker
-                    label="Start Date"
-                    value={formData.startDate}
-                    onChange={(date) => setFormData({ ...formData, startDate: date })}
-                    disabled={dialogMode === 'view'}
-                    renderInput={(params) => <TextField {...params} fullWidth />}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <DatePicker
-                    label="End Date"
-                    value={formData.endDate}
-                    onChange={(date) => setFormData({ ...formData, endDate: date })}
-                    disabled={dialogMode === 'view'}
-                    renderInput={(params) => <TextField {...params} fullWidth />}
-                  />
-                </Grid>
-              </Grid>
-            </Box>
+              </Box>
+            )}
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setDialogOpen(false)} startIcon={<CloseIcon />}>
-              {dialogMode === 'view' ? 'Close' : 'Cancel'}
+              Close
             </Button>
-            {dialogMode !== 'view' && canEdit && (
-              <Button onClick={handleSaveProject} variant="contained" startIcon={<SaveIcon />}>
-                {dialogMode === 'add' ? 'Create' : 'Update'}
-              </Button>
-            )}
           </DialogActions>
         </Dialog>
 

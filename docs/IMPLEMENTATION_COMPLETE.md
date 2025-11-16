@@ -4,10 +4,9 @@
 ## 🎯 **Successfully Implemented Features**
 
 ### 1. **Gantt Chart Projects Dashboard** 
-- ✅ **Proper Timeline Structure**: Header with time periods, project rows with horizontal bars
-- ✅ **Visual Grid Layout**: Table-like structure matching the reference image
-- ✅ **Interactive Timeline**: Click projects for details, hover for tooltips
-- ✅ **Time Range Selection**: 30 days to 1 year views
+	- Note: 1 Month and 3 Months show a centered window around today; 6 Months and 1 Year will expand to include projects outside the base window.
+	- Note: 1 Month and 3 Months show a centered window around today; 6 Months and 1 Year will expand to include projects outside the base window.
+	- Timeline preloads data for two years (1 year before and 1 year after) so users can scroll and explore beyond the selected range.
 - ✅ **Progress Visualization**: Progress bars inside project timelines
 - ✅ **Today Indicator**: Red line showing current date
 - ✅ **Status Color Coding**: Orange (Planning), Blue (In Progress), Green (Completed)
@@ -108,7 +107,7 @@
 ## 🧪 **Testing Ready**
 
 ### **Sample Data Available:**
-- 5 realistic projects with different statuses and timelines
+- 6 realistic projects with different statuses and timelines
 - Multiple tasks per project with various completion states
 - Team assignments using actual system users
 - Center associations and priority levels

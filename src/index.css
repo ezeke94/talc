@@ -375,3 +375,62 @@ input[type="checkbox"]:focus {
     background: rgba(123,198,120,0.5);
   }
 }
+
+/* Modern unified scrollbar for desktop and larger screens */
+:root {
+  --scrollbar-track: rgba(0,0,0,0.03);
+  --scrollbar-thumb: rgba(0,0,0,0.18);
+  --scrollbar-thumb-hover: rgba(0,0,0,0.28);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+/* Webkit-based browsers */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 8px;
+  border: 2px solid transparent; /* Makes the thumb look inset */
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--scrollbar-thumb-hover);
+}
+
+/* Make scrollbars slightly darker in dark mode */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --scrollbar-track: rgba(255,255,255,0.03);
+    --scrollbar-thumb: rgba(255,255,255,0.16);
+    --scrollbar-thumb-hover: rgba(255,255,255,0.24);
+  }
+}
+
+/* Specifically style scrollbars used in MUI Dialog scrollable areas */
+.MuiDialogContent-root::-webkit-scrollbar,
+.MuiPaper-root::-webkit-scrollbar,
+.MuiList-root::-webkit-scrollbar,
+.MuiCardContent-root::-webkit-scrollbar{
+  width: 10px;
+}
+
+.MuiDialogContent-root::-webkit-scrollbar-thumb,
+.MuiPaper-root::-webkit-scrollbar-thumb,
+.MuiList-root::-webkit-scrollbar-thumb,
+.MuiCardContent-root::-webkit-scrollbar-thumb{
+  background-color: var(--scrollbar-thumb);
+  border-radius: 8px;
+}

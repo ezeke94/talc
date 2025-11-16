@@ -493,7 +493,7 @@ const SeedData = () => {
 
                         // Remove any documents tagged as seeded demo data
                         const seedTags = ['seed-demo', 'quality10'];
-                        for (const coll of ['centers','mentors','sops','events','notifications','centerMetrics','auditLogs']) {
+                        for (const coll of ['centers','mentors','sops','events','notifications','centerMetrics','auditLogs','projects']) {
                             removed += await deleteBy(coll, 'seedTag', seedTags);
                         }
 

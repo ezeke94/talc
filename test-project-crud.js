@@ -33,6 +33,7 @@ console.log('📖 READ (View Project Details):');
 console.log('  1. Click on a project name in the Timeline view');
 console.log('  2. Verify project details dialog opens');
 console.log('  3. Check all information is displayed correctly');
+console.log('     - Verify Tasks, Tags and Dependencies are visible in view-only mode');
 console.log('  4. Close dialog');
 console.log('');
 
@@ -51,15 +52,9 @@ console.log('  2. Confirm deletion in the dialog');
 console.log('  3. Verify project is removed from both views');
 console.log('');
 
-console.log('🔗 CONNECTION (Project Dependencies):');
-console.log('  1. Create two test projects:');
-console.log('     - Project A: "Design Phase" (1 week)');
-console.log('     - Project B: "Development Phase" (2 weeks)');
-console.log('  2. Click on the blue connection node at the END of Project A');
-console.log('  3. Notice the connection mode alert appears');
-console.log('  4. Click on either connection node of Project B');
-console.log('  5. Verify Project B is rescheduled to start after Project A ends');
-console.log('  6. Check that dependency relationship is created');
+console.log('🔗 CONNECTION (Project Dependencies): Not available in UI (use Firestore directly)');
+// Connection UI removed — project dependency creation via UI is not available.
+console.log('🔗 CONNECTION (Project Dependencies): Not available in UI (use Firestore directly)');
 console.log('');
 
 console.log('📱 MOBILE UI:');
@@ -69,7 +64,6 @@ console.log('  3. Select a mobile device (e.g., iPhone 12)');
 console.log('  4. Verify Timeline view is responsive:');
 console.log('     - Project info column is narrower');
 console.log('     - Text sizes are appropriate');
-console.log('     - Connection nodes are visible and clickable');
 console.log('     - Timeline periods are readable');
 console.log('');
 
@@ -79,6 +73,7 @@ console.log('  ✓ Real-time updates in Firebase');
 console.log('  ✓ Responsive design on mobile');
 console.log('  ✓ Project dependencies function correctly');
 console.log('  ✓ Visual feedback during connection mode');
+// Project dependency creation via the timeline UI is removed.
 console.log('  ✓ No seed data button visible');
 console.log('');
 

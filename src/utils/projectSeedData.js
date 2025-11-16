@@ -40,7 +40,7 @@ export const generateProjectMockData = async () => {
     const today = new Date();
     
     // Sample projects with realistic data
-    const projects = [
+  const projects = [
       {
         name: "Q1 Curriculum Implementation",
         description: "Implement new mathematics curriculum across all centers for Q1",
@@ -93,7 +93,8 @@ export const generateProjectMockData = async () => {
             dueDate: Timestamp.fromDate(addDays(today, 50)),
             priority: "Medium"
           }
-        ]
+        ],
+        seedTag: 'seed-demo'
       },
       {
         name: "Digital Assessment Platform",
@@ -137,7 +138,8 @@ export const generateProjectMockData = async () => {
             dueDate: Timestamp.fromDate(addDays(today, 70)),
             priority: "High"
           }
-        ]
+        ],
+        seedTag: 'seed-demo'
       },
       {
         name: "Mentor Performance Enhancement",
@@ -194,7 +196,8 @@ export const generateProjectMockData = async () => {
             completedDate: Timestamp.fromDate(addDays(today, -12)),
             priority: "Medium"
           }
-        ]
+        ],
+        seedTag: 'seed-demo'
       },
       {
         name: "Infrastructure Upgrade - Phase 2",
@@ -229,7 +232,8 @@ export const generateProjectMockData = async () => {
             dueDate: Timestamp.fromDate(addDays(today, 50)),
             priority: "Medium"
           }
-        ]
+        ],
+        seedTag: 'seed-demo'
       },
       {
         name: "Quality Assurance Framework",
@@ -275,6 +279,52 @@ export const generateProjectMockData = async () => {
             priority: "Medium"
           }
         ]
+      , seedTag: 'seed-demo'
+      }
+      ,{
+        name: "Community Scholarship Outreach",
+        description: "Launch a scholarship and outreach program to support high-potential students across centers.",
+        status: "Planning",
+        priority: "Medium",
+        startDate: Timestamp.fromDate(addDays(today, 10)),
+        endDate: Timestamp.fromDate(addDays(today, 120)),
+        progress: 0,
+        center: getRandomCenter(),
+        owner: getRandomUsers(1)[0] || null,
+        assignedUsers: getRandomUsers(3),
+        reminderDays: 10,
+        dependencies: [],
+        tags: ["outreach", "scholarship", "community"],
+        tasks: [
+          {
+            id: "task-1",
+            name: "Define Scholarship Criteria",
+            description: "Define eligibility and selection criteria for scholarships.",
+            status: "Planning",
+            assignedTo: getRandomUsers(1)[0] || null,
+            dueDate: Timestamp.fromDate(addDays(today, 20)),
+            priority: "High"
+          },
+          {
+            id: "task-2",
+            name: "Outreach Campaign",
+            description: "Plan outreach campaign to schools and community centers.",
+            status: "Planning",
+            assignedTo: getRandomUsers(1)[0] || null,
+            dueDate: Timestamp.fromDate(addDays(today, 45)),
+            priority: "Medium"
+          },
+          {
+            id: "task-3",
+            name: "Application & Selection",
+            description: "Collect applications and run selection process.",
+            status: "Planning",
+            assignedTo: getRandomUsers(2)[0] || null,
+            dueDate: Timestamp.fromDate(addDays(today, 70)),
+            priority: "High"
+          }
+        ],
+        seedTag: 'seed-demo'
       }
     ];
 
