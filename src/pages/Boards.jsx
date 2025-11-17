@@ -715,8 +715,15 @@ const Boards = () => {
               <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600 }}>
                 Tasks ({project.tasks.filter(t => (t.status || '').toLowerCase() === 'completed').length}/{project.tasks.length})
               </Typography>
-              <Box sx={{ mt: 1, maxHeight: isMobile ? 240 : 160, overflowY: 'auto' }}>
-                {project.tasks.slice(0, 5).map((task, taskIndex) => (
+              {/* If more than 3 tasks exist show a persistent hint above the scrollable list */}
+              {project.tasks.length > 3 && (
+                <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', mb: 1 }}>
+                  +{project.tasks.length - 3} more tasks — scroll to view
+                </Typography>
+              )}
+
+              <Box sx={{ mt: 1, maxHeight: isMobile ? 320 : 160, minHeight: isMobile ? 160 : 120, overflowY: 'auto' }}>
+                {project.tasks.map((task, taskIndex) => (
                   <Box
                     key={taskIndex}
                     sx={{
@@ -774,11 +781,7 @@ const Boards = () => {
                     )}
                   </Box>
                 ))}
-                {project.tasks.length > 5 && (
-                  <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                    +{project.tasks.length - 5} more tasks
-                  </Typography>
-                )}
+                {/* preserved for legacy compatibility - we keep this here but the persistent hint above is the primary UX */}
               </Box>
             </Box>
           )}
