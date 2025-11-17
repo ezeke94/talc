@@ -734,8 +734,10 @@ const Boards = () => {
                       p: 0.5,
                       borderRadius: 1,
                       bgcolor: (task.status || '').toLowerCase() === 'completed' ? 'success.light' :
-                               isTaskOverdue(task) ? 'error.light' : 'transparent',
-                      '&:hover': { bgcolor: 'action.hover' }
+                               isTaskOverdue(task) ? 'error.light' : 'grey.50',
+                      borderLeft: `4px solid ${getStatusColor(task.status)}`,
+                      transition: 'background 0.15s, transform 0.1s',
+                      '&:hover': { bgcolor: 'action.hover', transform: 'translateY(-1px)' }
                     }}
                   >
                     {canEdit ? (
