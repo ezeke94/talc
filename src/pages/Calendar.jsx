@@ -833,7 +833,7 @@ const Calendar = () => {
         </Box>
 
         {/* Create/Edit dialog */}
-        <Dialog open={showForm} onClose={() => { setShowForm(false); setEditingEvent(null); }} fullWidth maxWidth="md">
+        <Dialog open={showForm} onClose={() => { setShowForm(false); setEditingEvent(null); }} fullWidth maxWidth="md" fullScreen={isMobile}>
           <DialogTitle>{editingEvent ? 'Edit Event/Task' : 'Create Event/Task'}</DialogTitle>
           <DialogContent dividers>
             <EventForm

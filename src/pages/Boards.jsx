@@ -577,6 +577,10 @@ const Boards = () => {
         updatedAt: Timestamp.now()
       });
       setSnackbar({ open: true, message: 'Task status updated', severity: 'success' });
+      // Keep selected project view in sync (optimistic update) if it's the open dialog
+      if (selectedProject && selectedProject.id === projectId) {
+        setSelectedProject(prev => ({ ...prev, tasks, progress }));
+      }
     } catch (err) {
       console.error('Failed to update task status', err);
       setSnackbar({ open: true, message: 'Error updating task: ' + err.message, severity: 'error' });
@@ -1196,7 +1200,23 @@ const Boards = () => {
                           }}
                         >
                           <ListItemIcon sx={{ minWidth: 32 }}>
-                            {getTaskStatusIcon(task.status)}
+                            {canEdit ? (
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleTaskStatus(selectedProject.id, index);
+                                }}
+                              >
+                                {(task.status || '').toLowerCase() === 'completed' ? (
+                                  <CheckCircleIcon color="success" fontSize="small" />
+                                ) : (
+                                  <RadioButtonUncheckedIcon fontSize="small" />
+                                )}
+                              </IconButton>
+                            ) : (
+                              getTaskStatusIcon(task.status)
+                            )}
                           </ListItemIcon>
                           <ListItemText
                             primary={task.name}

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Box, TextField, Button, Typography, Checkbox, FormControlLabel, MenuItem, Select, InputLabel, FormControl, Paper, Stack, useMediaQuery } from '@mui/material';
+import { Box, TextField, Button, Typography, Checkbox, FormControlLabel, MenuItem, Select, InputLabel, FormControl, Paper, Stack, useMediaQuery, IconButton } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
 
 // Placeholder props: onSave, eventData, centers, mentors, users, sops
 const EventForm = ({ onSave, eventData = {}, centers = [], mentors = [], users = [], sops = [] }) => {
@@ -48,10 +49,14 @@ const EventForm = ({ onSave, eventData = {}, centers = [], mentors = [], users =
   const [todos, setTodos] = useState(eventData.todos || []);
 
   // Add/remove todo
-  const addTodo = () => setTodos([...todos, { id: Date.now(), text: '', completed: false }]);
+  const addTodo = () => setTodos([...todos, { id: Date.now(), text: '', completed: false, isNew: true }]);
   const updateTodo = (idx, field, value) => {
     const newTodos = [...todos];
     newTodos[idx][field] = value;
+    // If user types text for a newly added todo, clear the isNew flag so checkbox appears
+    if (field === 'text' && newTodos[idx].isNew && String(value).trim() !== '') {
+      newTodos[idx].isNew = false;
+    }
     setTodos(newTodos);
   };
   const removeTodo = idx => setTodos(todos.filter((_, i) => i !== idx));
@@ -297,23 +302,31 @@ const EventForm = ({ onSave, eventData = {}, centers = [], mentors = [], users =
             Tasks are from SOP - modify the SOP to change task text. You can only toggle completion status.
           </Typography>
         )}
-        {todos.map((todo, idx) => (
-          <Box key={todo.id} sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-            <Checkbox checked={todo.completed} onChange={e => updateTodo(idx, 'completed', e.target.checked)} size={isMobile ? 'small' : 'medium'} />
-            <TextField 
-              value={todo.text} 
-              onChange={e => updateTodo(idx, 'text', e.target.value)} 
-              size={isMobile ? 'small' : 'medium'} 
-              sx={{ flex: 1 }} 
-              disabled={!!sopId}
+        {/* Make the to-do list scrollable on small screens so users can view more tasks */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, maxHeight: isMobile ? '36vh' : '240px', overflowY: 'auto', pr: 1 }}>
+          {todos.map((todo, idx) => (
+            <Box key={todo.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 1 }}>
+            {/* Hide checkbox for newly added todos until the user types text */}
+            {!todo.isNew && (
+              <Checkbox checked={todo.completed} onChange={e => updateTodo(idx, 'completed', e.target.checked)} size={isMobile ? 'small' : 'medium'} />
+            )}
+                <TextField 
+                  value={todo.text} 
+                  onChange={e => updateTodo(idx, 'text', e.target.value)} 
+                  size={isMobile ? 'small' : 'medium'} 
+                  sx={{ flex: 1, minWidth: 0 }} 
+                  disabled={!!sopId}
               InputProps={{
                 readOnly: !!sopId
               }}
             />
-            <Button color="error" onClick={() => removeTodo(idx)} size={isMobile ? 'small' : 'medium'} disabled={!!sopId}>Delete</Button>
+                <IconButton color="error" onClick={() => removeTodo(idx)} size={isMobile ? 'small' : 'medium'} disabled={!!sopId} aria-label="delete-todo">
+                  <DeleteIcon fontSize="small" />
+                </IconButton>
           </Box>
         ))}
-        <Button variant="outlined" onClick={addTodo} size={isMobile ? 'small' : 'medium'} disabled={!!sopId}>+ Add To-Do</Button>
+      </Box>
+      <Button variant="outlined" onClick={addTodo} size={isMobile ? 'small' : 'medium'} disabled={!!sopId}>+ Add To-Do</Button>
         <Box sx={{ mt: 2 }}>
           <Button variant="contained" color="primary" onClick={handleSave} size={isMobile ? 'small' : 'medium'}>Save Event/Task</Button>
         </Box>
