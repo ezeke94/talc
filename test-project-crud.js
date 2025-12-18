@@ -33,7 +33,6 @@ console.log('📖 READ (View Project Details):');
 console.log('  1. Click on a project name in the Timeline view');
 console.log('  2. Verify project details dialog opens');
 console.log('  3. Check all information is displayed correctly');
-console.log('     - Verify Tasks, Tags and Dependencies are visible in view-only mode');
 console.log('  4. Close dialog');
 console.log('');
 

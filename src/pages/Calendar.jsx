@@ -31,6 +31,10 @@ import {
   Card,
   CardContent,
   Fab,
+  Badge,
+  Snackbar,
+  Alert,
+  Fade,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import SearchIcon from '@mui/icons-material/Search';
@@ -52,11 +56,100 @@ import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc, o
 // notifications removed
 import { useAuth } from '../context/AuthContext';
 
+// Keyframe animation for pulsing save button
+const pulseKeyframes = `
+  @keyframes pulse-glow {
+    0% {
+      box-shadow: 0 0 0 0 rgba(76, 175, 80, 0.7);
+    }
+    50% {
+      box-shadow: 0 0 0 12px rgba(76, 175, 80, 0);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgba(76, 175, 80, 0);
+    }
+  }
+  @keyframes bounce-subtle {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-3px);
+    }
+  }
+  @keyframes attention-shake {
+    0%, 100% {
+      transform: translateX(0);
+    }
+    25% {
+      transform: translateX(-2px);
+    }
+    75% {
+      transform: translateX(2px);
+    }
+  }
+`;
+
+// Add styles to document
+if (typeof document !== 'undefined') {
+  const styleElement = document.createElement('style');
+  styleElement.textContent = pulseKeyframes;
+  document.head.appendChild(styleElement);
+}
+
 const Calendar = () => {
+  // Save button component - animated design
+  const UnsavedTasksIndicator = ({ eventId, isMobile }) => {
+    const hasUnsaved = !!todosChanged[eventId];
+    
+    if (!hasUnsaved) return null;
+    
+    return (
+      <Button
+        size="small"
+        variant="contained"
+        onClick={() => handleSaveTodos(eventId)}
+        startIcon={<CheckIcon sx={{ fontSize: '0.9rem' }} />}
+        sx={{
+          textTransform: 'none',
+          fontSize: '0.8125rem',
+          fontWeight: 600,
+          px: 1.25,
+          py: 0,
+          height: 28,
+          minHeight: 28,
+          lineHeight: 1.1,
+          minWidth: 'auto',
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          color: '#fff',
+          boxShadow: '0 4px 15px 0 rgba(102, 126, 234, 0.4)',
+          animation: 'pulse-glow 2s ease-in-out infinite',
+          borderRadius: '16px',
+          '& .MuiButton-startIcon': {
+            marginRight: 0.5,
+          },
+          '&:hover': {
+            background: 'linear-gradient(135deg, #5568d3 0%, #6a3f8f 100%)',
+            boxShadow: '0 6px 20px 0 rgba(102, 126, 234, 0.6)',
+            transform: 'translateY(-2px)',
+          },
+          '&:active': {
+            transform: 'translateY(0)',
+          },
+          transition: 'all 0.3s ease',
+        }}
+      >
+        Save
+      </Button>
+    );
+  };
+
   // State for editing todos inline
   const [editingTodos, setEditingTodos] = useState({}); // { [eventId]: todos }
   const [todosChanged, setTodosChanged] = useState({}); // { [eventId]: boolean }
   const [expandedTodos, setExpandedTodos] = useState({}); // control collapsed/expanded task lists per event
+  const [showUnsavedSnackbar, setShowUnsavedSnackbar] = useState(false); // Show snackbar when changes detected
+  const [unsavedEventId, setUnsavedEventId] = useState(null); // Track which event has unsaved changes
 
   // Save updated todos for an event
   const handleSaveTodos = async (eventId) => {
@@ -77,6 +170,7 @@ const Calendar = () => {
   setEvents(prev => prev.map(ev => (ev.id === eventId ? { ...ev, todos, status } : ev)));
   setAllEvents(prev => prev.map(ev => (ev.id === eventId ? { ...ev, todos, status } : ev)));
       setTodosChanged(prev => ({ ...prev, [eventId]: false }));
+      setShowUnsavedSnackbar(false); // Hide snackbar on successful save
       // Always log audit when todos are saved
       // Fetch latest event data after update to ensure audit log is correct
       const eventSnap = await getDocs(query(collection(db, 'events'), where('__name__', '==', eventId)));
@@ -96,6 +190,8 @@ const Calendar = () => {
       return { ...prev, [eventId]: updatedTodos };
     });
     setTodosChanged(prev => ({ ...prev, [eventId]: true }));
+    setUnsavedEventId(eventId);
+    setShowUnsavedSnackbar(true);
   };
   const toggleExpandTodos = (eventId) => {
     setExpandedTodos(prev => ({ ...prev, [eventId]: !prev[eventId] }));
@@ -1009,12 +1105,8 @@ const Calendar = () => {
                                       ))}
                                     </Stack>
 
-                                    <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
-                                      {todosChanged[event.id] && (
-                                        <IconButton size="small" color="success" onClick={() => handleSaveTodos(event.id)} title="Save tasks">
-                                          <CheckIcon />
-                                        </IconButton>
-                                      )}
+                                    <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mt: 1 }}>
+                                      <UnsavedTasksIndicator eventId={event.id} isMobile={false} />
                                     </Stack>
 
                                     {canViewComments(event) && event.comments && event.comments.length > 0 && (
@@ -1150,28 +1242,28 @@ const Calendar = () => {
                                   <Chip key={center} label={centerMap[center] || `Unknown Center (${center})`} size="small" />
                                 ))}
                               </Box>
-                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, flexDirection: 'column' }}>
                                 {event.sopId && (
                                   <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', mb: 0.5, display: 'block', width: '100%' }}>
                                     Tasks from SOP
                                   </Typography>
                                 )}
-                                {(editingTodos[event.id] || event.todos || []).map(todo => (
-                                  <Box key={todo.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                    <input
-                                      type="checkbox"
-                                      checked={!!todo.completed}
-                                      onChange={() => handleToggleTodo(event.id, todo.id)}
-                                      style={{ accentColor: todo.completed ? '#388e3c' : undefined }}
-                                    />
-                                    <Typography variant="body2" sx={{ textDecoration: todo.completed ? 'line-through' : 'none', ml: 0.5 }}>{todo.text}</Typography>
-                                  </Box>
-                                ))}
-                                {todosChanged[event.id] && (
-                                  <IconButton size="small" color="success" onClick={() => handleSaveTodos(event.id)} title="Save tasks">
-                                    <CheckIcon />
-                                  </IconButton>
-                                )}
+                                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                                  {(editingTodos[event.id] || event.todos || []).map(todo => (
+                                    <Box key={todo.id} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={!!todo.completed}
+                                        onChange={() => handleToggleTodo(event.id, todo.id)}
+                                        style={{ accentColor: todo.completed ? '#388e3c' : undefined }}
+                                      />
+                                      <Typography variant="body2" sx={{ textDecoration: todo.completed ? 'line-through' : 'none', ml: 0.5 }}>{todo.text}</Typography>
+                                    </Box>
+                                  ))}
+                                </Box>
+                                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', mt: 1 }}>
+                                  <UnsavedTasksIndicator eventId={event.id} isMobile={true} />
+                                </Box>
                               </Box>
                             </Box>
                             <Stack direction="row" spacing={{ xs: 0.25, sm: 0.5 }} sx={{ mt: 1.5, alignItems: 'center' }}>
@@ -1345,6 +1437,42 @@ const Calendar = () => {
           )}
         </DialogActions>
       </Dialog>
+
+      {/* Snackbar notification for unsaved changes - appears at bottom center */}
+      <Snackbar
+        open={showUnsavedSnackbar}
+        autoHideDuration={6000}
+        onClose={() => setShowUnsavedSnackbar(false)}
+        TransitionComponent={Fade}
+        TransitionProps={{ timeout: 250 }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          onClose={() => setShowUnsavedSnackbar(false)}
+          severity="info"
+          sx={{
+            width: 'auto',
+            maxWidth: '90vw',
+            px: 1,
+            py: 0.35,
+            borderRadius: 9999,
+            background: 'linear-gradient(180deg, #e3f2fd 0%, #e1f5fe 100%)',
+            color: '#0d47a1',
+            border: '1px solid #64b5f6',
+            boxShadow: '0 6px 20px rgba(25, 118, 210, 0.18)',
+            fontWeight: 600,
+            fontSize: '0.8rem',
+            alignItems: 'center',
+            display: 'inline-flex',
+            gap: 0.5,
+            '& .MuiAlert-icon': {
+              color: '#1976d2',
+            },
+          }}
+        >
+          Unsaved changes — tap Save.
+        </Alert>
+      </Snackbar>
     </Container>
   );
 };
