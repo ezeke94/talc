@@ -23,12 +23,8 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks(id) {
             if (!id.includes('node_modules')) return
-            // Firebase split: auth vs firestore vs messaging vs app/core
-            if (id.includes('/node_modules/firebase/auth') || id.includes('firebase/auth')) return 'firebase-auth'
-            if (id.includes('/node_modules/firebase/firestore') || id.includes('firebase/firestore')) return 'firebase-firestore'
-            if (id.includes('/node_modules/firebase/messaging') || id.includes('firebase/messaging')) return 'firebase-messaging'
-            if (id.includes('/node_modules/firebase/app') || id.includes('firebase/app')) return 'firebase-app'
-            if (id.includes('/node_modules/firebase/')) return 'firebase'
+            // Firebase: keep all firebase modules in one chunk to avoid circular import issues
+            if (id.includes('/node_modules/firebase') || id.includes('firebase/')) return 'firebase'
 
             // MUI split: core vs icons vs date pickers vs emotion
             if (id.includes('/node_modules/@mui/icons-material') || id.includes('@mui/icons-material')) return 'mui-icons'
