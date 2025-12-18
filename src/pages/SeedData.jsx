@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { db } from '../firebase/config';
-import { collection, writeBatch, addDoc, getDocs, where, query, doc, updateDoc } from 'firebase/firestore';
+import { collection, writeBatch, addDoc, getDocs, where, query } from 'firebase/firestore';
 // ...existing code...
 import { Button, Typography, CircularProgress, Alert, Paper, Stack } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
@@ -401,7 +401,7 @@ const SeedData = () => {
                 const existing = Array.isArray(data.assignedFormIds) ? data.assignedFormIds : [];
                 const merged = Array.from(new Set([ ...existing, ...DEFAULT_FORM_IDS ]));
                 // Only write if changed
-                if (merged.length !== existing.length || !existing.every((v, i) => merged.includes(v))) {
+                if (merged.length !== existing.length || !existing.every((v) => merged.includes(v))) {
                     batch.update(d.ref, { assignedFormIds: merged });
                     updatedCount += 1;
                 }

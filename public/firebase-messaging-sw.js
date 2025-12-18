@@ -21,7 +21,7 @@ const DEDUP_WINDOW_MS = 10000; // 10 seconds window for deduplication
  * This ensures same notification content doesn't show twice
  */
 function generateNotificationId(payload) {
-  const { type, eventId, url } = payload.data || {};
+  const { type, eventId } = payload.data || {};
   let { title, body } = payload.notification || {};
   // Ensure title/body are always strings (never objects/JSON)
   if (typeof title !== 'string') title = 'TALC Notification';
@@ -220,7 +220,7 @@ self.addEventListener('notificationclick', (event) => {
   
   event.notification.close();
   
-  const { url, type } = event.notification.data || {};
+  const { url } = event.notification.data || {};
   const action = event.action;
   
   // Handle different actions

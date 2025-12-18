@@ -92,8 +92,8 @@ const Projects = () => {
   
   // State management
   const [projects, setProjects] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [centers, setCenters] = useState([]);
+  const [_users, _setUsers] = useState([]);
+  const [_centers, _setCenters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState(null);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -101,7 +101,7 @@ const Projects = () => {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   // Default to 1 year view (365 days) per user request
   const [ganttTimeRange, setGanttTimeRange] = useState(365); // days
-  const [draggedProject, setDraggedProject] = useState(null);
+  const [_draggedProject, _setDraggedProject] = useState(null);
   // Connection mode removed — dependency drawing is now handled outside UI
 
   // Form state
@@ -146,7 +146,7 @@ const Projects = () => {
         const usersData = usersSnapshot.docs
           .map(doc => ({ id: doc.id, ...doc.data() }))
           .filter(user => user.isActive);
-        setUsers(usersData);
+        _setUsers(usersData);
 
         // Fetch centers
         const centersSnapshot = await getDocs(collection(db, 'centers'));
@@ -164,7 +164,7 @@ const Projects = () => {
             { id: 'harlur', name: 'Harlur' }
           ];
         }
-        setCenters(centersData);
+        _setCenters(centersData);
 
         setLoading(false);
         
@@ -205,20 +205,24 @@ const Projects = () => {
   const scrollRef = React.useRef(null);
   const timelineRef = React.useRef(null);
   // Preferred scaling for each time-range so zooming feels meaningful
-  const SCALE_BY_RANGE = {
+  const SCALE_BY_RANGE = useMemo(() => ({
     30: 22,
     90: 12,
     180: 6,
     365: 3
-  };
+  }), []);
 
-  const DEFAULT_PIXELS_PER_DAY = SCALE_BY_RANGE[ganttTimeRange] || 12; // default to current range
-  const [scale, setScale] = useState(DEFAULT_PIXELS_PER_DAY);
+  const defaultPixelsPerDay = useMemo(
+    () => SCALE_BY_RANGE[ganttTimeRange] || 12,
+    [SCALE_BY_RANGE, ganttTimeRange]
+  );
+
+  const [scale, setScale] = useState(defaultPixelsPerDay);
   const scaleRef = React.useRef(scale);
   useEffect(() => { scaleRef.current = scale; }, [scale]);
   // (SCALE_BY_RANGE moved above sequence to initialize scale correctly)
-  const MIN_SCALE = Math.min(...Object.values(SCALE_BY_RANGE));
-  const MAX_SCALE = Math.max(...Object.values(SCALE_BY_RANGE));
+  const MIN_SCALE = useMemo(() => Math.min(...Object.values(SCALE_BY_RANGE)), [SCALE_BY_RANGE]);
+  const MAX_SCALE = useMemo(() => Math.max(...Object.values(SCALE_BY_RANGE)), [SCALE_BY_RANGE]);
   const ganttData = useMemo(() => {
     if (projects.length === 0) {
       const now = new Date();
@@ -296,15 +300,14 @@ const Projects = () => {
     // Continuous zoom while Ctrl/Cmd + wheel is pressed. We will update scale on each wheel
     // and debounce to snap to discrete ranges once wheel stops.
     let lastCenterRatio = 0.5;
-    const wheelTimer = { id: null };
 
-  let wheelTimerID = null;
+    let wheelTimerID = null;
   const onWheel = (e) => {
       if (!(e.ctrlKey || e.metaKey)) return;
       e.preventDefault();
 
       // compute center ratio so when scaling we preserve the current viewport center
-      const oldWidth = timelineRef.current?.clientWidth || (ganttData?.totalDays || 90) * scale;
+      const oldWidth = timelineRef.current?.clientWidth || (ganttData?.totalDays || 90) * scaleRef.current;
       lastCenterRatio = oldWidth > 0 ? (container.scrollLeft + container.clientWidth / 2) / oldWidth : 0.5;
 
       // compute new scale using an exponential factor for smooth zoom
@@ -342,7 +345,7 @@ const Projects = () => {
       container.removeEventListener('wheel', onWheel);
       if (wheelTimerID) clearTimeout(wheelTimerID);
     };
-  }, [ganttTimeRange, ganttData?.totalDays]);
+  }, [ganttTimeRange, ganttData?.totalDays, MIN_SCALE, MAX_SCALE, SCALE_BY_RANGE]);
 
   // Helpers for zoom/pan/reset
   const TIME_RANGES = [30, 90, 180, 365];
@@ -361,7 +364,7 @@ const Projects = () => {
   useEffect(() => {
     const container = scrollRef.current;
     if (!container || !timelineRef.current) {
-      setScale(SCALE_BY_RANGE[ganttTimeRange] || DEFAULT_PIXELS_PER_DAY);
+      setScale(SCALE_BY_RANGE[ganttTimeRange] || 12);
       return;
     }
 
@@ -369,7 +372,7 @@ const Projects = () => {
     const centerLeft = container.scrollLeft + container.clientWidth / 2;
     const centerRatio = oldWidth > 0 ? centerLeft / oldWidth : 0.5;
 
-    const newScale = SCALE_BY_RANGE[ganttTimeRange] || DEFAULT_PIXELS_PER_DAY;
+    const newScale = SCALE_BY_RANGE[ganttTimeRange] || 12;
     setScale(newScale);
 
     // Wait for layout to recalculate new width and then adjust scroll to keep center
@@ -378,9 +381,9 @@ const Projects = () => {
       const newCenterLeft = Math.max(0, Math.min(1, centerRatio)) * newWidth;
       container.scrollTo({ left: Math.max(0, newCenterLeft - container.clientWidth / 2), behavior: 'smooth' });
     });
-  }, [ganttTimeRange, ganttData?.totalDays]);
+  }, [ganttTimeRange, ganttData?.totalDays, SCALE_BY_RANGE]);
 
-  const resetToToday = () => {
+  const resetToToday = React.useCallback(() => {
     if (!scrollRef.current || !timelineRef.current || !ganttData?.totalDays) return;
     const now = new Date();
     const todayOffset = ((now - ganttData.startDate) / (24 * 60 * 60 * 1000)) / ganttData.totalDays;
@@ -388,7 +391,7 @@ const Projects = () => {
     const leftPx = Math.max(0, Math.min(1, todayOffset)) * contentWidth;
     const container = scrollRef.current;
     container.scrollTo({ left: Math.max(0, leftPx - container.clientWidth / 2), behavior: 'smooth' });
-  };
+  }, [ganttData?.startDate, ganttData?.totalDays]);
 
   // Ensure on the very first load we center the timeline on today so the default view
   // shows the current date in the middle (user-requested default behavior).
@@ -402,7 +405,7 @@ const Projects = () => {
       resetToToday();
       hasCenteredOnMountRef.current = true;
     }, 80);
-  }, [ganttData?.totalDays]);
+  }, [ganttData?.totalDays, resetToToday]);
 
   // On mount and when ganttTimeRange changes, center the visible viewport to the selected range around today
   // Remove auto reset on zoom — zoom preserves viewport center.
@@ -428,7 +431,7 @@ const Projects = () => {
   };
 
   // Handle project operations
-  const handleAddProject = () => {
+  const _handleAddProject = () => {
     setFormData({
       name: '',
       description: '',
@@ -475,7 +478,7 @@ const Projects = () => {
     setDialogOpen(true);
   };
 
-  const handleSaveProject = async () => {
+  const _handleSaveProject = async () => {
     try {
       const projectData = {
         ...formData,
@@ -660,7 +663,7 @@ const Projects = () => {
 
           {/* Project Rows */}
           {ganttData.projects.length > 0 ? (
-            ganttData.projects.map((project, index) => (
+            ganttData.projects.map((project) => (
               <Box 
                 key={project.id} 
                 sx={{ 
@@ -909,7 +912,7 @@ const Projects = () => {
   );
 
   // Render Project Cards
-  const renderProjectCards = () => (
+  const _renderProjectCards = () => (
     <Grid container spacing={3}>
       {projects.map((project) => (
         <Grid item xs={12} sm={6} lg={4} key={project.id}>

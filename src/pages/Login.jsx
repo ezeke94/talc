@@ -1,19 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { auth, googleProvider } from '../firebase/config';
-import { signInWithPopup, signInWithRedirect } from 'firebase/auth';
+import { signInWithPopup } from 'firebase/auth';
 import { Button, Container, Typography, Paper, Box, CircularProgress, Alert } from '@mui/material';
 import GoogleIcon from '@mui/icons-material/Google';
 import logo from '../assets/logo.png'; // <-- Import your logo
 import { useAuth } from '../context/AuthContext';
-import { isPWA as isPWAEnv } from '../utils/pwaUtils';
+// PWA redirect flow disabled; popup login is enforced.
 
 const Login = () => {
     const navigate = useNavigate();
     const { currentUser } = useAuth();
     const [signingIn, setSigningIn] = useState(false);
     const [error, setError] = useState(null);
-    const [showRedirectHint, setShowRedirectHint] = useState(false);
+    
 
     const isInAppBrowser = () => {
         try {
@@ -33,33 +33,9 @@ const Login = () => {
         }
     }, [currentUser, navigate]);
 
-    // Surface redirect errors captured by AuthContext
-    useEffect(() => {
-        try {
-            const redirectErr = sessionStorage.getItem('authRedirectError');
-            if (redirectErr) {
-                console.warn('Login: Found redirect error from previous attempt:', redirectErr);
-                setError('Sign-in via redirect failed. Please try again, or allow popups and retry.');
-                sessionStorage.removeItem('authRedirectError');
-                setShowRedirectHint(true);
-            }
-        } catch (e) {
-            console.warn('Login: Failed to check redirect error:', e);
-        }
-    }, []);
+    // Redirect flow is disabled; always use popup.
 
-    // Unified PWA detection (supports Windows/Android/iOS installed apps)
-    const isStandalonePWA = () => {
-        const result = !!isPWAEnv();
-        console.log('Login: isStandalonePWA check:', result, {
-            navigatorStandalone: !!window.navigator?.standalone,
-            displayStandalone: window.matchMedia?.('(display-mode: standalone)')?.matches,
-            displayWCO: window.matchMedia?.('(display-mode: window-controls-overlay)')?.matches,
-            utmSource: window.location.search.includes('utm_source=homescreen'),
-            referrer: document.referrer === "" || document.referrer.includes("android-app://")
-        });
-        return result;
-    };
+    // PWA detection not required for popup-only sign-in.
 
     const handleGoogleSignIn = async () => {
         try {
@@ -78,34 +54,18 @@ const Login = () => {
                 console.warn('Login: Persistence setup issue (non-fatal):', persistErr);
             }
             
-            const params = new URLSearchParams(window.location.search);
-            const authModeOverride = params.get('authMode'); // 'popup' | 'redirect' | null
-            console.log('Login: Auth mode override:', authModeOverride);
-            console.log('Login: Current URL:', window.location.href);
-            console.log('Login: Is PWA:', isStandalonePWA());
-            
-            // Use redirect only in true standalone PWA mode (popups often blocked)
-            // TEMP: Force popup mode until redirect URI is configured in Google Cloud Console
-            if (false && (authModeOverride === 'redirect' || (authModeOverride !== 'popup' && isStandalonePWA()))) {
-                console.log('Login: Using redirect sign-in');
-                await signInWithRedirect(auth, googleProvider);
-                // redirect will take over; navigation happens after redirect completes
-            } else {
-                console.log('Login: Using popup sign-in (forced for compatibility)');
-                try {
-                    const result = await signInWithPopup(auth, googleProvider);
-                    if (result?.user) {
-                        console.log('Login: Popup sign-in successful for user:', result.user.email);
-                        // Navigate immediately after popup success to avoid waiting on background profile sync
-                        navigate('/');
-                        return;
-                    }
-                    console.warn('Login: Popup returned no user; this should not happen');
-                } catch (popupError) {
-                    console.warn('Login: Popup sign-in failed:', popupError?.code, popupError?.message);
-                    // If popup fails, show error
-                    setError('Sign-in failed. Please try again.');
+            console.log('Login: Using popup sign-in (enforced)');
+            try {
+                const result = await signInWithPopup(auth, googleProvider);
+                if (result?.user) {
+                    console.log('Login: Popup sign-in successful for user:', result.user.email);
+                    navigate('/');
+                    return;
                 }
+                console.warn('Login: Popup returned no user; this should not happen');
+            } catch (popupError) {
+                console.warn('Login: Popup sign-in failed:', popupError?.code, popupError?.message);
+                setError('Sign-in failed. Please try again.');
             }
         } catch (err) {
             console.error('Login: Sign-in error:', err);
@@ -123,10 +83,8 @@ const Login = () => {
             
             setError(errorMessage);
         } finally {
-            // Only set loading to false if we're not doing a redirect
-            if (!isStandalonePWA()) {
-                setSigningIn(false);
-            }
+            // Always clear loading after popup attempt
+            setSigningIn(false);
         }
     };
 
@@ -159,26 +117,7 @@ const Login = () => {
                     >
                         Sign In with Google
                     </Button>
-                    {showRedirectHint && (
-                        <Button
-                            fullWidth
-                            variant="text"
-                            onClick={() => {
-                                try {
-                                    setSigningIn(true);
-                                    setError(null);
-                                    // Force redirect mode explicitly
-                                    signInWithRedirect(auth, googleProvider);
-                                } catch (e) {
-                                    setSigningIn(false);
-                                    setError('Redirect sign-in could not start. Please try again.');
-                                }
-                            }}
-                            sx={{ mt: 1 }}
-                        >
-                            Having trouble? Try redirect sign-in
-                        </Button>
-                    )}
+                    {/* Redirect fallback disabled to enforce popup sign-in */}
                     {signingIn && (
                         <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2 }}>
                             <CircularProgress size={20} />

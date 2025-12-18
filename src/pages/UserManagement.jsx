@@ -302,18 +302,18 @@ const UserManagement = () => {
                       <Typography variant="body2">Status:</Typography>
                       {canManage ? (
                         <ToggleButtonGroup
-                          value={!!user.isActive ? 'active' : 'inactive'}
+                          value={user.isActive ? 'active' : 'inactive'}
                           exclusive
                           onChange={(e, val) => {
                             if (val !== null) handleActiveChange(user.id, val === 'active');
                           }}
                           size="medium"
-                          disabled={!!activeLoading[user.id]}
+                          disabled={Boolean(activeLoading[user.id])}
                         >
                           <ToggleButton value="active" color="success" sx={{ px: 3 }}>Active</ToggleButton>
                           <ToggleButton value="inactive" color="error" sx={{ px: 3 }}>Inactive</ToggleButton>
                         </ToggleButtonGroup>
-                      ) : (!!user.isActive ? <Chip label="Active" color="success" /> : <Chip label="Inactive" color="error" />)}
+                      ) : (user.isActive ? <Chip label="Active" color="success" /> : <Chip label="Inactive" color="error" />)}
                     </Box>
 
                     <FormControl fullWidth size="medium" sx={{ mt: 1 }}>
@@ -378,18 +378,18 @@ const UserManagement = () => {
                   <TableCell>
                     {canManage ? (
                       <ToggleButtonGroup
-                        value={!!user.isActive ? 'active' : 'inactive'}
+                        value={user.isActive ? 'active' : 'inactive'}
                         exclusive
                         onChange={(e, val) => {
                           if (val !== null) handleActiveChange(user.id, val === 'active');
                         }}
                         size="small"
-                        disabled={!!activeLoading[user.id]}
+                        disabled={Boolean(activeLoading[user.id])}
                       >
                         <ToggleButton value="active" color="success" sx={{ px: 2, fontSize: '0.95rem' }}>Active</ToggleButton>
                         <ToggleButton value="inactive" color="error" sx={{ px: 2, fontSize: '0.95rem' }}>Inactive</ToggleButton>
                       </ToggleButtonGroup>
-                    ) : (!!user.isActive ? <Chip label="Active" color="success" size="small" /> : <Chip label="Inactive" color="error" size="small" />)}
+                    ) : (user.isActive ? <Chip label="Active" color="success" size="small" /> : <Chip label="Inactive" color="error" size="small" />)}
                   </TableCell>
                   <TableCell>
                     {canManage ? (

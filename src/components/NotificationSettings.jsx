@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getMessaging, getToken } from 'firebase/messaging';
 import { replaceAllDevicesWithToken } from '../utils/deviceManager';
 import {
@@ -33,7 +33,7 @@ import PhoneAndroidIcon from '@mui/icons-material/PhoneAndroid';
 import TabletIcon from '@mui/icons-material/Tablet';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import EditIcon from '@mui/icons-material/Edit';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../firebase/config';
 import { useAuth } from '../context/AuthContext';
 import { setupNotifications, disableNotifications, getNotificationStatus } from '../utils/notifications';
@@ -74,31 +74,7 @@ const NotificationSettings = ({ compact = false }) => {
   });
   // Preferences hidden in simplified UI
 
-  useEffect(() => {
-    if (currentUser) {
-      // Only load enabled/disabled state for simplicity
-      const fetch = async () => {
-        try {
-          const notifStatus = getNotificationStatus();
-          setStatus(notifStatus);
-          const userRef = doc(db, 'users', currentUser.uid);
-          const userDoc = await getDoc(userRef);
-          const userData = userDoc.data();
-          setNotificationsEnabled(!!userData?.notificationsEnabled);
-          setCurrentDeviceToken(userData?.fcmToken || null);
-          
-          // Load devices
-          await loadDevices();
-        } catch (error) {
-          console.error('Error loading notification settings:', error);
-          setStatus(getNotificationStatus());
-        }
-      };
-      fetch();
-    }
-  }, [currentUser]);
-
-  const loadDevices = async () => {
+  const loadDevices = useCallback(async () => {
     if (!currentUser) {
       console.log('NotificationSettings: No current user, skipping device load');
       return;
@@ -126,7 +102,30 @@ const NotificationSettings = ({ compact = false }) => {
       setLoadingDevices(false);
       console.log('NotificationSettings: Loading complete');
     }
-  };
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    // Only load enabled/disabled state for simplicity
+    const fetch = async () => {
+      try {
+        const notifStatus = getNotificationStatus();
+        setStatus(notifStatus);
+        const userRef = doc(db, 'users', currentUser.uid);
+        const userDoc = await getDoc(userRef);
+        const userData = userDoc.data();
+        setNotificationsEnabled(!!userData?.notificationsEnabled);
+        setCurrentDeviceToken(userData?.fcmToken || null);
+        
+        // Load devices
+        await loadDevices();
+      } catch (error) {
+        console.error('Error loading notification settings:', error);
+        setStatus(getNotificationStatus());
+      }
+    };
+    fetch();
+  }, [currentUser, loadDevices]);
 
   // Refresh token state
   const [refreshingToken, setRefreshingToken] = useState(false);

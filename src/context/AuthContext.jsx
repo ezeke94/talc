@@ -1,6 +1,6 @@
-import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef, useMemo, useCallback } from 'react';
 import { auth, db, persistencePromise } from '../firebase/config';
-import { onAuthStateChanged, getRedirectResult } from 'firebase/auth';
+import { onAuthStateChanged } from 'firebase/auth';
 import { CircularProgress, Box } from '@mui/material';
 import { setupNotifications } from '../utils/notifications';
 import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
@@ -15,15 +15,25 @@ export const AuthProvider = ({ children }) => {
     const [currentUser, setCurrentUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [authInitialized, setAuthInitialized] = useState(false);
+    const currentUserRef = useRef(null);
+    const authInitializedRef = useRef(false);
     // Keep a live subscription to the user's Firestore profile so role/centers never flicker
     const userDocUnsubRef = useRef(null);
 
-    const stopUserDocSubscription = () => {
-        try { if (typeof userDocUnsubRef.current === 'function') userDocUnsubRef.current(); } catch {}
-        userDocUnsubRef.current = null;
-    };
+    useEffect(() => {
+        currentUserRef.current = currentUser;
+    }, [currentUser]);
 
-    const startUserDocSubscription = (uid, baseUserObj) => {
+    useEffect(() => {
+        authInitializedRef.current = authInitialized;
+    }, [authInitialized]);
+
+    const stopUserDocSubscription = useCallback(() => {
+        try { if (typeof userDocUnsubRef.current === 'function') userDocUnsubRef.current(); } catch { /* ignore unsubscription errors */ }
+        userDocUnsubRef.current = null;
+    }, []);
+
+    const startUserDocSubscription = useCallback((uid, baseUserObj) => {
         if (!uid) return;
         // Avoid duplicate subscriptions
         stopUserDocSubscription();
@@ -37,17 +47,16 @@ export const AuthProvider = ({ children }) => {
                 return merged;
             });
             // Cache for quick restore in PWA visibility changes
-            try { localStorage.setItem('talc_user_profile', JSON.stringify(data || {})); } catch {}
+            try { localStorage.setItem('talc_user_profile', JSON.stringify(data || {})); } catch { /* ignore localStorage errors */ }
         }, (e) => {
             // On error, keep previous state; optionally log
             console.debug('User doc subscription error:', e?.message || e);
         });
-    };
+    }, [stopUserDocSubscription]);
 
     useEffect(() => {
         let unsubscribe = () => {};
         let authStateTimeout;
-        let redirectUser = null; // Move this to outer scope so it's accessible in onAuthStateChanged
 
         const init = async () => {
             // Ensure auth persistence has been configured before handling redirect or subscribing.
@@ -59,27 +68,7 @@ export const AuthProvider = ({ children }) => {
                 console.debug('Auth persistence setup failed or was skipped:', e?.message || e);
             }
 
-            // CRITICAL: Check for redirect result FIRST before setting up auth state listener
-            // This must happen BEFORE onAuthStateChanged to catch the redirect user
-            console.log('AuthContext: Checking for redirect sign-in result...');
-            console.log('AuthContext: Current URL:', window.location.href);
-            console.log('AuthContext: URL search params:', window.location.search);
-            try {
-                const redirectResult = await getRedirectResult(auth);
-                console.log('AuthContext: getRedirectResult returned:', redirectResult ? 'user found' : 'null');
-                if (redirectResult?.user) {
-                    console.log('AuthContext: ✓ Redirect sign-in successful:', redirectResult.user.email);
-                    redirectUser = redirectResult.user; // Set the outer scope variable
-                    // Clear any previous redirect error markers
-                    try { sessionStorage.removeItem('authRedirectError'); } catch {}
-                } else {
-                    console.log('AuthContext: No redirect result (user may have been on login page or already signed in)');
-                }
-            } catch (e) {
-                // Persist redirect error so UI can surface it on the login screen
-                console.error('AuthContext: Redirect sign-in failed:', e?.code, e?.message, e);
-                try { sessionStorage.setItem('authRedirectError', e?.code || e?.message || 'redirect_failed'); } catch {}
-            }
+            // Redirect-based sign-in is disabled; no getRedirectResult handling.
 
             // Log the current URL to confirm OAuth redirect parameters are received
             console.debug('Current URL:', window.location.href);
@@ -91,7 +80,7 @@ export const AuthProvider = ({ children }) => {
                     const displayStandalone = window.matchMedia?.('(display-mode: standalone)')?.matches;
                     const displayWCO = window.matchMedia?.('(display-mode: window-controls-overlay)')?.matches;
                     return isiOSStandalone || displayStandalone || displayWCO;
-                } catch (e) {
+                    } catch {
                     return false;
                 }
             };
@@ -104,7 +93,7 @@ export const AuthProvider = ({ children }) => {
 
             // Set a timeout to prevent infinite loading in case Firebase auth doesn't respond
             authStateTimeout = setTimeout(() => {
-                if (!authInitialized) {
+                if (!authInitializedRef.current) {
                     console.warn('Auth state timeout - Firebase auth may be stuck');
                     setLoading(false);
                     setAuthInitialized(true);
@@ -122,9 +111,8 @@ export const AuthProvider = ({ children }) => {
 
                 setAuthInitialized(true);
 
-                // If we just got a user from redirect, prefer that over the auth state user
-                const actualUser = redirectUser || user;
-                console.debug('Actual user to process:', actualUser?.email || 'none');
+                const actualUser = user;
+                console.debug('User to process:', actualUser?.email || 'none');
 
                 // Start processing this change
                 if (actualUser) {
@@ -184,7 +172,7 @@ export const AuthProvider = ({ children }) => {
                 } else {
                     // Signed out: clear state and any profile subscription/cache
                     stopUserDocSubscription();
-                    try { localStorage.removeItem('talc_user_profile'); } catch {}
+                    try { localStorage.removeItem('talc_user_profile'); } catch { /* ignore storage removal errors */ }
                     setCurrentUser(null);
                     setLoading(false);
                 }
@@ -195,11 +183,11 @@ export const AuthProvider = ({ children }) => {
         const handlePWAAppVisible = () => {
             console.debug('AuthContext: PWA app became visible, checking auth state');
             // Force a auth state check when PWA becomes visible
-            if (auth.currentUser && !currentUser) {
+            if (auth.currentUser && !currentUserRef.current) {
                 console.debug('AuthContext: Found Firebase user but no context user, syncing');
                 // Try to enrich with cached Firestore profile immediately to avoid role flicker
                 let cached = null;
-                try { cached = JSON.parse(localStorage.getItem('talc_user_profile') || 'null'); } catch {}
+                try { cached = JSON.parse(localStorage.getItem('talc_user_profile') || 'null'); } catch { /* ignore parse errors */ }
                 setCurrentUser({ ...auth.currentUser, ...(cached || {}) });
                 // Ensure live subscription is active
                 startUserDocSubscription(auth.currentUser.uid, auth.currentUser);
@@ -230,7 +218,7 @@ export const AuthProvider = ({ children }) => {
             }
             try {
                 if (typeof unsubscribe === 'function') unsubscribe();
-            } catch (e) {
+            } catch {
                 /* ignore */
             }
             // Clean up user doc subscription
@@ -241,10 +229,12 @@ export const AuthProvider = ({ children }) => {
             window.removeEventListener('pwa-auth-error', handlePWAAuthError);
             window.removeEventListener('pwa-auth-promise-error', handlePWAAuthError);
         };
-    }, []);
+    }, [startUserDocSubscription, stopUserDocSubscription]);
+
+    const value = useMemo(() => ({ currentUser, loading }), [currentUser, loading]);
 
     return (
-        <AuthContext.Provider value={{ currentUser, loading }}>
+        <AuthContext.Provider value={value}>
             {loading ? (
                 <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '100vh', gap: 2 }}>
                     <CircularProgress />

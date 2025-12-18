@@ -19,7 +19,7 @@ const KPIChart = ({ data, onSegmentClick }) => {
     // Calculate total for percentage
     const total = data.reduce((sum, entry) => sum + entry.value, 0);
     
-    const CustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }) => {
+    const CustomLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent }) => {
         // Convert midAngle to radians and calculate label position
         const RADIAN = Math.PI / 180;
         const radius = innerRadius + (outerRadius - innerRadius) * 0.5;

@@ -55,9 +55,9 @@ export async function refreshServiceWorkers({ unregisterNonMessaging = false } =
       const scriptUrl = reg.active?.scriptURL || reg.waiting?.scriptURL || reg.installing?.scriptURL;
       const isFCM = isFirebaseMessagingSW(scriptUrl);
       if (unregisterNonMessaging && !isFCM) {
-        try { await reg.unregister(); } catch {}
+        try { await reg.unregister(); } catch { /* ignore unregister failures */ }
       } else {
-        try { await reg.update(); } catch {}
+        try { await reg.update(); } catch { /* ignore update failures */ }
       }
     }));
   } catch (e) {
@@ -80,6 +80,6 @@ export async function resetAppCache({ deep = false } = {}) {
       localStorage.removeItem('talc_notification_history');
       localStorage.removeItem('talc_notification_dedup');
       // Do NOT remove auth keys or FCM token by default to avoid sign-outs
-    } catch {}
+    } catch { /* ignore localStorage errors */ }
   }
 }

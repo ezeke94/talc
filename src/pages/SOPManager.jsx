@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Container, Typography, Paper, Box, Button, TextField, List, ListItem, ListItemText, Dialog, DialogTitle, DialogContent, DialogActions, CircularProgress, Checkbox, FormControlLabel, Chip, IconButton, Tooltip, Card, CardContent, CardActions, Stack, Divider, Badge } from '@mui/material';
 import { Link as LinkIcon, Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Description as DescriptionIcon } from '@mui/icons-material';
 import { db } from '../firebase/config';
-import { collection, addDoc, updateDoc, doc, deleteDoc, onSnapshot, orderBy, query, getDoc } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, deleteDoc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 
 const SOPManager = () => {
@@ -106,7 +106,7 @@ const SOPManager = () => {
           createdAt: now,
           createdBy: { userId: currentUser.uid, userName: baseUserName },
         };
-        const docRef = await addDoc(collection(db, 'sops'), newSop);
+        const _docRef = await addDoc(collection(db, 'sops'), newSop);
         
       }
       // Close dialog and reset

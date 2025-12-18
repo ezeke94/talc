@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Alert,
   AlertTitle,
@@ -33,22 +33,10 @@ const NotificationPrompt = ({ onNavigateToSettings }) => {
   const [showPrompt, setShowPrompt] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
   const [notificationStatus, setNotificationStatus] = useState(null);
-  const [userPreferences, setUserPreferences] = useState(null);
+  const [_userPreferences, _setUserPreferences] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    console.log('NotificationPrompt: currentUser changed:', !!currentUser);
-    if (currentUser) {
-      checkNotificationStatus();
-    } else {
-      // Reset states when no user
-      setShowPrompt(false);
-      setNotificationStatus(null);
-      setUserPreferences(null);
-    }
-  }, [currentUser]);
-
-  const checkNotificationStatus = async () => {
+  const checkNotificationStatus = useCallback(async () => {
     if (!currentUser) return;
     
     console.log('NotificationPrompt: checkNotificationStatus called');
@@ -73,7 +61,7 @@ const NotificationPrompt = ({ onNavigateToSettings }) => {
         notificationsEnabled: userData.notificationsEnabled,
         lastDismissed: userData.notificationPromptDismissed 
       });
-      setUserPreferences(userData);
+      _setUserPreferences(userData);
 
       // Show prompt if conditions are met
       const shouldShow = shouldShowNotificationPrompt(status, userData);
@@ -86,7 +74,19 @@ const NotificationPrompt = ({ onNavigateToSettings }) => {
       // Don't show prompt if there's an error
       setShowPrompt(false);
     }
-  };
+  }, [currentUser]);
+
+  useEffect(() => {
+    console.log('NotificationPrompt: currentUser changed:', !!currentUser);
+    if (currentUser) {
+      checkNotificationStatus();
+    } else {
+      // Reset states when no user
+      setShowPrompt(false);
+      setNotificationStatus(null);
+      _setUserPreferences(null);
+    }
+  }, [currentUser, checkNotificationStatus]);
 
   const shouldShowNotificationPrompt = (status, userData) => {
     // Safety checks

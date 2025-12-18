@@ -36,25 +36,25 @@ import {
   Alert,
   Fade,
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+
 import SearchIcon from '@mui/icons-material/Search';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import CloseIcon from '@mui/icons-material/Close';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import LinkIcon from '@mui/icons-material/Link';
-import EventForm from '../components/EventForm';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AutorenewIcon from '@mui/icons-material/Autorenew';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import AddIcon from '@mui/icons-material/Add';
 import CheckIcon from '@mui/icons-material/Check';
-import { exportEventsToPDF } from '../utils/pdfExport';
+// PDF export handled via print preview; no direct PDF library used.
 import logo from '../assets/logo.png';
 import { db } from '../firebase/config';
 import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc, onSnapshot } from 'firebase/firestore';
 // notifications removed
 import { useAuth } from '../context/AuthContext';
+import EventForm from '../components/EventForm';
 
 // Keyframe animation for pulsing save button
 const pulseKeyframes = `
@@ -99,7 +99,7 @@ if (typeof document !== 'undefined') {
 
 const Calendar = () => {
   // Save button component - animated design
-  const UnsavedTasksIndicator = ({ eventId, isMobile }) => {
+  const UnsavedTasksIndicator = ({ eventId }) => {
     const hasUnsaved = !!todosChanged[eventId];
     
     if (!hasUnsaved) return null;
@@ -147,9 +147,7 @@ const Calendar = () => {
   // State for editing todos inline
   const [editingTodos, setEditingTodos] = useState({}); // { [eventId]: todos }
   const [todosChanged, setTodosChanged] = useState({}); // { [eventId]: boolean }
-  const [expandedTodos, setExpandedTodos] = useState({}); // control collapsed/expanded task lists per event
   const [showUnsavedSnackbar, setShowUnsavedSnackbar] = useState(false); // Show snackbar when changes detected
-  const [unsavedEventId, setUnsavedEventId] = useState(null); // Track which event has unsaved changes
 
   // Save updated todos for an event
   const handleSaveTodos = async (eventId) => {
@@ -171,10 +169,7 @@ const Calendar = () => {
   setAllEvents(prev => prev.map(ev => (ev.id === eventId ? { ...ev, todos, status } : ev)));
       setTodosChanged(prev => ({ ...prev, [eventId]: false }));
       setShowUnsavedSnackbar(false); // Hide snackbar on successful save
-      // Always log audit when todos are saved
-      // Fetch latest event data after update to ensure audit log is correct
-      const eventSnap = await getDocs(query(collection(db, 'events'), where('__name__', '==', eventId)));
-      const eventObj = eventSnap.docs.length > 0 ? eventSnap.docs[0].data() : {};
+      // Always log audit when todos are saved (no additional read required here).
 
     } catch (err) {
       alert('Error saving tasks. Please try again.');
@@ -190,12 +185,9 @@ const Calendar = () => {
       return { ...prev, [eventId]: updatedTodos };
     });
     setTodosChanged(prev => ({ ...prev, [eventId]: true }));
-    setUnsavedEventId(eventId);
     setShowUnsavedSnackbar(true);
   };
-  const toggleExpandTodos = (eventId) => {
-    setExpandedTodos(prev => ({ ...prev, [eventId]: !prev[eventId] }));
-  };
+  // toggleExpandTodos removed; expansion UI not implemented.
   const { currentUser } = useAuth();
   // Role helpers with fallback to cached profile to avoid flicker when context updates lag
   const normalizedRole = useMemo(() => {
@@ -206,7 +198,6 @@ const Calendar = () => {
     } catch { return ''; }
   }, [currentUser]);
   const isEvaluator = useMemo(() => normalizedRole === 'evaluator', [normalizedRole]);
-  const isCoordinator = useMemo(() => normalizedRole === 'coordinator', [normalizedRole]);
   const isAdminOrQuality = useMemo(() => (normalizedRole === 'admin' || normalizedRole === 'quality'), [normalizedRole]);
   const canEditEvents = useMemo(() => (normalizedRole === 'admin' || normalizedRole === 'quality' || normalizedRole === 'evaluator'), [normalizedRole]);
 
@@ -228,7 +219,6 @@ const Calendar = () => {
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
   const [filterOwnerName, setFilterOwnerName] = useState('');
-  const [filterSop, setFilterSop] = useState('');
 
   // Reschedule dialog
   // Filter collapse state
@@ -267,23 +257,20 @@ const Calendar = () => {
     console.log('Center map created:', map, 'from centers:', centers);
     return map;
   }, [centers]);
-  const userMap = useMemo(
-    () => Object.fromEntries(users.map(u => [u.id || u.uid, u.name || u.displayName || u.email || ''])),
-    [users]
-  );
+  // userMap not used; rely on direct lookups from `users`.
   const mentorMap = useMemo(
     () => Object.fromEntries(mentors.map(m => [m.id, m.name])),
     [mentors]
   );
   // Owner name for search: always displayName/email for users, name for mentors
-  const getOwnerName = (ev) => {
+  const getOwnerName = useCallback((ev) => {
     if (ev.ownerType === 'mentor') {
       return mentorMap[ev.ownerId] || '';
     }
     // For user, prefer displayName, fallback to email
     const user = users.find(u => (u.id || u.uid) === ev.ownerId);
     return user?.displayName || user?.email || '';
-  };
+  }, [mentorMap, users]);
   
   // Get SOP URL for an event
   const getSopUrl = (ev) => {
@@ -299,21 +286,8 @@ const Calendar = () => {
     return isNaN(d.getTime()) ? null : d;
   };
 
-  // Theme breakpoint helper for responsive UI (used to show FAB on mobile)
-  const theme = useTheme();
-  const [isMobile, setIsMobile] = useState(false);
-
-  // More reliable mobile detection for Safari and Opera
-  useEffect(() => {
-    const checkMobile = () => {
-      const width = window.innerWidth;
-      setIsMobile(width < 900);
-    };
-    
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  // Responsive helper
+  const mediaIsMobile = useMediaQuery('(max-width:900px)');
 
   // Export PDF for upcoming week
 
@@ -361,7 +335,7 @@ const Calendar = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentUser]);
+  }, []);
 
   // Realtime listener for events limited to a date window (now -30 days .. now +15 days)
   useEffect(() => {
@@ -401,8 +375,8 @@ const Calendar = () => {
           try {
             await updateDoc(doc(db, 'events', ev.id), { status: 'completed' });
             ev.status = 'completed';
-          } catch (err) {
-            // ignore
+          } catch {
+            /* ignore */
           }
         }
 
@@ -445,8 +419,6 @@ const Calendar = () => {
 
       // Build helper maps
       const centerMapForExport = Object.fromEntries(centers.map(c => [c.id || c.name, c.name || c.id]));
-      const userMapForExport = Object.fromEntries(users.map(u => [u.id || u.uid, u]));
-      const mentorMapForExport = Object.fromEntries(mentors.map(m => [m.id, m]));
 
       const taskMap = {};
       eventsForWeek.forEach(ev => {
@@ -600,9 +572,9 @@ const Calendar = () => {
       setAllEvents(prev => prev.map(ev => (ev.id === rescheduleEvent.id ? { ...ev, startDateTime: newDateTime, comments: updatedComments } : ev)));
   // notification removed: event_reschedule
 
-    } catch (err) {
+    } catch (_ERR) {
       alert('Error rescheduling event/task. Please try again.');
-      console.error(err);
+      console.error(_ERR);
     }
     setRescheduleDialogOpen(false);
     setRescheduleEvent(null);
@@ -619,13 +591,13 @@ const Calendar = () => {
       fetchedRef.current = false;
       return;
     }
-  // Prevent double fetching in StrictMode / remount scenarios
-  if (fetchedRef.current) return;
-  fetchedRef.current = true;
+    // Prevent double fetching in StrictMode / remount scenarios
+    if (fetchedRef.current) return;
+    fetchedRef.current = true;
 
-  // Load initial data
-  loadData();
-  }, [currentUser]);
+    // Load initial data
+    loadData();
+  }, [currentUser, loadData]);
 
   // Keep `events` in sync with `allEvents` when the master list changes (local updates)
   useEffect(() => {
@@ -657,7 +629,7 @@ const Calendar = () => {
         });
 
       } else {
-        const docRef = await addDoc(collection(db, 'events'), {
+        await addDoc(collection(db, 'events'), {
           ...eventData,
           lastModifiedBy: { userId: currentUser.uid, userName: currentUser.displayName },
           createdBy: { userId: currentUser.uid, userName: currentUser.displayName },
@@ -667,9 +639,9 @@ const Calendar = () => {
         // update `allEvents`/`events`. This avoids a transient duplicate
         // showing on create across devices.
       }
-    } catch (err) {
+    } catch (_ERR) {
       alert('Error saving event/task. Please try again.');
-      console.error(err);
+      console.error(_ERR);
     }
     setShowForm(false);
     setEditingEvent(null);
@@ -687,9 +659,9 @@ const Calendar = () => {
   setAllEvents(prev => prev.filter(ev => ev.id !== eventId));
   // notification removed: event_delete
 
-    } catch (err) {
+    } catch (_ERR) {
       alert('Error deleting event/task. Please try again.');
-      console.error(err);
+      console.error(_ERR);
     }
   };
 
@@ -738,10 +710,10 @@ const Calendar = () => {
   setAllEvents(prev => [...prev, newEvent]);
   // notification removed: event_create (duplicate)
       return newEvent;
-    } catch (err) {
-      console.error('Failed to duplicate event', err);
+    } catch (_ERR) {
+      console.error('Failed to duplicate event', _ERR);
       alert('Failed to duplicate event. Please try again.');
-      throw err;
+      throw _ERR;
     }
   };
 
@@ -773,8 +745,8 @@ const Calendar = () => {
         }
         // Do not open or edit the original event
       }
-    } catch (err) {
-      // error handled in called functions
+    } catch {
+      /* error handled in called functions */
     } finally {
       setConfirmLoading(false);
       closeConfirm();
@@ -825,7 +797,7 @@ const Calendar = () => {
         }
 
         return filtered;
-  }, [allEvents, filterCenter, filterStatus, filterDateFrom, filterDateTo, searchText, filterOwnerName, showHistory]);
+  }, [allEvents, filterCenter, filterStatus, filterDateFrom, filterDateTo, searchText, filterOwnerName, showHistory, getOwnerName]);
 
   const groupedByDate = useMemo(() => {
     // Build ordered groups to preserve the sorted order from filteredEvents
@@ -843,10 +815,7 @@ const Calendar = () => {
     return { groups, order };
   }, [filteredEvents]);
 
-  const getCenterNames = (centerIds) => {
-    if (!Array.isArray(centerIds)) return [];
-    return centerIds.map(id => centerMap[id] || id);
-  };
+  // getCenterNames helper removed (unused).
 
   // Who can view reschedule comments: admins/quality, evaluators, the event owner, or any user who authored a comment
   const canViewComments = (ev) => {
@@ -874,7 +843,7 @@ const Calendar = () => {
                   onClick={() => setFiltersOpen(v => !v)} 
                   color="primary" 
                   aria-label="filters"
-                  size={isMobile ? "small" : "medium"}
+                  size={mediaIsMobile ? "small" : "medium"}
                   sx={{ p: { xs: 1, sm: 1.5 } }}
                 >
                   <FilterListIcon sx={{ fontSize: { xs: '1.1rem', sm: '1.5rem' } }} />
@@ -882,19 +851,19 @@ const Calendar = () => {
               </Tooltip>
               <Tooltip title="Export next week's events (Mon–Sun)">
                 <span>
-                  <IconButton
+                  <IconButton 
                     onClick={async () => { await handleExportNextWeekPdf(); }}
                     color="primary"
                     aria-label="export-pdf"
                     disabled={exportingPdf}
-                    size={isMobile ? "small" : "medium"}
+                    size={mediaIsMobile ? "small" : "medium"}
                     sx={{ p: { xs: 1, sm: 1.5 } }}
                   >
                     <PictureAsPdfIcon sx={{ fontSize: { xs: '1.1rem', sm: '1.5rem' } }} />
                   </IconButton>
                 </span>
               </Tooltip>
-              {!isMobile && (
+              {!mediaIsMobile && (
                 <Button 
                   variant="contained" 
                   color="primary" 
@@ -920,7 +889,7 @@ const Calendar = () => {
                       '& .MuiChip-label': { px: 1.25, fontWeight: 600 }
                     }}
                     aria-label="toggle-history"
-                    size={isMobile ? 'small' : 'medium'}
+                    size={mediaIsMobile ? 'small' : 'medium'}
                   />
                 </span>
               </Tooltip>
@@ -929,7 +898,7 @@ const Calendar = () => {
         </Box>
 
         {/* Create/Edit dialog */}
-        <Dialog open={showForm} onClose={() => { setShowForm(false); setEditingEvent(null); }} fullWidth maxWidth="md" fullScreen={isMobile}>
+        <Dialog open={showForm} onClose={() => { setShowForm(false); setEditingEvent(null); }} fullWidth maxWidth="md" fullScreen={mediaIsMobile}>
           <DialogTitle>{editingEvent ? 'Edit Event/Task' : 'Create Event/Task'}</DialogTitle>
           <DialogContent dividers>
             <EventForm
@@ -1026,18 +995,13 @@ const Calendar = () => {
         )}
 
         {/* Responsive: Table for desktop, Cards for mobile/tablet */}
-        {(() => {
-          const theme = useTheme();
-          const isMobile = useMediaQuery('(max-width:900px)');
-          if (loading) {
-            return <Typography>Loading events/tasks...</Typography>;
-          }
-          if (filteredEvents.length === 0) {
-            return <Typography>No events/tasks found.</Typography>;
-          }
-          if (!isMobile) {
+        {loading ? (
+          <Typography>Loading events/tasks...</Typography>
+        ) : filteredEvents.length === 0 ? (
+          <Typography>No events/tasks found.</Typography>
+        ) : !mediaIsMobile ? (
             // Desktop Table view
-            return (
+            (
               <TableContainer component={Paper} elevation={0} sx={{ boxShadow: 'none', background: 'transparent' }}>
                 <Table sx={{ minWidth: 700 }}>
           <TableHead>
@@ -1106,7 +1070,7 @@ const Calendar = () => {
                                     </Stack>
 
                                     <Stack direction="row" spacing={1} alignItems="flex-start" sx={{ mt: 1 }}>
-                                      <UnsavedTasksIndicator eventId={event.id} isMobile={false} />
+                                      <UnsavedTasksIndicator eventId={event.id} />
                                     </Stack>
 
                                     {canViewComments(event) && event.comments && event.comments.length > 0 && (
@@ -1209,10 +1173,10 @@ const Calendar = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
-            );
-          } else {
+            )
+          ) : (
             // Mobile Card view grouped by date
-            return (
+            (
               <List sx={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 3, p: 0 }}>
                 {groupedByDate.order.map(dateKey => (
                   <Box key={dateKey}>
@@ -1262,7 +1226,7 @@ const Calendar = () => {
                                   ))}
                                 </Box>
                                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', mt: 1 }}>
-                                  <UnsavedTasksIndicator eventId={event.id} isMobile={true} />
+                                  <UnsavedTasksIndicator eventId={event.id} />
                                 </Box>
                               </Box>
                             </Box>
@@ -1356,13 +1320,12 @@ const Calendar = () => {
                   </Box>
                 ))}
               </List>
-            );
-          }
-        })()}
+            )
+        )}
       </Paper>
 
       {/* Mobile floating action button for creating a new event/task - available to all users */}
-      {(isMobile || (typeof window !== 'undefined' && window.innerWidth < 900)) && (
+      {mediaIsMobile && (
         <Fab
           color="primary"
           aria-label="add"

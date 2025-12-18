@@ -33,7 +33,7 @@ export function generateNotificationId(payload) {
  * Check if notification was already received recently
  * Returns true if duplicate, false if new
  */
-export function isDuplicateNotification(notificationId, source = 'unknown', payload = {}) {
+export function isDuplicateNotification(notificationId, source = 'unknown') {
   try {
     const dedupData = JSON.parse(localStorage.getItem(DEDUP_KEY) || '{}');
     const now = Date.now();
@@ -47,7 +47,6 @@ export function isDuplicateNotification(notificationId, source = 'unknown', payl
     
     // Check if this notification exists
     if (dedupData[notificationId]) {
-      const timeSince = now - dedupData[notificationId].timestamp;
       // Duplicate detected - block it
       return true; // Duplicate
     }

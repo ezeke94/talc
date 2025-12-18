@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Button,
@@ -19,8 +19,7 @@ import {
   TextField,
   Tooltip,
   Typography,
-  useMediaQuery,
-  useTheme
+
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
@@ -32,7 +31,7 @@ import {
   collection,
   deleteDoc,
   doc,
-  getDocs,
+
   onSnapshot,
   serverTimestamp,
   updateDoc
@@ -184,8 +183,7 @@ const FormEditorDialog = ({ open, onClose, onSave, initial }) => {
 // Assignment UI intentionally removed; mentors assign forms on Mentors page
 
 const FormManagement = () => {
-  const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  // Responsive checks not required here
   const [forms, setForms] = useState([]);
   const [mentors, setMentors] = useState([]);
   const [loading, setLoading] = useState(true);

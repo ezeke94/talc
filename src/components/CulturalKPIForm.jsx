@@ -24,9 +24,7 @@ const CulturalKPIForm = () => {
             window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
             document.body.scrollTop = 0;
             document.documentElement.scrollTop = 0;
-        } catch (e) {
-            // ignore in non-browser environments
-        }
+        } catch { /* ignore in non-browser environments */ }
     }, []);
     const { mentorId } = useParams();
     const navigate = useNavigate();

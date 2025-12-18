@@ -202,7 +202,7 @@ export async function setupNotifications(currentUser, deviceName = null) {
     if (navigator.serviceWorker) {
       navigator.serviceWorker.addEventListener('message', (event) => {
         if (event.data.type === 'NOTIFICATION_RECEIVED') {
-          const { notificationId, timestamp, source } = event.data;
+          const { notificationId, source } = event.data;
           
           // Service worker received a notification, mark it in our dedup system
           if (notificationId && !isDuplicateNotification(notificationId, source)) {

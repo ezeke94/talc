@@ -1,5 +1,5 @@
 import { db } from '../firebase/config';
-import { collection, addDoc, doc, getDocs, setDoc, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, getDocs, Timestamp } from 'firebase/firestore';
 
 // Sample project data for seeding
 export const generateProjectMockData = async () => {

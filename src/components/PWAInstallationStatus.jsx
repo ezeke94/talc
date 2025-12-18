@@ -76,7 +76,7 @@ const PWAInstallationStatus = () => {
     }
   };
 
-  const { isPWA, isIOS, isAndroid, isMobile, canInstall, isStandalone } = installStatus;
+  const { isIOS, isAndroid, isMobile, canInstall, isStandalone } = installStatus;
 
   return (
     <Card>

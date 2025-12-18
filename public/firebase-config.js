@@ -10,3 +10,6 @@ const firebaseConfig = {
 };
 // Keep the variable name global for the service worker to import
 // Example usage in service worker: importScripts('/firebase-config.js');
+
+// Make available as a global for SWs that import this file
+try { self.firebaseConfig = firebaseConfig; } catch { /* non-SW contexts may not have `self` */ }

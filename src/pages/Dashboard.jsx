@@ -33,24 +33,13 @@ const Dashboard = () => {
     const userRole = (currentUser?.role || '').trim().toLowerCase();
     const canViewDashboard = ['admin', 'quality'].includes(userRole);
 
-    // If user doesn't have dashboard access, show access denied
-    if (!canViewDashboard) {
-        return (
-            <Container maxWidth="lg" sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
-                <Paper elevation={3} sx={{ borderRadius: { xs: 2, sm: 3 }, p: 4, textAlign: 'center' }}>
-                    <Typography variant="h5" color="error" gutterBottom>
-                        Access Denied
-                    </Typography>
-                    <Typography variant="body1" color="text.secondary">
-                        You don't have permission to view dashboards. Only Admin and Quality roles can access this page.
-                    </Typography>
-                </Paper>
-            </Container>
-        );
-    }
 
     useEffect(() => {
         const fetchData = async () => {
+            if (!canViewDashboard) {
+                setLoading(false);
+                return;
+            }
             setLoading(true);
             try {
                 const mentorsSnapshot = await getDocs(collection(db, 'mentors'));
@@ -73,16 +62,15 @@ const Dashboard = () => {
                     setForms(formsData);
                     // Keep existing default if still available; else fallback to first
                     if (formsData.length > 0) {
-                        const hasCurrent = formsData.some(f => f.name === kpiType);
-                        if (!hasCurrent) {
+                        setKpiType((prev) => {
+                            const hasCurrent = formsData.some(f => f.name === prev);
+                            if (hasCurrent) return prev;
                             // Prefer Intellect/Cultural if present; otherwise first form
                             const preferred = ['Intellect', 'Cultural'].find(n => formsData.some(f => f.name === n));
-                            setKpiType(preferred || formsData[0].name);
-                        }
+                            return preferred || formsData[0].name;
+                        });
                     }
-                } catch (e) {
-                    // forms collection may not exist yet; ignore
-                }
+                } catch { /* forms collection may not exist yet; ignore */ }
             } catch (error) {
                 console.error("Error fetching data:", error);
             } finally {
@@ -90,10 +78,10 @@ const Dashboard = () => {
             }
         };
         fetchData();
-    }, []);
+    }, [canViewDashboard]);
 
     useEffect(() => {
-        if (loading) return;
+        if (!canViewDashboard || loading) return;
 
         try {
             // Filter mentors by center if centerFilter is set.
@@ -181,13 +169,29 @@ const Dashboard = () => {
             setChartData([]);
         }
 
-    }, [kpiType, centerFilter, allMentors, allSubmissions, loading]);
+    }, [kpiType, centerFilter, allMentors, allSubmissions, loading, canViewDashboard]);
 
     const handleChartClick = (data) => {
         setModalTitle(`Mentors in "${data.name}"`);
         setModalMentors(data.mentors);
         setModalOpen(true);
     };
+
+    // If user doesn't have dashboard access, show access denied
+    if (!canViewDashboard) {
+        return (
+            <Container maxWidth="lg" sx={{ px: { xs: 1, sm: 2, md: 3 } }}>
+                <Paper elevation={3} sx={{ borderRadius: { xs: 2, sm: 3 }, p: 4, textAlign: 'center' }}>
+                    <Typography variant="h5" color="error" gutterBottom>
+                        Access Denied
+                    </Typography>
+                    <Typography variant="body1" color="text.secondary">
+                        You don't have permission to view dashboards. Only Admin and Quality roles can access this page.
+                    </Typography>
+                </Paper>
+            </Container>
+        );
+    }
 
     return (
         <Box>

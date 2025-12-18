@@ -12,7 +12,7 @@ export const isPWA = () => {
       document.referrer === "" ||
       document.referrer.includes("android-app://")
     );
-  } catch (e) {
+  } catch {
     return false;
   }
 };
@@ -20,7 +20,7 @@ export const isPWA = () => {
 export const isIOS = () => {
   try {
     return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  } catch (e) {
+  } catch {
     return false;
   }
 };
@@ -28,7 +28,7 @@ export const isIOS = () => {
 export const isAndroid = () => {
   try {
     return /Android/.test(navigator.userAgent);
-  } catch (e) {
+  } catch {
     return false;
   }
 };
@@ -36,7 +36,7 @@ export const isAndroid = () => {
 export const isMobile = () => {
   try {
     return isIOS() || isAndroid() || /Mobile|Tablet/.test(navigator.userAgent);
-  } catch (e) {
+  } catch {
     return false;
   }
 };
@@ -47,7 +47,7 @@ export const canInstallPWA = () => {
     return 'serviceWorker' in navigator && 
            'PushManager' in window &&
            'Notification' in window;
-  } catch (e) {
+  } catch {
     return false;
   }
 };
@@ -271,12 +271,12 @@ export const setupPWAVisibilityHandlers = () => {
   });
 
   // Handle beforeunload for PWA
-  window.addEventListener('beforeunload', (event) => {
+  window.addEventListener('beforeunload', () => {
     if (isPWA()) {
       console.log('PWA: App is being unloaded');
       // Clear any auth cache that might cause issues
       if ('caches' in window) {
-        caches.open('talc-cache-v1').then(cache => {
+        caches.open('talc-cache-v1').then(() => {
           // Signal service worker to clear auth cache
           if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
             navigator.serviceWorker.controller.postMessage({

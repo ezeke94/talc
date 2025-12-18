@@ -206,7 +206,7 @@ export function exportEventsToPDF(events, logoUrl, options = {}) {
         data.cell.styles.overflow = 'linebreak';
       }
     },
-    didDrawPage: (data) => {
+    didDrawPage: () => {
       doc.setDrawColor('#DDEEDD');
     },
     pageBreak: 'auto',

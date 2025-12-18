@@ -130,7 +130,7 @@ const Layout = () => {
         try {
             // Clear caches and ask SWs to clear theirs. Keep it shallow by default.
             await resetAppCache({ deep: false });
-        } catch {}
+        } catch { /* ignore reset errors */ }
         // Force a reload with a cache-busting param
         const url = new URL(window.location.href);
         url.searchParams.set('r', String(Date.now()));

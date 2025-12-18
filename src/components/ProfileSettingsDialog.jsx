@@ -7,7 +7,7 @@ import NotificationSettings from './NotificationSettings';
 
 const ProfileSettingsDialog = ({ onClose }) => {
   const { currentUser } = useAuth();
-  const [userData, setUserData] = useState(null);
+  const [_userData, _setUserData] = useState(null);
   const [name, setName] = useState('');
   const [assignedCenter, setAssignedCenter] = useState('');
   const [centers, setCenters] = useState([]);
@@ -21,7 +21,7 @@ const ProfileSettingsDialog = ({ onClose }) => {
       const snap = await getDoc(ref);
       const data = snap.exists() ? snap.data() : null;
       
-      setUserData(data);
+      _setUserData(data);
       setName(data?.name || data?.displayName || '');
       
       if (Array.isArray(data?.assignedCenters)) {

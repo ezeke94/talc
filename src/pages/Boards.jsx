@@ -69,7 +69,6 @@ import {
   useDroppable,
 } from '@dnd-kit/core';
 import {
-  arrayMove,
   SortableContext,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
@@ -260,7 +259,7 @@ const Boards = () => {
       };
     }
     return columns;
-  }, [projects, showOnHold]);
+  }, [projects, showOnHold, isMobile]);
 
   // Handle drag and drop
   const handleDragStart = (event) => {

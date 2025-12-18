@@ -20,14 +20,14 @@ const MentorDetail = () => {
     const [notesDialogOpen, setNotesDialogOpen] = useState(false);
     const [allNotes, setAllNotes] = useState([]);
     const [notesPage, setNotesPage] = useState(1);
-    const [expandedNotes, setExpandedNotes] = useState({});
+    const [_expandedNotes, _setExpandedNotes] = useState({});
     const [activeKpiTab, setActiveKpiTab] = useState(0);
     const [availableForms, setAvailableForms] = useState([]); // all forms from kpiForms
     const NOTES_PER_PAGE = 10;
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-    const intellectRef = useRef(null);
-    const culturalRef = useRef(null);
+    const _intellectRef = useRef(null);
+    const _culturalRef = useRef(null);
 
     // Labels imported from shared constants
 
@@ -43,7 +43,7 @@ const MentorDetail = () => {
                 } else {
                     setError('Mentor not found.');
                 }
-            } catch (err) {
+            } catch {
                 setError('Failed to load mentor data.');
             }
         };
@@ -57,7 +57,7 @@ const MentorDetail = () => {
             const subsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setSubmissions(subsData);
             setLoading(false);
-        }, (err) => {
+        }, () => {
             setError('Failed to load KPI submissions.');
             setLoading(false);
         });
@@ -73,10 +73,7 @@ const MentorDetail = () => {
                 const snap = await getDocs(fsCollection(db, 'kpiForms'));
                 const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
                 setAvailableForms(arr);
-            } catch (e) {
-                // ignore if forms collection not present
-                setAvailableForms([]);
-            }
+            } catch { /* ignore if forms collection not present */ setAvailableForms([]); }
         })();
     }, []);
 
@@ -198,7 +195,7 @@ const MentorDetail = () => {
     if (!mentor) return null;
 
     // Show all assigned centers or fallback to center
-    const centers = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
+    const _centers = Array.isArray(mentor.assignedCenters) ? mentor.assignedCenters : (mentor.center ? [mentor.center] : []);
 
     // Determine which forms to show for this mentor: use Firestore-assigned forms only
     const assignedFormIds = Array.isArray(mentor?.assignedFormIds) ? mentor.assignedFormIds : [];
@@ -208,20 +205,7 @@ const MentorDetail = () => {
 
     // Custom chart component to show score labels for desktop only
     const ChartWithLabels = ({ data, fieldKeys }) => {
-        // Custom label renderer for scores, with background for visibility
-        const renderScoreLabel = (props) => {
-            const { x, y, value, index } = props;
-            // Offset labels slightly to avoid overlap
-            const yOffset = -16;
-            return (
-                <g>
-                    <rect x={x - 14} y={y + yOffset - 10} width={28} height={18} rx={4} fill="#fff" opacity={0.8} />
-                    <text x={x} y={y + yOffset} textAnchor="middle" fontSize="12" fill="#555" style={{ pointerEvents: 'none', fontWeight: 600 }}>
-                        {value.toFixed(1)}
-                    </text>
-                </g>
-            );
-        };
+
         const colors = [
             '#8884d8','#82ca9d','#ff7300','#38761d','#f44336','#2196f3','#9c27b0','#ffca28','#4caf50','#00acc1'
         ];
@@ -285,7 +269,7 @@ const MentorDetail = () => {
     };
 
     // Responsive KPI section layout with notes expansion
-    const KPISection = ({ title, data, formType, kpiType }) => (
+    const KPISection = ({ title, data, kpiType }) => (
         <Fade in timeout={500}>
             <Paper sx={{ p: { xs: 2, md: 3 }, mt: 3 }}>
                 <Typography variant="h5" sx={{ mb: 2 }}>{title}</Typography>

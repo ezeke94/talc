@@ -31,7 +31,7 @@ try {
       }
     });
   }
-} catch {}
+} catch (e) { /* ignore env load errors (best-effort) */ }
 
 const cfg = {
   apiKey: process.env.VITE_FIREBASE_API_KEY || '',
@@ -58,4 +58,4 @@ try {
   const verContent = `// Auto-generated build stamp for SW\nself.SW_BUILD = ${JSON.stringify(stamp)};\n`;
   fs.writeFileSync(verOut, verContent, { encoding: 'utf8' });
   console.log('Wrote', verOut);
-} catch {}
+} catch (e) { /* ignore version write errors */ }
