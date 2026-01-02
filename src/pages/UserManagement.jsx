@@ -196,7 +196,8 @@ const UserManagement = () => {
       const functions = getFunctions();
       const sendTestNotif = httpsCallable(functions, 'sendTestNotification');
       
-      const result = await sendTestNotif({ userId, userName });
+      const clientTimestamp = new Date().toLocaleString();
+      const result = await sendTestNotif({ userId, userName, clientTimestamp });
       
       if (result.data.success) {
         setSnackbar({ 

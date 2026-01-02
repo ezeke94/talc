@@ -26,7 +26,7 @@ exports.sendTestNotification = onCall({
   cors: true, // Enable CORS for all origins
 }, async (request) => {
   try {
-    const { userId, userName } = request.data;
+    const { userId, userName, clientTimestamp } = request.data;
 
     if (!userId) {
       throw new Error('userId is required');
@@ -69,11 +69,13 @@ exports.sendTestNotification = onCall({
     }
 
     const tokenList = Array.from(tokens);
-    const timestamp = new Date().toLocaleString();
+    const serverIso = new Date().toISOString();
+    // Prefer client-side timestamp (locale) when provided; otherwise show server ISO (marked UTC)
+    const displayTimestamp = clientTimestamp || `${serverIso} (UTC)`;
     const displayName = userName || 'User';
     
     const title = 'Test Notification';
-    const body = `Hi ${displayName}! This is a test notification sent at ${timestamp}`;
+    const body = `Hi ${displayName}! This test notification was sent at ${displayTimestamp}`; 
 
     // Create notifications for each token with proper iOS/Android formatting
     const baseUrl = (process.env.FRONTEND_URL || 'https://kpitalc.netlify.app').replace(/\/$/, '');
@@ -88,7 +90,8 @@ exports.sendTestNotification = onCall({
           token,
           data: {
             type: 'test_notification',
-            timestamp: new Date().toISOString(),
+            timestamp: serverIso,
+            clientTimestamp: clientTimestamp || '',
             url: '/'
           },
           webpush: {
@@ -111,7 +114,8 @@ exports.sendTestNotification = onCall({
         notification: { title, body },
         data: {
           type: 'test_notification',
-          timestamp: new Date().toISOString(),
+          timestamp: serverIso,
+          clientTimestamp: clientTimestamp || '',
           url: '/'
         },
         webpush: {

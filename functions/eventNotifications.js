@@ -133,6 +133,34 @@ function createIOSNotification(title, body, priority = '10', badge = 1) {
   };
 }
 
+// Helper: Handle Firestore index-required errors for scheduled functions
+async function handleMissingIndex(funcName, error) {
+  const isIndexError = error && (error.code === 9 || (error.message && error.message.includes('requires an index')));
+  if (!isIndexError) return false;
+  console.warn(`Firestore index missing for ${funcName}. Skipping this scheduled run: ${error.message}`);
+  try {
+    await db.collection('_alerts').doc('missing_indexes').set({
+      lastSeen: new Date(),
+      [funcName]: { lastSeen: new Date(), message: String(error) }
+    }, { merge: true });
+  } catch (e) {
+    console.warn('Failed to write missing_indexes alert doc', e);
+  }
+  return true;
+}
+
+// Helper: Mark missing index resolved for scheduled functions
+async function resolveMissingIndex(funcName) {
+  try {
+    await db.collection('_alerts').doc('missing_indexes').set({
+      lastResolved: new Date(),
+      [funcName]: { resolvedAt: new Date(), resolved: true }
+    }, { merge: true });
+  } catch (e) {
+    console.warn('Failed to mark missing index resolved', e);
+  }
+} 
+
 // Helper: fetch all device tokens for a user (main fcmToken + devices subcollection)
 async function getAllUserTokens(userId) {
   const tokens = new Set();
@@ -217,354 +245,17 @@ async function handleSendResults(results, recipientsMeta) {
   }
 }
 
+// REMOVED: runOwnerEventReminders runner (moved to scheduled job only); keep scheduled `sendOwnerEventReminders` for now (may be removed later if desired)
+
+
 // Owner reminders - one day before at 4 PM UTC
-exports.sendOwnerEventReminders = onSchedule({
-  schedule: "0 16 * * *", // Daily at 4 PM UTC
-  timeZone: "UTC",
-  region: "us-central1",
-  memory: "256MiB",
-}, async (event) => {
-  try {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(0, 0, 0, 0);
-    
-    const dayAfter = new Date(tomorrow);
-    dayAfter.setDate(dayAfter.getDate() + 1);
+// REMOVED: scheduled owner event reminders (disabled/removed by request)
 
-    // Get events due tomorrow
-    const eventsSnapshot = await db.collection('events')
-      .where('startDateTime', '>=', tomorrow)
-      .where('startDateTime', '<', dayAfter)
-      .where('status', 'in', ['pending', 'in_progress'])
-      .get();
+// REMOVED: quality-team same-day reminders and core runner (deleted per request)
 
-  const notifications = [];
-  const recipientsMeta = [];
 
-    // Process events and notify owners
-    for (const eventDoc of eventsSnapshot.docs) {
-      const event = eventDoc.data();
-      
-      // Skip events that were recently modified (within last 24 hours) to avoid double notifications
-      // with real-time update notifications
-      if (event.lastModifiedAt) {
-        const lastModified = timestampToDate(event.lastModifiedAt);
-        const oneDayAgo = new Date();
-        oneDayAgo.setDate(oneDayAgo.getDate() - 1);
-        if (lastModified && lastModified > oneDayAgo) {
-          console.log(`Skipping reminder for recently modified event: ${event.title}`);
-          continue;
-        }
-      }
-      
-      // Get event owners (assignees who created or own the event)
-      const ownerIds = [];
-      
-      // Add event creator as owner if they're a user
-      if (event.createdBy?.userId) {
-        ownerIds.push(event.createdBy.userId);
-      }
-      
-      // Add assignees who are owners/creators
-      const assigneeIds = event.assignees || [];
-      ownerIds.push(...assigneeIds);
-      
-      // Remove duplicates
-      const uniqueOwnerIds = [...new Set(ownerIds)];
-      
-      for (const userId of uniqueOwnerIds) {
-        const tokens = await getAllUserTokens(userId);
-        for (const token of tokens) {
-          const isWeb = isWebToken(token);
-          if (isWeb) {
-            notifications.push({
-              token,
-              data: {
-                type: 'event_reminder_owner',
-                eventId: eventDoc.id,
-                url: `/calendar`,
-                timing: 'day_before'
-              },
-              webpush: {
-                fcmOptions: { link: `${baseUrl}/calendar` },
-                notification: {
-                  title: `Event Tomorrow: ${event.title}`,
-                  body: `Due tomorrow at ${formatTimestampTime(event.startDateTime)}`,
-                  icon: absIcon,
-                  badge: absBadge
-                }
-              }
-            });
-          } else {
-            notifications.push({
-              token,
-              notification: {
-                title: `Event Tomorrow: ${event.title}`,
-                body: `Due tomorrow at ${formatTimestampTime(event.startDateTime)}`,
-              },
-              data: {
-                type: 'event_reminder_owner',
-                eventId: eventDoc.id,
-                url: `/calendar`,
-                timing: 'day_before'
-              },
-              webpush: {
-                fcmOptions: { link: `${baseUrl}/calendar` },
-                notification: { icon: absIcon, badge: absBadge }
-              }
-            });
-          }
-          recipientsMeta.push({ userId, token });
-        }
-      }
-    }
+// REMOVED: weekly overdue task reminders (deleted per request)
 
-    // Send notifications in batches
-    const batchSize = 500;
-    for (let i = 0; i < notifications.length; i += batchSize) {
-      const batch = notifications.slice(i, i + batchSize);
-      const metaBatch = recipientsMeta.slice(i, i + batchSize);
-      if (batch.length > 0) {
-        const results = await messaging.sendEach(batch);
-        await handleSendResults(results, metaBatch);
-      }
-    }
-
-    console.log(`Sent ${notifications.length} owner event reminder notifications`);
-    return { success: true, count: notifications.length };
-
-  } catch (error) {
-    console.error('Error sending owner event reminders:', error);
-    throw error;
-  }
-});
-
-// Quality team and owner reminders - same day at 8 AM UTC
-exports.sendQualityTeamEventReminders = onSchedule({
-  schedule: "0 8 * * *", // Daily at 8 AM UTC (changed from 4 PM to avoid overlap with owner reminders)
-  timeZone: "UTC",
-  region: "us-central1",
-  memory: "256MiB",
-}, async (event) => {
-  try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    // Get events due today
-    const eventsSnapshot = await db.collection('events')
-      .where('startDateTime', '>=', today)
-      .where('startDateTime', '<', tomorrow)
-      .where('status', 'in', ['pending', 'in_progress'])
-      .get();
-
-  const notifications = [];
-  const recipientsMeta = [];
-
-    // Get ALL users (role-based filtering removed)
-    const allUsersSnapshot = await db.collection('users').get();
-
-    // Build all users with centers and tokens (multi-device)
-    const allMembers = [];
-    for (const docSnap of allUsersSnapshot.docs) {
-      const data = docSnap.data();
-      const centers = data.assignedCenters || [];
-      const tokens = await getAllUserTokens(docSnap.id);
-      if (tokens.length) {
-        allMembers.push({ userId: docSnap.id, centers, tokens });
-      }
-    }
-
-    // Process events for same-day reminders
-    for (const eventDoc of eventsSnapshot.docs) {
-      const event = eventDoc.data();
-      const eventTime = timestampToDate(event.startDateTime);
-      
-      // Skip events that were recently modified (within last 24 hours) to avoid double notifications
-      // with real-time update notifications
-      if (event.lastModifiedAt) {
-        const lastModified = timestampToDate(event.lastModifiedAt);
-        const oneDayAgo = new Date();
-        oneDayAgo.setDate(oneDayAgo.getDate() - 1);
-        if (lastModified && lastModified > oneDayAgo) {
-          console.log(`Skipping same-day reminder for recently modified event: ${event.title}`);
-          continue;
-        }
-      }
-      
-      // Skip if event is in the past (already started today)
-      if (eventTime && eventTime < new Date()) {
-        continue;
-      }
-
-      // Notify ALL users (role-based filtering removed)
-      for (const member of allMembers) {
-        const shouldNotify = member.centers.length === 0 ||
-          (event.center && member.centers.includes(event.center)) ||
-          (event.assignedCenters && event.assignedCenters.some(center => member.centers.includes(center)));
-        if (!shouldNotify) continue;
-        for (const token of member.tokens) {
-          const isWeb = isWebToken(token);
-          if (isWeb) {
-            notifications.push({
-              token,
-              data: {
-                type: 'event_reminder',
-                eventId: eventDoc.id,
-                url: `/calendar`,
-                timing: 'same_day'
-              },
-              webpush: {
-                fcmOptions: { link: `${baseUrl}/calendar` },
-                notification: {
-                  title: `Event Today: ${event.title}`,
-                  body: `Due today at ${eventTime.toLocaleTimeString()}`,
-                  icon: absIcon,
-                  badge: absBadge
-                }
-              }
-            });
-          } else {
-            notifications.push({
-              token,
-              notification: {
-                title: `Event Today: ${event.title}`,
-                body: `Due today at ${eventTime.toLocaleTimeString()}`,
-              },
-              data: {
-                type: 'event_reminder',
-                eventId: eventDoc.id,
-                url: `/calendar`,
-                timing: 'same_day'
-              },
-              webpush: {
-                fcmOptions: { link: `${baseUrl}/calendar` },
-                notification: { icon: absIcon, badge: absBadge }
-              }
-            });
-          }
-          recipientsMeta.push({ userId: member.userId, token });
-        }
-      }
-
-      // REMOVED: Duplicate notification to owners/assignees - Quality team members are the primary recipients for same-day reminders
-      // Owners/assignees get notified about tomorrow's events by sendOwnerEventReminders
-      // This prevents double notifications for users who are both quality team members and event assignees
-    }
-
-    // Send notifications in batches
-    const batchSize = 500;
-    for (let i = 0; i < notifications.length; i += batchSize) {
-      const batch = notifications.slice(i, i + batchSize);
-      const metaBatch = recipientsMeta.slice(i, i + batchSize);
-      if (batch.length > 0) {
-        const results = await messaging.sendEach(batch);
-        await handleSendResults(results, metaBatch);
-      }
-    }
-
-    console.log(`Sent ${notifications.length} same-day event reminder notifications`);
-    return { success: true, count: notifications.length };
-
-  } catch (error) {
-    console.error('Error sending same-day event reminders:', error);
-    throw error;
-  }
-});
-
-// Function for overdue task notifications (weekly to reduce costs)
-exports.sendWeeklyOverdueTaskReminders = onSchedule({
-  schedule: "0 9 * * 1", // Every Monday at 9 AM
-  timeZone: "UTC",
-  region: "us-central1",
-  memory: "256MiB",
-}, async (event) => {
-  try {
-    const now = new Date();
-    
-    // Get overdue events
-    const overdueEventsSnapshot = await db.collection('events')
-      .where('startDateTime', '<', now)
-      .where('status', 'in', ['pending', 'in_progress'])
-      .get();
-
-  const notifications = [];
-  const recipientsMeta = [];
-
-    for (const eventDoc of overdueEventsSnapshot.docs) {
-      const event = eventDoc.data();
-      const assigneeIds = event.assignees || [];
-      
-      for (const userId of assigneeIds) {
-        const tokens = await getAllUserTokens(userId);
-        for (const token of tokens) {
-          const eventDate = timestampToDate(event.startDateTime);
-          const daysOverdue = eventDate ? Math.ceil((now - eventDate) / (1000 * 60 * 60 * 24)) : 0;
-          const isWeb = isWebToken(token);
-          if (isWeb) {
-            notifications.push({
-              token,
-              data: {
-                type: 'task_overdue',
-                eventId: eventDoc.id,
-                daysOverdue: daysOverdue.toString(),
-                url: '/calendar'
-              },
-              webpush: {
-                fcmOptions: { link: `${baseUrl}/calendar` },
-                notification: {
-                  title: `Overdue Task: ${event.title}`,
-                  body: `This task is ${daysOverdue} days overdue`,
-                  icon: absIcon,
-                  badge: absBadge
-                }
-              }
-            });
-          } else {
-            notifications.push({
-              token,
-              notification: {
-                title: `Overdue Task: ${event.title}`,
-                body: `This task is ${daysOverdue} days overdue`,
-              },
-              data: {
-                type: 'task_overdue',
-                eventId: eventDoc.id,
-                daysOverdue: daysOverdue.toString(),
-                url: '/calendar'
-              },
-              webpush: {
-                fcmOptions: { link: `${baseUrl}/calendar` },
-                notification: { icon: absIcon, badge: absBadge }
-              }
-            });
-          }
-          recipientsMeta.push({ userId, token });
-        }
-      }
-    }
-
-    const batchSize = 500;
-    for (let i = 0; i < notifications.length; i += batchSize) {
-      const batch = notifications.slice(i, i + batchSize);
-      const metaBatch = recipientsMeta.slice(i, i + batchSize);
-      if (batch.length > 0) {
-        const results = await messaging.sendEach(batch);
-        await handleSendResults(results, metaBatch);
-      }
-    }
-
-    console.log(`Sent ${notifications.length} overdue task notifications`);
-    return { success: true, count: notifications.length };
-
-  } catch (error) {
-    console.error('Error sending overdue reminders:', error);
-    throw error;
-  }
-});
 
 // REMOVED: sendCalendarEventNotifications - This function was redundant and caused double notifications
 // It sent reminders to ALL users at 4 PM UTC, but sendOwnerEventReminders and sendQualityTeamEventReminders
@@ -584,56 +275,9 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
     const notifications = [];
     const recipientsMeta = [];
 
-    // Notify event assignees
+    // Assignee notifications for newly created events are disabled per configuration
     const assigneeIds = eventData.assignees || [];
-    for (const userId of assigneeIds) {
-      // Check for duplicate notification
-      if (await wasNotificationRecentlySent(userId, eventId, 'event_assigned')) {
-        continue; // Skip - already sent recently
-      }
-      
-      const tokens = await getAllUserTokens(userId);
-      for (const token of tokens) {
-        const isWeb = isWebToken(token);
-        if (isWeb) {
-          notifications.push({
-            token,
-            data: {
-              type: 'event_assigned',
-              eventId: eventId,
-              url: `/calendar`,
-            },
-            webpush: {
-              fcmOptions: { link: `${baseUrl}/calendar` },
-              notification: {
-                title: `New Event Assigned: ${eventData.title}`,
-                body: `You have been assigned to this event`,
-                icon: absIcon,
-                badge: absBadge
-              }
-            }
-          });
-        } else {
-          notifications.push({
-            token,
-            notification: {
-              title: `New Event Assigned: ${eventData.title}`,
-              body: `You have been assigned to this event`,
-            },
-            data: {
-              type: 'event_assigned',
-              eventId: eventId,
-              url: `/calendar`,
-            },
-            webpush: {
-              fcmOptions: { link: `${baseUrl}/calendar` },
-              notification: { icon: absIcon, badge: absBadge }
-            }
-          });
-        }
-        recipientsMeta.push({ userId, token });
-      }
-    }
+    console.log(`Assignee notifications (event_assigned) disabled for event ${eventId}; ${assigneeIds.length} assignee(s) ignored.`);
 
     // Notify ALL users (role-based filtering removed - assignees already notified above)
     const allUsersSnapshot = await db.collection('users').get();
@@ -705,6 +349,7 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
     }
 
     console.log(`Sent ${notifications.length} notifications for event creation`);
+    try { await resolveMissingIndex('sendNotificationsOnEventCreate'); } catch (e) { console.warn('resolveMissingIndex error', e); }
     return { success: true, count: notifications.length };
 
   } catch (error) {

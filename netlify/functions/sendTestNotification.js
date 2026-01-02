@@ -28,7 +28,7 @@ exports.handler = async function (event) {
   try {
     initAdmin();
     const body = JSON.parse(event.body || '{}');
-    const { token, tokens, title, body: msgBody, data = {}, userName, timestamp } = body;
+    const { token, tokens, title, body: msgBody, data = {}, userName, timestamp, clientTimestamp } = body;
     
     // Support both single token and multiple tokens
     const tokenList = tokens || (token ? [token] : []);
@@ -37,10 +37,13 @@ exports.handler = async function (event) {
       return { statusCode: 400, body: JSON.stringify({ error: 'token or tokens array is required' }) };
     }
 
+    // Determine timestamp to show: prefer clientTimestamp if provided
+    const tsToUse = clientTimestamp || timestamp || new Date().toISOString();
+
     // Use provided title/body or create test notification message
     const notificationTitle = title || 'Test Notification';
-    const notificationBody = msgBody || (userName && timestamp 
-      ? `Hi ${userName}! This is a test notification sent at ${timestamp}` 
+    const notificationBody = msgBody || (userName 
+      ? `Hi ${userName}! This is a test notification sent at ${tsToUse}` 
       : 'Test notification from TALC Management');
 
     // Absolute URLs for WebPush assets
@@ -56,7 +59,8 @@ exports.handler = async function (event) {
           token: tkn,
           data: {
             type: 'test_notification',
-            timestamp: timestamp || new Date().toISOString(),
+            timestamp: tsToUse,
+            clientTimestamp: clientTimestamp || '',
             ...Object.keys(data).reduce((acc, k) => ({ ...acc, [k]: String(data[k]) }), {})
           },
           webpush: {
@@ -70,7 +74,8 @@ exports.handler = async function (event) {
         notification: { title: notificationTitle, body: notificationBody },
         data: {
           type: 'test_notification',
-          timestamp: timestamp || new Date().toISOString(),
+          timestamp: tsToUse,
+          clientTimestamp: clientTimestamp || '',
           ...Object.keys(data).reduce((acc, k) => ({ ...acc, [k]: String(data[k]) }), {})
         },
         webpush: {

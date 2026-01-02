@@ -51,7 +51,7 @@ import CheckIcon from '@mui/icons-material/Check';
 // PDF export handled via print preview; no direct PDF library used.
 import logo from '../assets/logo.png';
 import { db } from '../firebase/config';
-import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, updateDoc, doc, deleteDoc, onSnapshot, Timestamp } from 'firebase/firestore';
 // notifications removed
 import { useAuth } from '../context/AuthContext';
 import EventForm from '../components/EventForm';
@@ -561,15 +561,17 @@ const Calendar = () => {
           newDateTime,
         },
       ];
+      // Normalize the startDateTime to a Firestore Timestamp
+      const startTs = (typeof newDateTime === 'string') ? Timestamp.fromDate(new Date(newDateTime)) : newDateTime;
       await updateDoc(eventRef, {
-        startDateTime: newDateTime,
+        startDateTime: startTs,
         comments: updatedComments,
         lastModifiedBy: { userId: currentUser.uid, userName: currentUser.displayName },
         notificationSent: false,
         lastNotificationAt: new Date(),
       });
-      setEvents(prev => prev.map(ev => (ev.id === rescheduleEvent.id ? { ...ev, startDateTime: newDateTime, comments: updatedComments } : ev)));
-      setAllEvents(prev => prev.map(ev => (ev.id === rescheduleEvent.id ? { ...ev, startDateTime: newDateTime, comments: updatedComments } : ev)));
+      setEvents(prev => prev.map(ev => (ev.id === rescheduleEvent.id ? { ...ev, startDateTime: startTs, comments: updatedComments } : ev)));
+      setAllEvents(prev => prev.map(ev => (ev.id === rescheduleEvent.id ? { ...ev, startDateTime: startTs, comments: updatedComments } : ev)));
   // notification removed: event_reschedule
 
     } catch (_ERR) {
@@ -616,9 +618,15 @@ const Calendar = () => {
         // Get previous event data for audit comparison
         const prevEventSnap = await getDocs(query(collection(db, 'events'), where('__name__', '==', editingEvent.id)));
         const prevEventData = prevEventSnap.docs.length > 0 ? prevEventSnap.docs[0].data() : {};
-  await updateDoc(eventRef, eventData);
-  setEvents(prev => prev.map(ev => (ev.id === editingEvent.id ? { ...editingEvent, ...eventData } : ev)));
-  setAllEvents(prev => prev.map(ev => (ev.id === editingEvent.id ? { ...editingEvent, ...eventData } : ev)));
+
+        // Normalize datetime fields to Firestore Timestamps if they are strings
+        const payload = { ...eventData };
+        if (typeof payload.startDateTime === 'string') payload.startDateTime = Timestamp.fromDate(new Date(payload.startDateTime));
+        if (typeof payload.endDateTime === 'string') payload.endDateTime = Timestamp.fromDate(new Date(payload.endDateTime));
+
+        await updateDoc(eventRef, payload);
+        setEvents(prev => prev.map(ev => (ev.id === editingEvent.id ? { ...editingEvent, ...payload } : ev)));
+        setAllEvents(prev => prev.map(ev => (ev.id === editingEvent.id ? { ...editingEvent, ...payload } : ev)));
   // notification removed: event_update
         // Compute changed fields for audit
         const changedFields = {};
@@ -629,8 +637,13 @@ const Calendar = () => {
         });
 
       } else {
+        // Normalize datetime fields to Firestore Timestamps if they are strings for new events
+        const payload = { ...eventData };
+        if (typeof payload.startDateTime === 'string') payload.startDateTime = Timestamp.fromDate(new Date(payload.startDateTime));
+        if (typeof payload.endDateTime === 'string') payload.endDateTime = Timestamp.fromDate(new Date(payload.endDateTime));
+
         await addDoc(collection(db, 'events'), {
-          ...eventData,
+          ...payload,
           lastModifiedBy: { userId: currentUser.uid, userName: currentUser.displayName },
           createdBy: { userId: currentUser.uid, userName: currentUser.displayName },
         });

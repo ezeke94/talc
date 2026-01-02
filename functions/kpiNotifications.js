@@ -80,13 +80,25 @@ async function getAllUserTokens(userId) {
   return Array.from(tokens);
 }
 
-// Weekly KPI assessment reminders (Fridays at 2 PM)
-exports.sendWeeklyKPIReminders = onSchedule({
-  schedule: "0 14 * * 5", // Every Friday at 2 PM UTC
-  timeZone: "UTC",
-  region: "us-central1",
-  memory: "256MiB",
-}, async (event) => {
+// Helper: Handle Firestore index-required errors for scheduled functions
+async function handleMissingIndex(funcName, error) {
+  const isIndexError = error && (error.code === 9 || (error.message && error.message.includes('requires an index')));
+  if (!isIndexError) return false;
+  console.warn(`Firestore index missing for ${funcName}. Skipping this scheduled run: ${error.message}`);
+  try {
+    await db.collection('_alerts').doc('missing_indexes').set({
+      lastSeen: new Date(),
+      [funcName]: { lastSeen: new Date(), message: String(error) }
+    }, { merge: true });
+  } catch (e) {
+    console.warn('Failed to write missing_indexes alert doc', e);
+  }
+  return true;
+}
+
+
+// Core runner for KPI reminders
+async function runWeeklyKPIReminders(dryRun = false) {
   try {
     const twoWeeksAgo = new Date();
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
@@ -207,79 +219,122 @@ exports.sendWeeklyKPIReminders = onSchedule({
       }
     }
 
-    // Send consolidated notifications
+    // Build per-evaluator summary
+    const evaluatorsSummary = [];
     for (const [evaluatorId, pendingList] of notificationsByEvaluator) {
       const evaluatorData = evaluatorTokens.get(evaluatorId);
       if (!evaluatorData) continue;
 
       const mentorCount = new Set(pendingList.map(p => p.mentorId)).size;
       const formCount = pendingList.length;
+      const tokenCount = evaluatorData.tokens.length;
+
       // Dedup per day per evaluator for KPI reminders
       const todayKey = new Date();
       todayKey.setUTCHours(0,0,0,0);
       const dedupKey = `kpi_reminder_${todayKey.toISOString().slice(0,10)}`;
       const skipEvaluator = await wasNotificationRecentlySent(evaluatorId, dedupKey, 24 * 3600);
       if (skipEvaluator) continue;
-      
-      // Send to all devices for this evaluator
-      for (const token of evaluatorData.tokens) {
-        const title = `KPI Assessments Pending`;
-        const body = `${mentorCount} mentor(s) need evaluation (${formCount} forms)`;
-        const web = isWebToken(token);
-        if (web) {
-          notifications.push({
-            token,
-            data: {
-              type: 'kpi_reminder',
-              pendingCount: formCount.toString(),
-              mentorCount: mentorCount.toString(),
-              evaluatorRole: evaluatorData.role,
-              url: '/mentors'
-            },
-            webpush: {
-              fcmOptions: { link: `${baseUrl}/mentors` },
-              notification: { title, body, icon: absIcon, badge: absBadge }
-            }
-          });
-        } else {
-          notifications.push({
-            token,
-            notification: { title, body },
-            data: {
-              type: 'kpi_reminder',
-              pendingCount: formCount.toString(),
-              mentorCount: mentorCount.toString(),
-              evaluatorRole: evaluatorData.role,
-              url: '/mentors'
-            },
-            webpush: {
-              fcmOptions: { link: `${baseUrl}/mentors` },
-              notification: { icon: absIcon, badge: absBadge }
-            }
-          });
+
+      evaluatorsSummary.push({
+        evaluatorId,
+        name: evaluatorData.name,
+        role: evaluatorData.role,
+        mentorCount,
+        formCount,
+        tokenCount
+      });
+
+      // If not dry run, build push messages
+      if (!dryRun) {
+        for (const token of evaluatorData.tokens) {
+          const title = `KPI Assessments Pending`;
+          const body = `${mentorCount} mentor(s) need evaluation (${formCount} forms)`;
+          const web = isWebToken(token);
+          if (web) {
+            notifications.push({
+              token,
+              data: {
+                type: 'kpi_reminder',
+                pendingCount: formCount.toString(),
+                mentorCount: mentorCount.toString(),
+                evaluatorRole: evaluatorData.role,
+                url: '/mentors'
+              },
+              webpush: {
+                fcmOptions: { link: `${baseUrl}/mentors` },
+                notification: { title, body, icon: absIcon, badge: absBadge }
+              }
+            });
+          } else {
+            notifications.push({
+              token,
+              notification: { title, body },
+              data: {
+                type: 'kpi_reminder',
+                pendingCount: formCount.toString(),
+                mentorCount: mentorCount.toString(),
+                evaluatorRole: evaluatorData.role,
+                url: '/mentors'
+              },
+              webpush: {
+                fcmOptions: { link: `${baseUrl}/mentors` },
+                notification: { icon: absIcon, badge: absBadge }
+              }
+            });
+          }
         }
       }
     }
 
-    // Send notifications in batches
-    const batchSize = 500;
-    for (let i = 0; i < notifications.length; i += batchSize) {
-      const batch = notifications.slice(i, i + batchSize);
-      if (batch.length > 0) {
-        await messaging.sendEach(batch);
+    if (!dryRun) {
+      // Send notifications in batches
+      const batchSize = 500;
+      for (let i = 0; i < notifications.length; i += batchSize) {
+        const batch = notifications.slice(i, i + batchSize);
+        if (batch.length > 0) {
+          await messaging.sendEach(batch);
+        }
       }
+
+      console.log(`Sent ${notifications.length} KPI reminder notifications for ${evaluatorsSummary.length} evaluators`);
+      try { await handleMissingIndex('sendWeeklyKPIReminders', null); await resolveMissingIndex('sendWeeklyKPIReminders'); } catch(e) { /* ignore */ }
+      return { 
+        success: true, 
+        notificationCount: notifications.length,
+        pendingEvaluations: pendingEvaluations.length,
+        evaluatorsNotified: evaluatorsSummary.length
+      };
+    } else {
+      // Dry-run: return summary and preview
+      return {
+        success: true,
+        notificationCount: 0,
+        pendingEvaluations: pendingEvaluations.length,
+        evaluatorsPreview: evaluatorsSummary.slice(0, 200),
+        pendingPreview: pendingEvaluations.slice(0, 200),
+        evaluatorsCount: evaluatorsSummary.length
+      };
     }
 
-    console.log(`Sent ${notifications.length} KPI reminder notifications for ${pendingEvaluations.length} pending evaluations`);
-    return { 
-      success: true, 
-      notificationCount: notifications.length,
-      pendingEvaluations: pendingEvaluations.length,
-      evaluatorsNotified: notificationsByEvaluator.size
-    };
-
   } catch (error) {
+    if (await handleMissingIndex('sendWeeklyKPIReminders', error)) {
+      return { success: true, notificationCount: 0, pendingEvaluations: 0, evaluatorsNotified: 0, note: 'missing_index' };
+    }
     console.error('Error sending KPI reminders:', error);
     throw error;
   }
+}
+
+// Scheduled wrapper
+exports.sendWeeklyKPIReminders = onSchedule({
+  schedule: "0 14 * * 5", // Every Friday at 2 PM UTC
+  timeZone: "UTC",
+  region: "us-central1",
+  memory: "256MiB",
+}, async (event) => {
+  return runWeeklyKPIReminders();
 });
+
+// Export runner for admin invocations
+exports.runWeeklyKPIReminders = runWeeklyKPIReminders;

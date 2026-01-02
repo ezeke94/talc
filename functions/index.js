@@ -16,11 +16,10 @@ const kpiNotifications = require('./kpiNotifications');
 const eventChangeNotifications = require('./eventChangeNotifications');
 const operationalNotifications = require('./operationalNotifications');
 const { sendTestNotification } = require('./sendTestNotification');
+const adminRunners = require('./adminRunners');
 
 // Export all notification functions
 exports.sendOwnerEventReminders = eventNotifications.sendOwnerEventReminders;
-exports.sendQualityTeamEventReminders = eventNotifications.sendQualityTeamEventReminders;
-exports.sendWeeklyOverdueTaskReminders = eventNotifications.sendWeeklyOverdueTaskReminders;
 exports.sendNotificationsOnEventCreate = eventNotifications.sendNotificationsOnEventCreate;
 exports.sendWeeklyKPIReminders = kpiNotifications.sendWeeklyKPIReminders;
 exports.notifyEventReschedule = eventChangeNotifications.notifyEventReschedule;
@@ -28,9 +27,13 @@ exports.notifyEventUpdate = eventChangeNotifications.notifyEventUpdate;
 exports.notifyEventCancellation = eventChangeNotifications.notifyEventCancellation;
 exports.notifyEventCompletion = eventChangeNotifications.notifyEventCompletion;
 exports.notifyEventDelete = eventChangeNotifications.notifyEventDelete;
-exports.sendMonthlyOperationalSummary = operationalNotifications.sendMonthlyOperationalSummary;
-exports.sendCriticalSystemAlert = operationalNotifications.sendCriticalSystemAlert;
 exports.sendTestNotification = sendTestNotification;
+// Admin-invokable runner (for UI-triggered smoke tests)
+// REMOVED: runOwnerEventReminders was removed as part of cleanup
+// Admin callables
+exports.previewWeeklyKPIReminders = adminRunners.previewWeeklyKPIReminders;
+exports.runWeeklyKPIReminders = adminRunners.runWeeklyKPIReminders;
+// Note: migrateEventTimestamps callable was removed after migration was executed (cleanup)
 
 // Keep the hello world function for testing
 exports.helloWorld = onRequest((request, response) => {

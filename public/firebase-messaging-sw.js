@@ -94,6 +94,14 @@ function saveNotificationToHistory(notificationId, timestamp) {
 messaging.onBackgroundMessage((payload) => {
   console.log('[SW] Background message received:', JSON.stringify(payload));
   
+  // Suppress removed notification types (disabled by config)
+  const removedTypes = ['event_assigned','event_reminder','task_overdue','monthly_summary','system_alert'];
+  const incomingType = payload?.data?.type;
+  if (removedTypes.includes(incomingType)) {
+    console.log('[SW] Suppressing removed notification type (background):', incomingType);
+    return Promise.resolve();
+  }
+
   // Check if any client (browser tab) is currently visible/focused
   // If so, let the foreground handler deal with it
   return self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
@@ -264,6 +272,13 @@ self.addEventListener('message', (event) => {
     const payload = event.data.payload;
     const { title, body, icon } = payload.notification || {};
     const { type, url, eventId } = payload.data || {};
+
+    // Suppress removed notification types (disabled by config)
+    const removedTypes = ['event_assigned','event_reminder','task_overdue','monthly_summary','system_alert'];
+    if (removedTypes.includes(type)) {
+      console.log('[SW] Suppressing removed notification type (foreground relay):', type);
+      return;
+    }
 
     // Generate unique ID and check for duplicates (foreground relay)
     const notificationId = generateNotificationId(payload);

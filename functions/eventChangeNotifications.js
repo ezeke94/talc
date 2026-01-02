@@ -176,7 +176,10 @@ exports.notifyEventReschedule = onDocumentUpdated({
     const oldDateTime = beforeData.startDateTime;
     const newDateTime = afterData.startDateTime;
     
-    if (!oldDateTime || !newDateTime || oldDateTime.isEqual(newDateTime)) {
+    // Normalize and compare safely (supports Firestore Timestamps and JS Dates)
+    const oldDt = timestampToDate(oldDateTime);
+    const newDt = timestampToDate(newDateTime);
+    if (!oldDt || !newDt || oldDt.getTime() === newDt.getTime()) {
       return null; // No reschedule occurred
     }
 
@@ -271,7 +274,9 @@ exports.notifyEventUpdate = onDocumentUpdated({
     // Skip if this is a reschedule (handled by notifyEventReschedule)
     const oldDateTime = beforeData.startDateTime;
     const newDateTime = afterData.startDateTime;
-    if (oldDateTime && newDateTime && !oldDateTime.isEqual(newDateTime)) {
+    const oldDt = timestampToDate(oldDateTime);
+    const newDt = timestampToDate(newDateTime);
+    if (oldDt && newDt && oldDt.getTime() !== newDt.getTime()) {
       return null; // Reschedule is handled by separate function
     }
 

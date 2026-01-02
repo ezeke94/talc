@@ -5,6 +5,7 @@ import { collection, writeBatch, addDoc, getDocs, where, query } from 'firebase/
 import { Button, Typography, CircularProgress, Alert, Paper, Stack } from '@mui/material';
 import { useAuth } from '../context/AuthContext';
 import { seedProjectsToFirebase } from '../utils/projectSeedData';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const SeedData = () => {
     const [loading, setLoading] = useState(false);
@@ -80,6 +81,9 @@ const SeedData = () => {
     ];
 
     const { currentUser } = useAuth();
+    const [runnerLoading, setRunnerLoading] = useState(false);
+
+    const canAdmin = (import.meta.env.MODE !== 'production') || (currentUser && ['Admin', 'Quality'].includes(currentUser.role));
 
     // SOPs
     const sampleSops = [
@@ -467,6 +471,49 @@ const SeedData = () => {
                 <Button variant="contained" sx={{ bgcolor: '#9c27b0', '&:hover': { bgcolor: '#7b1fa2' } }} onClick={seedProjects} disabled={loading}>
                     {loading ? <CircularProgress size={24} /> : "Seed Projects"}
                 </Button>
+                {canAdmin && (
+                  <>
+                    <Button variant="contained" color="secondary" onClick={async () => {
+                      setRunnerLoading(true);
+                      setMessage('');
+                      try {
+                        const functions = getFunctions();
+                        const previewFn = httpsCallable(functions, 'previewWeeklyKPIReminders');
+                        const res = await previewFn();
+                        const data = res.data || {};
+                        setMessage(`Preview: ${data.pendingEvaluations} pending evaluations across ${data.evaluatorsCount} evaluators.`);
+                        console.log('KPI preview', data);
+                      } catch (err) {
+                        console.error(err);
+                        setMessage(`Error: ${err.message}`);
+                      } finally {
+                        setRunnerLoading(false);
+                      }
+                    }} disabled={runnerLoading}>
+                      {runnerLoading ? <CircularProgress size={20} /> : 'Preview KPI Reminders (Admin)'}
+                    </Button>
+
+                    <Button variant="contained" color="primary" onClick={async () => {
+                      setRunnerLoading(true);
+                      setMessage('');
+                      try {
+                        const functions = getFunctions();
+                        const runFn = httpsCallable(functions, 'runWeeklyKPIReminders');
+                        const res = await runFn();
+                        const data = res.data || {};
+                        setMessage(`Run complete: sent ${data.notificationCount} notifications to ${data.evaluatorsNotified} evaluators.`);
+                        console.log('KPI run result', data);
+                      } catch (err) {
+                        console.error(err);
+                        setMessage(`Error: ${err.message}`);
+                      } finally {
+                        setRunnerLoading(false);
+                      }
+                    }} disabled={runnerLoading}>
+                      {runnerLoading ? <CircularProgress size={20} /> : 'Run Weekly KPI Reminders (Admin)'}
+                    </Button>
+                  </>
+                )}
                 <Button variant="outlined" color="error" onClick={async () => {
                     setLoading(true);
                     setMessage('');
