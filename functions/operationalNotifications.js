@@ -21,7 +21,7 @@ const baseUrl = (process.env.FRONTEND_URL || 'https://kpitalc.netlify.app').repl
 const absIcon = `${baseUrl}/favicon.ico`;
 const absBadge = `${baseUrl}/favicon.ico`;
 
-// Firestore-based deduplication: log and skip if recently sent
+// Firestore-based deduplication: READ-ONLY check
 async function wasNotificationRecentlySent(userId, dedupKey, ttlSeconds = 3600) {
   try {
     const key = `${userId}-${dedupKey}`;
@@ -35,16 +35,27 @@ async function wasNotificationRecentlySent(userId, dedupKey, ttlSeconds = 3600) 
         if (ageSec < ttlSeconds) {
           return true;
         }
+        return false;
       } else {
-        // If no timestamp, treat as duplicate to be safe
         return true;
       }
     }
-    await ref.set({ userId, dedupKey, sentAt: new Date() }, { merge: true });
+    // Do not write here; recording happens after successful sends
     return false;
   } catch (e) {
     console.error('wasNotificationRecentlySent error', e);
     return false; // fail open
+  }
+}
+
+// Record that a notification was actually sent (for operational notifications)
+async function recordNotificationSent(userId, dedupKey, meta = {}) {
+  try {
+    const key = `${userId}-${dedupKey}`;
+    const ref = db.collection('_notificationLog').doc(key);
+    await ref.set({ userId, dedupKey, sentAt: new Date(), meta }, { merge: true });
+  } catch (e) {
+    console.error('recordNotificationSent error', e);
   }
 }
 

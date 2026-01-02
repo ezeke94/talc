@@ -21,7 +21,7 @@ const baseUrl = (process.env.FRONTEND_URL || 'https://kpitalc.netlify.app').repl
 const absIcon = `${baseUrl}/favicon.ico`;
 const absBadge = `${baseUrl}/favicon.ico`;
 
-// Firestore-based deduplication helper
+// Firestore-based deduplication helper (READ-ONLY check)
 async function wasNotificationRecentlySent(userId, dedupKey, ttlSeconds = 24 * 3600) {
   try {
     const key = `${userId}-${dedupKey}`;
@@ -33,17 +33,31 @@ async function wasNotificationRecentlySent(userId, dedupKey, ttlSeconds = 24 * 3
       if (sentAt) {
         const ageSec = (Date.now() - sentAt.getTime()) / 1000;
         if (ageSec < ttlSeconds) return true;
+        return false;
       } else {
+        // If stored entry has no timestamp, treat conservatively as "recent"
         return true;
       }
     }
-    await ref.set({ userId, dedupKey, sentAt: new Date() }, { merge: true });
+    // Intentionally DO NOT write here — this is a read-only check. Writing should occur only after a successful send.
     return false;
   } catch (e) {
     console.error('wasNotificationRecentlySent error', e);
+    // Fail open so we don't block notifications on helper errors
     return false;
   }
 }
+
+// Record that a notification was actually sent (writes to _notificationLog)
+async function recordNotificationSent(userId, dedupKey, meta = {}) {
+  try {
+    const key = `${userId}-${dedupKey}`;
+    const ref = db.collection('_notificationLog').doc(key);
+    await ref.set({ userId, dedupKey, sentAt: new Date(), meta }, { merge: true });
+  } catch (e) {
+    console.error('recordNotificationSent error', e);
+  }
+} 
 
 // Helper: fetch all device tokens for a user (devices subcollection with fallback to fcmToken)
 async function getAllUserTokens(userId) {
@@ -98,7 +112,8 @@ async function handleMissingIndex(funcName, error) {
 
 
 // Core runner for KPI reminders
-async function runWeeklyKPIReminders(dryRun = false) {
+async function runWeeklyKPIReminders(dryRun = false, options = {}) {
+  const force = !!options.force;
   try {
     const twoWeeksAgo = new Date();
     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
@@ -118,26 +133,8 @@ async function runWeeklyKPIReminders(dryRun = false) {
       recentSubmissions.add(`${data.mentorId}_${data.kpiType || data.formName}`);
     });
 
-    // Get ALL users (role-based filtering removed)
-    const usersSnapshot = await db.collection('users').get();
-
     const notifications = [];
     const evaluatorTokens = new Map();
-
-    // Cache ALL user FCM tokens (with multi-device support)
-    for (const userDoc of usersSnapshot.docs) {
-      const userData = userDoc.data();
-      const tokens = await getAllUserTokens(userDoc.id);
-      
-      if (tokens.length > 0) {
-        evaluatorTokens.set(userDoc.id, {
-          tokens: tokens,
-          centers: userData.assignedCenters || [],
-          name: userData.name || userData.email,
-          role: userData.role || 'User'
-        });
-      }
-    }
 
     // Check for mentors without recent KPI submissions
     const pendingEvaluations = [];
@@ -175,30 +172,27 @@ async function runWeeklyKPIReminders(dryRun = false) {
     for (const pending of pendingEvaluations) {
       let targetEvaluatorId = null;
 
-      // First, try to use assigned evaluator
+      // If assigned evaluator exists, use them (fast path)
       if (pending.assignedEvaluator?.id) {
-        // Get assigned evaluator's FCM token
-        const evaluatorDoc = await db.collection('users').doc(pending.assignedEvaluator.id).get();
-        const evaluatorData = evaluatorDoc.data();
-        const tokens = await getAllUserTokens(pending.assignedEvaluator.id);
-        
-        if (tokens.length > 0) {
-          targetEvaluatorId = pending.assignedEvaluator.id;
-          
-          // Add to evaluator tokens if not already cached
-          if (!evaluatorTokens.has(targetEvaluatorId)) {
-            evaluatorTokens.set(targetEvaluatorId, {
-              tokens: tokens, // Changed to array of tokens
-              centers: evaluatorData.assignedCenters || [],
-              name: evaluatorData.name || evaluatorData.email,
-              role: evaluatorData.role
+        targetEvaluatorId = pending.assignedEvaluator.id;
+      } else if (!dryRun) {
+        // For non-dry runs, perform the heavier fallback logic using cached evaluator tokens
+        // Get ALL users (role-based filtering removed)
+        if (evaluatorTokens.size === 0) {
+          const usersSnapshot = await db.collection('users').get();
+          for (const userDoc of usersSnapshot.docs) {
+            const userData = userDoc.data();
+            const tokens = await getAllUserTokens(userDoc.id);
+            // Include evaluator in cache even if they have no tokens so run mirrors preview
+            evaluatorTokens.set(userDoc.id, {
+              tokens: tokens,
+              centers: userData.assignedCenters || [],
+              name: userData.name || userData.email,
+              role: userData.role || 'User'
             });
           }
         }
-      }
 
-      // Fallback: find appropriate admin/quality member
-      if (!targetEvaluatorId) {
         for (const [evaluatorId, evaluatorData] of evaluatorTokens) {
           const shouldNotify = evaluatorData.centers.length === 0 || 
             pending.centers.some(center => evaluatorData.centers.includes(center));
@@ -221,20 +215,51 @@ async function runWeeklyKPIReminders(dryRun = false) {
 
     // Build per-evaluator summary
     const evaluatorsSummary = [];
+    // Track evaluators that will actually be sent notifications (so we can record dedupe entries AFTER successful sends)
+    const willNotifyEvaluatorIds = new Set();
     for (const [evaluatorId, pendingList] of notificationsByEvaluator) {
-      const evaluatorData = evaluatorTokens.get(evaluatorId);
-      if (!evaluatorData) continue;
+      let evaluatorData = evaluatorTokens.get(evaluatorId);
+
+      // If evaluator data wasn't cached (e.g., assigned evaluator with no cached tokens),
+      // fetch a minimal profile so preview can show the evaluator even if they have 0 tokens.
+      if (!evaluatorData) {
+        try {
+          const userDoc = await db.collection('users').doc(evaluatorId).get();
+          const userData = userDoc.exists ? userDoc.data() : {};
+          const tokens = await getAllUserTokens(evaluatorId);
+          evaluatorData = {
+            tokens,
+            centers: userData.assignedCenters || [],
+            name: userData.name || userData.email || evaluatorId,
+            role: userData.role || 'User'
+          };
+          // Cache for possible later use
+          evaluatorTokens.set(evaluatorId, evaluatorData);
+        } catch (e) {
+          console.warn('Failed to fetch evaluator data for preview', evaluatorId, e);
+          // Continue - skip this evaluator if profile can't be loaded
+          continue;
+        }
+      }
 
       const mentorCount = new Set(pendingList.map(p => p.mentorId)).size;
       const formCount = pendingList.length;
       const tokenCount = evaluatorData.tokens.length;
+      const tokenSamples = evaluatorData.tokens.slice(0, 3);
 
-      // Dedup per day per evaluator for KPI reminders
+      // Dedup per day per evaluator for KPI reminders (only applied for sends)
+      // NOTE: This dedupe key is KPI-specific and will not block other notification types
       const todayKey = new Date();
       todayKey.setUTCHours(0,0,0,0);
       const dedupKey = `kpi_reminder_${todayKey.toISOString().slice(0,10)}`;
-      const skipEvaluator = await wasNotificationRecentlySent(evaluatorId, dedupKey, 24 * 3600);
-      if (skipEvaluator) continue;
+      let skipReason = null;
+      if (!dryRun) {
+        const wasSent = await wasNotificationRecentlySent(evaluatorId, dedupKey, 24 * 3600);
+        if (wasSent && !force) skipReason = 'deduped';
+      }
+      if (!skipReason && tokenCount === 0) {
+        skipReason = 'no_tokens';
+      }
 
       evaluatorsSummary.push({
         evaluatorId,
@@ -242,13 +267,17 @@ async function runWeeklyKPIReminders(dryRun = false) {
         role: evaluatorData.role,
         mentorCount,
         formCount,
-        tokenCount
+        tokenCount,
+        tokenSamples,
+        skipReason
       });
 
-      // If not dry run, build push messages
-      if (!dryRun) {
+      // If not dry run, build push messages only for evaluators that will be sent
+      if (!dryRun && !skipReason) {
+        // mark evaluator to record dedupe after successful send
+        willNotifyEvaluatorIds.add(evaluatorId);
         for (const token of evaluatorData.tokens) {
-          const title = `KPI Assessments Pending`;
+          const title = `KPI Assessments Pending`; 
           const body = `${mentorCount} mentor(s) need evaluation (${formCount} forms)`;
           const web = isWebToken(token);
           if (web) {
@@ -297,14 +326,29 @@ async function runWeeklyKPIReminders(dryRun = false) {
         }
       }
 
-      console.log(`Sent ${notifications.length} KPI reminder notifications for ${evaluatorsSummary.length} evaluators`);
+      console.log(`Sent ${notifications.length} KPI reminder notifications for ${evaluatorsSummary.filter(e => e.skipReason === null).length} evaluators (total evaluated: ${evaluatorsSummary.length})`);
       try { await handleMissingIndex('sendWeeklyKPIReminders', null); await resolveMissingIndex('sendWeeklyKPIReminders'); } catch(e) { /* ignore */ }
-      return { 
-        success: true, 
+
+      // After successful send, record dedupe entries for evaluators actually notified
+      try {
+        const dedupKeyForToday = `kpi_reminder_${new Date().toISOString().slice(0,10)}`;
+        const evaluatorIds = Array.from(willNotifyEvaluatorIds);
+        if (evaluatorIds.length) {
+          await Promise.all(evaluatorIds.map(id => recordNotificationSent(id, dedupKeyForToday, { type: 'kpi_reminder' })));
+        }
+      } catch (e) {
+        console.warn('Failed to record KPI dedupe entries', e);
+      }
+
+      const runSummary = {
+        success: true,
         notificationCount: notifications.length,
         pendingEvaluations: pendingEvaluations.length,
-        evaluatorsNotified: evaluatorsSummary.length
+        evaluatorsNotified: evaluatorsSummary.filter(e => e.skipReason === null).length,
+        evaluatorsSummary: evaluatorsSummary.slice(0, 500)
       };
+
+      return runSummary;
     } else {
       // Dry-run: return summary and preview
       return {
@@ -328,12 +372,29 @@ async function runWeeklyKPIReminders(dryRun = false) {
 
 // Scheduled wrapper
 exports.sendWeeklyKPIReminders = onSchedule({
-  schedule: "0 14 * * 5", // Every Friday at 2 PM UTC
-  timeZone: "UTC",
+  schedule: "0 14 * * 5", // Every Friday at 2 PM (IST)
+  timeZone: "Asia/Kolkata",
   region: "us-central1",
   memory: "256MiB",
 }, async (event) => {
-  return runWeeklyKPIReminders();
+  const result = await runWeeklyKPIReminders();
+  // Log scheduled run to Firestore for audit
+  try {
+    await db.collection('_admin').doc('kpiRunLogs').collection('runs').add({
+      initiatedBy: 'system',
+      initiatedAt: new Date(),
+      type: 'scheduled',
+      resultSummary: {
+        notificationCount: result.notificationCount || 0,
+        pendingEvaluations: result.pendingEvaluations || 0,
+        evaluatorsNotified: result.evaluatorsNotified || result.evaluatorsSummary?.length || 0
+      },
+      evaluatorsPreview: (result.evaluatorsSummary || []).slice(0, 200)
+    });
+  } catch (e) {
+    console.warn('Failed to write KPI scheduled run log', e);
+  }
+  return result;
 });
 
 // Export runner for admin invocations

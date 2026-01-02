@@ -25,6 +25,7 @@ const absBadge = `${baseUrl}/favicon.ico`;
 /**
  * Check if notification was already sent recently (within last 60 seconds)
  * Prevents duplicate notifications from being sent to the same user for the same event
+ * This is a READ-ONLY check and will not create log entries.
  */
 async function wasNotificationRecentlySent(userId, eventId, notificationType) {
   const notificationKey = `${userId}-${eventId}-${notificationType}`;
@@ -34,25 +35,22 @@ async function wasNotificationRecentlySent(userId, eventId, notificationType) {
     const doc = await sentRef.get();
     if (doc.exists()) {
       const data = doc.data();
-      const sentAt = data.sentAt.toDate ? data.sentAt.toDate() : new Date(data.sentAt);
+      const sentAt = data.sentAt?.toDate ? data.sentAt.toDate() : (data.sentAt ? new Date(data.sentAt) : null);
       const now = new Date();
-      const diffSeconds = (now - sentAt) / 1000;
-      
-      // If sent within last 60 seconds, consider it a duplicate
-      if (diffSeconds < 60) {
-        console.log(`⏭️  Skipping duplicate: ${notificationKey} (sent ${Math.round(diffSeconds)}s ago)`);
+      if (sentAt) {
+        const diffSeconds = (now - sentAt) / 1000;
+        // If sent within last 60 seconds, consider it a duplicate
+        if (diffSeconds < 60) {
+          console.log(`⏭️  Skipping duplicate: ${notificationKey} (sent ${Math.round(diffSeconds)}s ago)`);
+          return true;
+        }
+        return false;
+      } else {
+        // If stored entry has no timestamp, treat conservatively as "recent"
         return true;
       }
     }
-    
-    // Record this notification send
-    await sentRef.set({
-      userId,
-      eventId,
-      notificationType,
-      sentAt: new Date()
-    }, { merge: true });
-    
+    // Do not write here; writing occurs only after a successful send
     return false;
   } catch (error) {
     console.error('Error checking notification log:', error);
@@ -60,6 +58,17 @@ async function wasNotificationRecentlySent(userId, eventId, notificationType) {
     return false;
   }
 }
+
+// Record that a notification was actually sent
+async function recordNotificationSent(userId, eventId, notificationType, meta = {}) {
+  try {
+    const notificationKey = `${userId}-${eventId}-${notificationType}`;
+    const sentRef = db.collection('_notificationLog').doc(notificationKey);
+    await sentRef.set({ userId, eventId, notificationType, sentAt: new Date(), meta }, { merge: true });
+  } catch (e) {
+    console.error('recordNotificationSent error', e);
+  }
+} 
 
 // Helper: Safely convert Firestore Timestamp to JavaScript Date
 function timestampToDate(timestamp) {
@@ -273,6 +282,8 @@ exports.sendOwnerEventReminders = onSchedule({
 
     const notifications = [];
     const recipientsMeta = [];
+    // Track which owners we successfully built notifications for so we can record dedupe entries later
+    const ownerIdsToRecord = new Set();
 
     for (const doc of eventsSnap.docs) {
       const ev = doc.data();
@@ -318,6 +329,9 @@ exports.sendOwnerEventReminders = onSchedule({
       } catch (e) {
         console.warn('Failed to update lastNotificationAt for event', eventId, e);
       }
+
+      // remember this owner+event to record dedupe after successful sends
+      ownerIdsToRecord.add(`${ownerId}-${eventId}`);
     }
 
     // Send notifications in batches
@@ -331,6 +345,19 @@ exports.sendOwnerEventReminders = onSchedule({
         await handleSendResults(results, metaBatch);
         totalSent += batch.length;
       }
+    }
+
+    // Record dedupe entries for owners we notified
+    try {
+      if (ownerIdsToRecord.size) {
+        const pairs = Array.from(ownerIdsToRecord).map(k => k.split('-'));
+        await Promise.all(pairs.map(([uid, ...rest]) => {
+          const evt = rest.join('-');
+          return recordNotificationSent(uid, evt, 'owner_reminder');
+        }));
+      }
+    } catch (e) {
+      console.warn('Failed to record owner reminder dedupe entries', e);
     }
 
     console.log(`Sent ${totalSent} owner reminder notifications for ${eventsSnap.size} event(s) starting tomorrow`);
@@ -371,6 +398,8 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
 
     const notifications = [];
     const recipientsMeta = [];
+    // track userIds we built notifications for so we can record dedupe entries
+    const eventCreatedRecipients = new Set();
 
     // Assignee notifications for newly created events are disabled per configuration
     const assigneeIds = eventData.assignees || [];
@@ -431,6 +460,7 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
           });
         }
         recipientsMeta.push({ userId, token });
+        eventCreatedRecipients.add(userId);
       }
     }
 
@@ -446,6 +476,14 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
     }
 
     console.log(`Sent ${notifications.length} notifications for event creation`);
+    // Record dedupe entries for users we notified for this event
+    try {
+      if (eventCreatedRecipients.size) {
+        await Promise.all(Array.from(eventCreatedRecipients).map(uid => recordNotificationSent(uid, eventId, 'event_created')));
+      }
+    } catch (e) {
+      console.warn('Failed to record event_created dedupe entries', e);
+    }
     try { await resolveMissingIndex('sendNotificationsOnEventCreate'); } catch (e) { console.warn('resolveMissingIndex error', e); }
     return { success: true, count: notifications.length };
 

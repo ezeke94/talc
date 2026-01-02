@@ -38,7 +38,9 @@ const kpi = require('./kpiNotifications');
 
 // Admin callable: preview KPI reminders (dry run)
 exports.previewWeeklyKPIReminders = onCall({
-  region: 'us-central1'
+  region: 'us-central1',
+  timeoutSeconds: 120,
+  memory: '512MiB'
 }, async (req) => {
   await requireAdminOrQuality(req.auth);
   const result = await kpi.runWeeklyKPIReminders(true);
@@ -47,73 +49,56 @@ exports.previewWeeklyKPIReminders = onCall({
 
 // Admin callable: run KPI reminders immediately
 exports.runWeeklyKPIReminders = onCall({
-  region: 'us-central1'
+  region: 'us-central1',
+  timeoutSeconds: 120,
+  memory: '512MiB'
 }, async (req) => {
-  await requireAdminOrQuality(req.auth);
-  const result = await kpi.runWeeklyKPIReminders(false);
+  const uid = await requireAdminOrQuality(req.auth);
+  const force = !!(req.data && req.data.force);
+  const result = await kpi.runWeeklyKPIReminders(false, { force });
+  // Log run to Firestore for audit
+  try {
+    await db.collection('_admin').doc('kpiRunLogs').collection('runs').add({
+      initiatedBy: uid,
+      initiatedAt: new Date(),
+      type: 'manual',
+      forced: force,
+      resultSummary: {
+        notificationCount: result.notificationCount || 0,
+        pendingEvaluations: result.pendingEvaluations || 0,
+        evaluatorsNotified: result.evaluatorsNotified || result.evaluatorsSummary?.length || 0
+      },
+      evaluatorsPreview: (result.evaluatorsSummary || []).slice(0, 200)
+    });
+  } catch (e) {
+    console.warn('Failed to write KPI run log', e);
+  }
   return result;
 });
 
-// HTTP fallback endpoints (CORS-enabled) for cross-origin callers (e.g., Netlify)
-const { onRequest } = require('firebase-functions/v2/https');
-
-function setCorsHeaders(res, origin) {
-  // Consider restricting origin to a whitelist for production
-  res.set('Access-Control-Allow-Origin', origin || '*');
-  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-}
-
-exports.previewWeeklyKPIRemindersHttp = onRequest({ region: 'us-central1', timeoutSeconds: 120, memory: '512MiB' }, async (req, res) => {
-  setCorsHeaders(res, req.get('origin'));
-  if (req.method === 'OPTIONS') {
-    return res.status(204).send('');
-  }
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
-
-  const authHeader = req.get('Authorization') || req.get('authorization') || '';
-  if (!authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing Authorization Bearer token' });
-  }
-
-  const idToken = authHeader.split(' ')[1];
+// Admin callable: trigger to send weekly KPI reminders now (manual trigger)
+exports.sendWeeklyKPIRemindersManual = onCall({
+  region: 'us-central1'
+}, async (req) => {
+  const uid = await requireAdminOrQuality(req.auth);
+  const result = await kpi.runWeeklyKPIReminders(false);
+  // Audit log
   try {
-    const decoded = await admin.auth().verifyIdToken(idToken);
-    await requireAdminOrQuality({ uid: decoded.uid });
-    const result = await kpi.runWeeklyKPIReminders(true);
-    return res.json(result);
-  } catch (err) {
-    console.error('previewWeeklyKPIRemindersHttp error', err);
-    return res.status(500).json({ error: err.message });
+    await db.collection('_admin').doc('kpiRunLogs').collection('runs').add({
+      initiatedBy: uid,
+      initiatedAt: new Date(),
+      type: 'manual-send',
+      resultSummary: {
+        notificationCount: result.notificationCount || 0,
+        pendingEvaluations: result.pendingEvaluations || 0,
+        evaluatorsNotified: result.evaluatorsNotified || result.evaluatorsSummary?.length || 0
+      }
+    });
+  } catch (e) {
+    console.warn('Failed to write KPI send log', e);
   }
+  return result;
 });
 
-exports.runWeeklyKPIRemindersHttp = onRequest({ region: 'us-central1', timeoutSeconds: 120, memory: '512MiB' }, async (req, res) => {
-  setCorsHeaders(res, req.get('origin'));
-  if (req.method === 'OPTIONS') {
-    return res.status(204).send('');
-  }
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method Not Allowed' });
-  }
-
-  const authHeader = req.get('Authorization') || req.get('authorization') || '';
-  if (!authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing Authorization Bearer token' });
-  }
-
-  const idToken = authHeader.split(' ')[1];
-  try {
-    const decoded = await admin.auth().verifyIdToken(idToken);
-    await requireAdminOrQuality({ uid: decoded.uid });
-    const result = await kpi.runWeeklyKPIReminders(false);
-    return res.json(result);
-  } catch (err) {
-    console.error('runWeeklyKPIRemindersHttp error', err);
-    return res.status(500).json({ error: err.message });
-  }
-});
-
+// HTTP fallback endpoints removed — using callables only now (deleted from console and removed locally to avoid drift)
 // REMOVED: admin callables for removed notification flows (quality team & weekly overdue).

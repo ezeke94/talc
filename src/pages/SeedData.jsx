@@ -478,22 +478,10 @@ const SeedData = () => {
                       setMessage('');
                       try {
                         if (!currentUser) throw new Error('Authentication required');
-                        if (!auth || !auth.currentUser) throw new Error('Auth not initialized');
-                        const token = await auth.currentUser.getIdToken();
-                        const endpoint = 'https://us-central1-kpi-talc.cloudfunctions.net/previewWeeklyKPIRemindersHttp';
-                        const res = await fetch(endpoint, {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                          },
-                          body: JSON.stringify({})
-                        });
-                        if (!res.ok) {
-                          const body = await res.json().catch(() => ({}));
-                          throw new Error(body.error || `HTTP ${res.status}`);
-                        }
-                        const data = await res.json();
+                        const functions = getFunctions();
+                        const previewFn = httpsCallable(functions, 'previewWeeklyKPIReminders');
+                        const res = await previewFn();
+                        const data = res.data || {};
                         setMessage(`Preview: ${data.pendingEvaluations} pending evaluations across ${data.evaluatorsCount} evaluators.`);
                         console.log('KPI preview', data);
                       } catch (err) {
@@ -511,22 +499,13 @@ const SeedData = () => {
                       setMessage('');
                       try {
                         if (!currentUser) throw new Error('Authentication required');
-                        if (!auth || !auth.currentUser) throw new Error('Auth not initialized');
-                        const token = await auth.currentUser.getIdToken();
-                        const endpoint = 'https://us-central1-kpi-talc.cloudfunctions.net/runWeeklyKPIRemindersHttp';
-                        const res = await fetch(endpoint, {
-                          method: 'POST',
-                          headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`
-                          },
-                          body: JSON.stringify({})
-                        });
-                        if (!res.ok) {
-                          const body = await res.json().catch(() => ({}));
-                          throw new Error(body.error || `HTTP ${res.status}`);
-                        }
-                        const data = await res.json();
+                        const functions = getFunctions();
+                        const runFn = httpsCallable(functions, 'runWeeklyKPIReminders');
+                        const res = await runFn();
+
+                        // For testing you can force send by holding Shift (quick shortcut)
+                        // Detect Shift held during click via event is not available here; provide an explicit force button below.
+                        const data = res.data || {};
                         setMessage(`Run complete: sent ${data.notificationCount} notifications to ${data.evaluatorsNotified} evaluators.`);
                         console.log('KPI run result', data);
                       } catch (err) {
@@ -537,6 +516,28 @@ const SeedData = () => {
                       }
                     }} disabled={runnerLoading}>
                       {runnerLoading ? <CircularProgress size={20} /> : 'Run Weekly KPI Reminders (Admin)'}
+                    </Button>
+
+                    <Button variant="contained" color="error" onClick={async () => {
+                      // Force send action
+                      setRunnerLoading(true);
+                      setMessage('');
+                      try {
+                        if (!currentUser) throw new Error('Authentication required');
+                        const functions = getFunctions();
+                        const runFn = httpsCallable(functions, 'runWeeklyKPIReminders');
+                        const res = await runFn({ force: true });
+                        const data = res.data || {};
+                        setMessage(`Force run complete: sent ${data.notificationCount} notifications to ${data.evaluatorsNotified} evaluators.`);
+                        console.log('KPI force run result', data);
+                      } catch (err) {
+                        console.error(err);
+                        setMessage(`Error: ${err.message}`);
+                      } finally {
+                        setRunnerLoading(false);
+                      }
+                    }} disabled={runnerLoading}>
+                      {runnerLoading ? <CircularProgress size={20} /> : 'Force Send KPI Reminders (Admin)'}
                     </Button>
                   </>
                 )}

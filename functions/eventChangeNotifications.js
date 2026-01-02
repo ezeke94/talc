@@ -24,6 +24,7 @@ const absBadge = `${baseUrl}/favicon.ico`;
 /**
  * Check if notification was already sent recently (within last 60 seconds)
  * Prevents duplicate notifications from being sent to the same user for the same event
+ * Read-only check (does not write). Writing happens after successful send.
  */
 async function wasNotificationRecentlySent(userId, eventId, notificationType) {
   const notificationKey = `${userId}-${eventId}-${notificationType}`;
@@ -33,32 +34,38 @@ async function wasNotificationRecentlySent(userId, eventId, notificationType) {
     const doc = await sentRef.get();
     if (doc.exists()) {
       const data = doc.data();
-      const sentAt = data.sentAt.toDate ? data.sentAt.toDate() : new Date(data.sentAt);
+      const sentAt = data.sentAt?.toDate ? data.sentAt.toDate() : (data.sentAt ? new Date(data.sentAt) : null);
       const now = new Date();
-      const diffSeconds = (now - sentAt) / 1000;
-      
-      // If sent within last 60 seconds, consider it a duplicate
-      if (diffSeconds < 60) {
-        console.log(`⏭️  Skipping duplicate: ${notificationKey} (sent ${Math.round(diffSeconds)}s ago)`);
+      if (sentAt) {
+        const diffSeconds = (now - sentAt) / 1000;
+        // If sent within last 60 seconds, consider it a duplicate
+        if (diffSeconds < 60) {
+          console.log(`⏭️  Skipping duplicate: ${notificationKey} (sent ${Math.round(diffSeconds)}s ago)`);
+          return true;
+        }
+        return false;
+      } else {
         return true;
       }
     }
-    
-    // Record this notification send
-    await sentRef.set({
-      userId,
-      eventId,
-      notificationType,
-      sentAt: new Date()
-    }, { merge: true });
-    
+    // Do not write here; recording should happen only after successful sends
     return false;
   } catch (error) {
     console.error('Error checking notification log:', error);
-    // On error, allow notification (fail open)
     return false;
   }
 }
+
+// Record that a notification was actually sent
+async function recordNotificationSent(userId, eventId, notificationType, meta = {}) {
+  try {
+    const notificationKey = `${userId}-${eventId}-${notificationType}`;
+    const sentRef = db.collection('_notificationLog').doc(notificationKey);
+    await sentRef.set({ userId, eventId, notificationType, sentAt: new Date(), meta }, { merge: true });
+  } catch (e) {
+    console.error('recordNotificationSent error', e);
+  }
+} 
 
 // Helper: Safely convert Firestore Timestamp to JavaScript Date
 function timestampToDate(timestamp) {
@@ -647,6 +654,9 @@ exports.notifyEventDelete = onDocumentDeleted({
 
     const notifications = [];
     const recipientsMeta = [];
+    // track userIds per notification type so we can record dedupe entries after successful sends
+    const assigneeRecipients = new Set();
+    const allUserRecipients = new Set();
 
     // Notify assignees (primary stakeholders)
     const assigneeIds = deletedData.assignees || [];
@@ -694,6 +704,8 @@ exports.notifyEventDelete = onDocumentDeleted({
         }
         recipientsMeta.push({ userId, token });
       }
+      // remember assignee to record dedupe after sends
+      assigneeRecipients.add(userId);
     }
 
     // Notify ALL users (role-based filtering removed - assignees already notified above)
@@ -748,6 +760,8 @@ exports.notifyEventDelete = onDocumentDeleted({
         }
         recipientsMeta.push({ userId, token });
       }
+      // remember user to record dedupe after sends
+      allUserRecipients.add(userId);
     }
 
     if (notifications.length > 0) {
@@ -761,6 +775,18 @@ exports.notifyEventDelete = onDocumentDeleted({
           console.warn(`Notification send failed for token ${idx}:`, code, res.error?.message);
         }
       });
+
+      // After successful sends, record dedupe entries for recipients
+      try {
+        if (assigneeRecipients.size) {
+          await Promise.all(Array.from(assigneeRecipients).map(uid => recordNotificationSent(uid, eventId, 'event_delete_assignee')));
+        }
+        if (allUserRecipients.size) {
+          await Promise.all(Array.from(allUserRecipients).map(uid => recordNotificationSent(uid, eventId, 'event_delete')));
+        }
+      } catch (e) {
+        console.warn('Failed to record deletion dedupe entries', e);
+      }
     }
 
     return { success: true, notificationsSent: notifications.length };
