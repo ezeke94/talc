@@ -1,4 +1,5 @@
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const logger = require('firebase-functions/logger');
 const { initializeApp, getApps } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
@@ -42,7 +43,7 @@ async function wasNotificationRecentlySent(userId, dedupKey, ttlSeconds = 24 * 3
     // Intentionally DO NOT write here — this is a read-only check. Writing should occur only after a successful send.
     return false;
   } catch (e) {
-    console.error('wasNotificationRecentlySent error', e);
+    logger.error('wasNotificationRecentlySent error', e);
     // Fail open so we don't block notifications on helper errors
     return false;
   }
@@ -55,7 +56,7 @@ async function recordNotificationSent(userId, dedupKey, meta = {}) {
     const ref = db.collection('_notificationLog').doc(key);
     await ref.set({ userId, dedupKey, sentAt: new Date(), meta }, { merge: true });
   } catch (e) {
-    console.error('recordNotificationSent error', e);
+    logger.error('recordNotificationSent error', e);
   }
 } 
 
@@ -87,7 +88,7 @@ async function getAllUserTokens(userId) {
       const userData = userDoc.data();
       if (userData?.fcmToken) tokens.add(userData.fcmToken);
     } catch (e) {
-      console.error(`getAllUserTokens: failed to read user ${userId}`, e);
+      logger.error(`getAllUserTokens: failed to read user ${userId}`, e);
     }
   }
   
@@ -98,14 +99,14 @@ async function getAllUserTokens(userId) {
 async function handleMissingIndex(funcName, error) {
   const isIndexError = error && (error.code === 9 || (error.message && error.message.includes('requires an index')));
   if (!isIndexError) return false;
-  console.warn(`Firestore index missing for ${funcName}. Skipping this scheduled run: ${error.message}`);
+  logger.warn(`Firestore index missing for ${funcName}. Skipping this scheduled run: ${error.message}`);
   try {
     await db.collection('_alerts').doc('missing_indexes').set({
       lastSeen: new Date(),
       [funcName]: { lastSeen: new Date(), message: String(error) }
     }, { merge: true });
   } catch (e) {
-    console.warn('Failed to write missing_indexes alert doc', e);
+    logger.warn('Failed to write missing_indexes alert doc', e);
   }
   return true;
 }
@@ -139,6 +140,22 @@ async function runWeeklyKPIReminders(dryRun = false, options = {}) {
     // Check for mentors without recent KPI submissions
     const pendingEvaluations = [];
     
+    // Prefetch form names for all assigned forms to avoid sequential reads
+    const allFormIds = new Set();
+    for (const m of mentors) {
+      const ids = m.assignedFormIds || [];
+      ids.forEach(id => allFormIds.add(id));
+    }
+    const formIdList = Array.from(allFormIds);
+    const formNamesById = {};
+    if (formIdList.length) {
+      const formSnaps = await Promise.all(formIdList.map(id => db.collection('kpiForms').doc(id).get()));
+      formSnaps.forEach((snap, idx) => {
+        const id = formIdList[idx];
+        formNamesById[id] = snap.exists ? (snap.data().name || id) : id;
+      });
+    }
+
     for (const mentor of mentors) {
       const mentorCenters = Array.isArray(mentor.assignedCenters) 
         ? mentor.assignedCenters 
@@ -148,10 +165,8 @@ async function runWeeklyKPIReminders(dryRun = false, options = {}) {
       const assignedFormIds = mentor.assignedFormIds || [];
       
       for (const formId of assignedFormIds) {
-        // Try to find the form to get its name
-        const formDoc = await db.collection('kpiForms').doc(formId).get();
-        const formName = formDoc.exists ? formDoc.data().name : formId;
-        
+        // Use prefetched form name
+        const formName = formNamesById[formId] || formId;
         const submissionKey = `${mentor.id}_${formName}`;
         if (!recentSubmissions.has(submissionKey)) {
           pendingEvaluations.push({
@@ -180,7 +195,8 @@ async function runWeeklyKPIReminders(dryRun = false, options = {}) {
         // Get ALL users (role-based filtering removed)
         if (evaluatorTokens.size === 0) {
           const usersSnapshot = await db.collection('users').get();
-          for (const userDoc of usersSnapshot.docs) {
+          // Parallelize token lookups to speed up building the cache
+          await Promise.all(usersSnapshot.docs.map(async (userDoc) => {
             const userData = userDoc.data();
             const tokens = await getAllUserTokens(userDoc.id);
             // Include evaluator in cache even if they have no tokens so run mirrors preview
@@ -190,7 +206,7 @@ async function runWeeklyKPIReminders(dryRun = false, options = {}) {
               name: userData.name || userData.email,
               role: userData.role || 'User'
             });
-          }
+          }));
         }
 
         for (const [evaluatorId, evaluatorData] of evaluatorTokens) {
@@ -236,7 +252,7 @@ async function runWeeklyKPIReminders(dryRun = false, options = {}) {
           // Cache for possible later use
           evaluatorTokens.set(evaluatorId, evaluatorData);
         } catch (e) {
-          console.warn('Failed to fetch evaluator data for preview', evaluatorId, e);
+          logger.warn('Failed to fetch evaluator data for preview', evaluatorId, e);
           // Continue - skip this evaluator if profile can't be loaded
           continue;
         }
@@ -326,7 +342,7 @@ async function runWeeklyKPIReminders(dryRun = false, options = {}) {
         }
       }
 
-      console.log(`Sent ${notifications.length} KPI reminder notifications for ${evaluatorsSummary.filter(e => e.skipReason === null).length} evaluators (total evaluated: ${evaluatorsSummary.length})`);
+      logger.info(`Sent ${notifications.length} KPI reminder notifications for ${evaluatorsSummary.filter(e => e.skipReason === null).length} evaluators (total evaluated: ${evaluatorsSummary.length})`);
       try { await handleMissingIndex('sendWeeklyKPIReminders', null); await resolveMissingIndex('sendWeeklyKPIReminders'); } catch(e) { /* ignore */ }
 
       // After successful send, record dedupe entries for evaluators actually notified
@@ -337,7 +353,7 @@ async function runWeeklyKPIReminders(dryRun = false, options = {}) {
           await Promise.all(evaluatorIds.map(id => recordNotificationSent(id, dedupKeyForToday, { type: 'kpi_reminder' })));
         }
       } catch (e) {
-        console.warn('Failed to record KPI dedupe entries', e);
+        logger.warn('Failed to record KPI dedupe entries', e);
       }
 
       const runSummary = {
@@ -365,7 +381,7 @@ async function runWeeklyKPIReminders(dryRun = false, options = {}) {
     if (await handleMissingIndex('sendWeeklyKPIReminders', error)) {
       return { success: true, notificationCount: 0, pendingEvaluations: 0, evaluatorsNotified: 0, note: 'missing_index' };
     }
-    console.error('Error sending KPI reminders:', error);
+    logger.error('Error sending KPI reminders:', error);
     throw error;
   }
 }
@@ -392,7 +408,7 @@ exports.sendWeeklyKPIReminders = onSchedule({
       evaluatorsPreview: (result.evaluatorsSummary || []).slice(0, 200)
     });
   } catch (e) {
-    console.warn('Failed to write KPI scheduled run log', e);
+    logger.warn('Failed to write KPI scheduled run log', e);
   }
   return result;
 });

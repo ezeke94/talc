@@ -1,4 +1,5 @@
 const { onCall } = require('firebase-functions/v2/https');
+const logger = require('firebase-functions/logger');
 const { initializeApp, getApps } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const admin = require('firebase-admin');
@@ -71,7 +72,7 @@ exports.runWeeklyKPIReminders = onCall({
       evaluatorsPreview: (result.evaluatorsSummary || []).slice(0, 200)
     });
   } catch (e) {
-    console.warn('Failed to write KPI run log', e);
+    logger.warn('Failed to write KPI run log', e);
   }
   return result;
 });
@@ -95,7 +96,7 @@ exports.sendWeeklyKPIRemindersManual = onCall({
       }
     });
   } catch (e) {
-    console.warn('Failed to write KPI send log', e);
+    logger.warn('Failed to write KPI send log', e);
   }
   return result;
 });

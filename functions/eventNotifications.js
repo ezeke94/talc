@@ -4,6 +4,7 @@ function isWebToken(token) {
   return typeof token === 'string' && token.length > 150 && token.includes(':');
 }
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const logger = require('firebase-functions/logger');
 const { onDocumentCreated } = require("firebase-functions/v2/firestore");
 const { initializeApp, getApps } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
@@ -41,7 +42,7 @@ async function wasNotificationRecentlySent(userId, eventId, notificationType) {
         const diffSeconds = (now - sentAt) / 1000;
         // If sent within last 60 seconds, consider it a duplicate
         if (diffSeconds < 60) {
-          console.log(`⏭️  Skipping duplicate: ${notificationKey} (sent ${Math.round(diffSeconds)}s ago)`);
+          logger.info(`⏭️  Skipping duplicate: ${notificationKey} (sent ${Math.round(diffSeconds)}s ago)`);
           return true;
         }
         return false;
@@ -53,7 +54,7 @@ async function wasNotificationRecentlySent(userId, eventId, notificationType) {
     // Do not write here; writing occurs only after a successful send
     return false;
   } catch (error) {
-    console.error('Error checking notification log:', error);
+    logger.error('Error checking notification log:', error);
     // On error, allow notification (fail open)
     return false;
   }
@@ -66,7 +67,7 @@ async function recordNotificationSent(userId, eventId, notificationType, meta = 
     const sentRef = db.collection('_notificationLog').doc(notificationKey);
     await sentRef.set({ userId, eventId, notificationType, sentAt: new Date(), meta }, { merge: true });
   } catch (e) {
-    console.error('recordNotificationSent error', e);
+    logger.error('recordNotificationSent error', e);
   }
 } 
 
@@ -88,10 +89,10 @@ function timestampToDate(timestamp) {
       return new Date(timestamp.seconds * 1000);
     }
   } catch (error) {
-    console.error('Error converting timestamp:', error);
+    logger.error('Error converting timestamp:', error);
   }
   
-  return null;
+  return null; 
 }
 
 // Helper: Safely format timestamp to locale string
@@ -146,16 +147,16 @@ function createIOSNotification(title, body, priority = '10', badge = 1) {
 async function handleMissingIndex(funcName, error) {
   const isIndexError = error && (error.code === 9 || (error.message && error.message.includes('requires an index')));
   if (!isIndexError) return false;
-  console.warn(`Firestore index missing for ${funcName}. Skipping this scheduled run: ${error.message}`);
+  logger.warn(`Firestore index missing for ${funcName}. Skipping this scheduled run: ${error.message}`);
   try {
     await db.collection('_alerts').doc('missing_indexes').set({
       lastSeen: new Date(),
       [funcName]: { lastSeen: new Date(), message: String(error) }
     }, { merge: true });
   } catch (e) {
-    console.warn('Failed to write missing_indexes alert doc', e);
+    logger.warn('Failed to write missing_indexes alert doc', e);
   }
-  return true;
+  return true; 
 }
 
 // Helper: Mark missing index resolved for scheduled functions
@@ -166,7 +167,7 @@ async function resolveMissingIndex(funcName) {
       [funcName]: { resolvedAt: new Date(), resolved: true }
     }, { merge: true });
   } catch (e) {
-    console.warn('Failed to mark missing index resolved', e);
+    logger.warn('Failed to mark missing index resolved', e);
   }
 } 
 
@@ -198,7 +199,7 @@ async function getAllUserTokens(userId) {
       const userData = userDoc.data();
       if (userData?.fcmToken) tokens.add(userData.fcmToken);
     } catch (e) {
-      console.error(`getAllUserTokens: failed to read user ${userId}`, e);
+      logger.error(`getAllUserTokens: failed to read user ${userId}`, e);
     }
   }
   
@@ -236,7 +237,7 @@ async function getAllTokensForAllUsers() {
       }
     }
   } catch (e) {
-    console.error('getAllTokensForAllUsers: failed to fetch tokens', e);
+    logger.error('getAllTokensForAllUsers: failed to fetch tokens', e);
   }
   return Array.from(tokens);
 }
@@ -249,7 +250,7 @@ async function handleSendResults(results, recipientsMeta) {
     if (res.success) continue;
     const meta = recipientsMeta[i];
     const code = res.error?.code || res.error?.errorInfo?.code;
-    console.warn('FCM send failure', code, res.error?.message, meta);
+    logger.warn('FCM send failure', code, res.error?.message, meta);
     // No token removal
   }
 }
@@ -275,7 +276,7 @@ exports.sendOwnerEventReminders = onSchedule({
       .get();
 
     if (eventsSnap.empty) {
-      console.log('No owner reminders to send: no events starting tomorrow');
+      logger.info('No owner reminders to send: no events starting tomorrow');
       try { await resolveMissingIndex('sendOwnerEventReminders'); } catch(e) { /* ignore */ }
       return { success: true, count: 0 };
     }
@@ -327,7 +328,7 @@ exports.sendOwnerEventReminders = onSchedule({
       try {
         await db.collection('events').doc(eventId).set({ lastNotificationAt: new Date() }, { merge: true });
       } catch (e) {
-        console.warn('Failed to update lastNotificationAt for event', eventId, e);
+        logger.warn('Failed to update lastNotificationAt for event', eventId, e);
       }
 
       // remember this owner+event to record dedupe after successful sends
@@ -357,10 +358,10 @@ exports.sendOwnerEventReminders = onSchedule({
         }));
       }
     } catch (e) {
-      console.warn('Failed to record owner reminder dedupe entries', e);
+      logger.warn('Failed to record owner reminder dedupe entries', e);
     }
 
-    console.log(`Sent ${totalSent} owner reminder notifications for ${eventsSnap.size} event(s) starting tomorrow`);
+    logger.info(`Sent ${totalSent} owner reminder notifications for ${eventsSnap.size} event(s) starting tomorrow`);
     try { await resolveMissingIndex('sendOwnerEventReminders'); } catch(e) { /* ignore */ }
     return { success: true, sent: totalSent, events: eventsSnap.size };
 
@@ -368,7 +369,7 @@ exports.sendOwnerEventReminders = onSchedule({
     if (await handleMissingIndex('sendOwnerEventReminders', error)) {
       return { success: true, sent: 0, events: 0, note: 'missing_index' };
     }
-    console.error('Error in sendOwnerEventReminders:', error);
+    logger.error('Error in sendOwnerEventReminders:', error);
     throw error;
   }
 });
@@ -403,7 +404,7 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
 
     // Assignee notifications for newly created events are disabled per configuration
     const assigneeIds = eventData.assignees || [];
-    console.log(`Assignee notifications (event_assigned) disabled for event ${eventId}; ${assigneeIds.length} assignee(s) ignored.`);
+    logger.info(`Assignee notifications (event_assigned) disabled for event ${eventId}; ${assigneeIds.length} assignee(s) ignored.`);
 
     // Notify ALL users (role-based filtering removed - assignees already notified above)
     const allUsersSnapshot = await db.collection('users').get();
@@ -475,20 +476,20 @@ exports.sendNotificationsOnEventCreate = onDocumentCreated({
       }
     }
 
-    console.log(`Sent ${notifications.length} notifications for event creation`);
+    logger.info(`Sent ${notifications.length} notifications for event creation`);
     // Record dedupe entries for users we notified for this event
     try {
       if (eventCreatedRecipients.size) {
         await Promise.all(Array.from(eventCreatedRecipients).map(uid => recordNotificationSent(uid, eventId, 'event_created')));
       }
     } catch (e) {
-      console.warn('Failed to record event_created dedupe entries', e);
+      logger.warn('Failed to record event_created dedupe entries', e);
     }
-    try { await resolveMissingIndex('sendNotificationsOnEventCreate'); } catch (e) { console.warn('resolveMissingIndex error', e); }
+    try { await resolveMissingIndex('sendNotificationsOnEventCreate'); } catch (e) { logger.warn('resolveMissingIndex error', e); }
     return { success: true, count: notifications.length };
 
   } catch (error) {
-    console.error('Error sending notifications for event creation:', error);
+    logger.error('Error sending notifications for event creation:', error);
     throw error;
   }
 });

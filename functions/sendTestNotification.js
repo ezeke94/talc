@@ -1,5 +1,4 @@
-const { onCall } = require("firebase-functions/v2/https");
-const { initializeApp, getApps } = require("firebase-admin/app");
+const { onCall } = require("firebase-functions/v2/https");const logger = require('firebase-functions/logger');const { initializeApp, getApps } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
 
@@ -48,7 +47,7 @@ exports.sendTestNotification = onCall({
         }
       });
     } catch (e) {
-      console.error('Error fetching devices:', e);
+      logger.error('Error fetching devices:', e);
     }
 
     // Fallback to fcmToken if no devices
@@ -143,12 +142,12 @@ exports.sendTestNotification = onCall({
     // Send notifications
     const results = await messaging.sendEach(messages);
 
-    console.log(`Test notification results: ${results.successCount} success, ${results.failureCount} failures`);
+    logger.info(`Test notification results: ${results.successCount} success, ${results.failureCount} failures`);
 
     // Log failures
     results.responses.forEach((response, idx) => {
       if (!response.success) {
-        console.error(`Failed to send to token ${idx}:`, response.error);
+        logger.warn(`Failed to send to token ${idx}:`, response.error);
       }
     });
 
@@ -160,7 +159,7 @@ exports.sendTestNotification = onCall({
     };
 
   } catch (error) {
-    console.error('Error sending test notification:', error);
+    logger.error('Error sending test notification:', error);
     throw error;
   }
 });

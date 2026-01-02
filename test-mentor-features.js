@@ -82,7 +82,7 @@ try {
   console.log('   1. Assign an evaluator to a mentor');
   console.log('   2. Ensure the mentor has assigned forms');
   console.log('   3. Check that forms show correct status (green if submitted this month)');
-  console.log('   4. Deploy Cloud Functions and wait for Friday 2 PM UTC for KPI reminders');
+  console.log('   4. Deploy Cloud Functions and wait for Friday 2 PM IST for KPI reminders');
   
 } catch (error) {
   console.error('❌ Test failed:', error);

@@ -61,7 +61,8 @@ if (document.hidden || document.visibilityState !== 'visible') {
 #### Cloud Functions Updates
 - **Event Creation**: Fixed missing export in `functions/index.js`
 - **Event Changes**: Fixed duplicate delete notifications
-- **KPI Reminders**: Updated for multi-device support
+- **KPI Reminders**: Updated for multi-device support; scheduled to run **Fridays at 2:00 PM IST (Asia/Kolkata)**. The server-side dedupe now performs a **read-only check** against the `_notificationLog` collection and only writes a record via `recordNotificationSent(...)` after notifications are successfully sent (prevents the read-check from creating false positives).
+- **Admin Callables**: Removed temporary HTTP-preview/run endpoints and replaced them with secure `httpsCallable` admin callables (prevents CORS/preflight issues and keeps admin UI simple). Helper smoke scripts were added in `functions/scripts/` (`run_kpi_preview.js`, `run_kpi_manual.js`) for safe local previews and cautious manual runs.
 - **Operational**: Fixed monthly summary notifications
 
 #### Token Management

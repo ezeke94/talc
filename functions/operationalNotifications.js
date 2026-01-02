@@ -1,4 +1,5 @@
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const logger = require('firebase-functions/logger');
 const { initializeApp, getApps } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
@@ -43,7 +44,7 @@ async function wasNotificationRecentlySent(userId, dedupKey, ttlSeconds = 3600) 
     // Do not write here; recording happens after successful sends
     return false;
   } catch (e) {
-    console.error('wasNotificationRecentlySent error', e);
+    logger.error('wasNotificationRecentlySent error', e);
     return false; // fail open
   }
 }
@@ -55,7 +56,7 @@ async function recordNotificationSent(userId, dedupKey, meta = {}) {
     const ref = db.collection('_notificationLog').doc(key);
     await ref.set({ userId, dedupKey, sentAt: new Date(), meta }, { merge: true });
   } catch (e) {
-    console.error('recordNotificationSent error', e);
+    logger.error('recordNotificationSent error', e);
   }
 }
 
@@ -87,7 +88,7 @@ async function getAllUserTokens(userId) {
       const userData = userDoc.data();
       if (userData?.fcmToken) tokens.add(userData.fcmToken);
     } catch (e) {
-      console.error(`getAllUserTokens: failed to read user ${userId}`, e);
+      logger.error(`getAllUserTokens: failed to read user ${userId}`, e);
     }
   }
   
@@ -98,16 +99,16 @@ async function getAllUserTokens(userId) {
 async function handleMissingIndex(funcName, error) {
   const isIndexError = error && (error.code === 9 || (error.message && error.message.includes('requires an index')));
   if (!isIndexError) return false;
-  console.warn(`Firestore index missing for ${funcName}. Skipping this scheduled run: ${error.message}`);
+  logger.warn(`Firestore index missing for ${funcName}. Skipping this scheduled run: ${error.message}`);
   try {
     await db.collection('_alerts').doc('missing_indexes').set({
       lastSeen: new Date(),
       [funcName]: { lastSeen: new Date(), message: String(error) }
     }, { merge: true });
   } catch (e) {
-    console.warn('Failed to write missing_indexes alert doc', e);
+    logger.warn('Failed to write missing_indexes alert doc', e);
   }
-  return true;
+  return true; 
 }
 
 

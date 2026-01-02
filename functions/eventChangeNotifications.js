@@ -1,4 +1,5 @@
 const { onDocumentUpdated, onDocumentCreated, onDocumentDeleted } = require("firebase-functions/v2/firestore");
+const logger = require('firebase-functions/logger');
 const { initializeApp, getApps } = require("firebase-admin/app");
 const { getFirestore } = require("firebase-admin/firestore");
 const { getMessaging } = require("firebase-admin/messaging");
@@ -40,7 +41,7 @@ async function wasNotificationRecentlySent(userId, eventId, notificationType) {
         const diffSeconds = (now - sentAt) / 1000;
         // If sent within last 60 seconds, consider it a duplicate
         if (diffSeconds < 60) {
-          console.log(`⏭️  Skipping duplicate: ${notificationKey} (sent ${Math.round(diffSeconds)}s ago)`);
+          logger.info(`⏭️  Skipping duplicate: ${notificationKey} (sent ${Math.round(diffSeconds)}s ago)`);
           return true;
         }
         return false;
@@ -51,7 +52,7 @@ async function wasNotificationRecentlySent(userId, eventId, notificationType) {
     // Do not write here; recording should happen only after successful sends
     return false;
   } catch (error) {
-    console.error('Error checking notification log:', error);
+    logger.error('Error checking notification log:', error);
     return false;
   }
 }
@@ -63,7 +64,7 @@ async function recordNotificationSent(userId, eventId, notificationType, meta = 
     const sentRef = db.collection('_notificationLog').doc(notificationKey);
     await sentRef.set({ userId, eventId, notificationType, sentAt: new Date(), meta }, { merge: true });
   } catch (e) {
-    console.error('recordNotificationSent error', e);
+    logger.error('recordNotificationSent error', e);
   }
 } 
 
@@ -85,7 +86,7 @@ function timestampToDate(timestamp) {
       return new Date(timestamp.seconds * 1000);
     }
   } catch (error) {
-    console.error('Error converting timestamp:', error);
+    logger.error('Error converting timestamp:', error);
   }
   
   return null;
@@ -164,7 +165,7 @@ async function getAllTokensForAllUsers() {
       }
     }
   } catch (e) {
-    console.error('getAllTokensForAllUsers: failed to fetch tokens', e);
+    logger.error('getAllTokensForAllUsers: failed to fetch tokens', e);
   }
   return Array.from(tokens);
 }
@@ -178,6 +179,7 @@ exports.notifyEventReschedule = onDocumentUpdated({
   try {
     const beforeData = event.data.before.data();
     const afterData = event.data.after.data();
+    const eventId = event.params.eventId;
     
     // Check if this is a reschedule (startDateTime changed)
     const oldDateTime = beforeData.startDateTime;
@@ -187,10 +189,10 @@ exports.notifyEventReschedule = onDocumentUpdated({
     const oldDt = timestampToDate(oldDateTime);
     const newDt = timestampToDate(newDateTime);
     if (!oldDt || !newDt || oldDt.getTime() === newDt.getTime()) {
+      logger.debug(`Skipping reschedule handler for event ${eventId}: startDateTime unchanged or missing`);
       return null; // No reschedule occurred
     }
 
-    const eventId = event.params.eventId;
     const eventTitle = afterData.title || 'Unnamed Event';
     const assigneeIds = afterData.assignees || [];
 
@@ -248,7 +250,7 @@ exports.notifyEventReschedule = onDocumentUpdated({
           }
         }
       } catch (userError) {
-        console.error(`Error getting user ${userId}:`, userError);
+        logger.error(`Error getting user ${userId}:`, userError);
         // Continue with other users
       }
     }
@@ -256,13 +258,13 @@ exports.notifyEventReschedule = onDocumentUpdated({
     // Send notifications
     if (notifications.length > 0) {
       const results = await messaging.sendEach(notifications);
-      console.log(`Sent ${results.successCount} reschedule notifications for event ${eventId}`);
+      logger.info(`Sent ${results.successCount} reschedule notifications for event ${eventId}`);
     }
 
     return { success: true, notificationsSent: notifications.length };
 
   } catch (error) {
-    console.error('Error sending reschedule notifications:', error);
+    logger.error('Error sending reschedule notifications:', error);
     // Don't throw to avoid failing the document update
     return { success: false, error: error.message };
   }
@@ -277,6 +279,7 @@ exports.notifyEventUpdate = onDocumentUpdated({
   try {
     const beforeData = event.data.before.data();
     const afterData = event.data.after.data();
+    const eventId = event.params.eventId;
     
     // Skip if this is a reschedule (handled by notifyEventReschedule)
     const oldDateTime = beforeData.startDateTime;
@@ -284,14 +287,17 @@ exports.notifyEventUpdate = onDocumentUpdated({
     const oldDt = timestampToDate(oldDateTime);
     const newDt = timestampToDate(newDateTime);
     if (oldDt && newDt && oldDt.getTime() !== newDt.getTime()) {
+      logger.debug(`Skipping update handler for event ${eventId}: detected reschedule (delegated to reschedule handler)`);
       return null; // Reschedule is handled by separate function
     }
 
     // Skip if status changed to cancelled or completed (handled by other functions)
     if (afterData.status === 'cancelled' && beforeData.status !== 'cancelled') {
+      logger.debug(`Skipping update handler for event ${eventId}: status changed to cancelled`);
       return null;
     }
     if (afterData.status === 'completed' && beforeData.status !== 'completed') {
+      logger.debug(`Skipping update handler for event ${eventId}: status changed to completed`);
       return null;
     }
 
@@ -304,6 +310,7 @@ exports.notifyEventUpdate = onDocumentUpdated({
 
     // If nothing significant changed, skip notification
     if (!titleChanged && !descriptionChanged && !centersChanged && !assigneesChanged && !todosChanged) {
+      logger.debug(`Skipping update handler for event ${eventId}: no significant fields changed`);
       return null;
     }
 
@@ -324,7 +331,7 @@ exports.notifyEventUpdate = onDocumentUpdated({
     const tokens = await getAllTokensForAllUsers();
     
     if (tokens.length === 0) {
-      console.log('No tokens available for event update notification');
+      logger.info('No tokens available for event update notification');
       return { success: true, notificationsSent: 0 };
     }
 
@@ -369,13 +376,13 @@ exports.notifyEventUpdate = onDocumentUpdated({
     // Send notifications
     if (notifications.length > 0) {
       const results = await messaging.sendEach(notifications);
-      console.log(`Sent ${results.successCount} update notifications for event ${eventId}`);
+      logger.info(`Sent ${results.successCount} update notifications for event ${eventId}`);
     }
 
     return { success: true, notificationsSent: notifications.length };
 
   } catch (error) {
-    console.error('Error sending event update notifications:', error);
+    logger.error('Error sending event update notifications:', error);
     return { success: false, error: error.message };
   }
 });
@@ -394,13 +401,13 @@ exports.notifyEventCancellation = onDocumentUpdated({
     const wasCancelled = beforeData.status !== 'cancelled' && afterData.status === 'cancelled';
     
     if (!wasCancelled) {
+      logger.debug(`Skipping cancellation handler for event ${event.params?.eventId || 'unknown'}: not a cancellation`);
       return null;
     }
 
     const eventId = event.params.eventId;
     const eventTitle = afterData.title || 'Unnamed Event';
     const assigneeIds = afterData.assignees || [];
-
     const notifications = [];
     
     for (const userId of assigneeIds) {
@@ -450,19 +457,19 @@ exports.notifyEventCancellation = onDocumentUpdated({
           }
         }
       } catch (userError) {
-        console.error(`Error getting user ${userId}:`, userError);
+        logger.error(`Error getting user ${userId}:`, userError);
       }
     }
 
     if (notifications.length > 0) {
       const results = await messaging.sendEach(notifications);
-      console.log(`Sent ${results.successCount} cancellation notifications for event ${eventId}`);
+      logger.info(`Sent ${results.successCount} cancellation notifications for event ${eventId}`);
     }
 
     return { success: true, notificationsSent: notifications.length };
 
   } catch (error) {
-    console.error('Error sending cancellation notifications:', error);
+    logger.error('Error sending cancellation notifications:', error);
     return { success: false, error: error.message };
   }
 });
@@ -481,6 +488,7 @@ exports.notifyEventCompletion = onDocumentUpdated({
     const wasCompleted = beforeData.status !== 'completed' && afterData.status === 'completed';
     
     if (!wasCompleted) {
+      logger.debug(`Skipping completion handler for event ${event.params?.eventId || 'unknown'}: not a completion`);
       return null;
     }
 
@@ -535,19 +543,19 @@ exports.notifyEventCompletion = onDocumentUpdated({
           }
         }
       } catch (userError) {
-        console.error(`Error getting tokens for supervisor ${userId}:`, userError);
+        logger.error(`Error getting tokens for supervisor ${userId}:`, userError);
       }
     }
 
     if (notifications.length > 0) {
       const results = await messaging.sendEach(notifications);
-      console.log(`Sent ${results.successCount} completion notifications for event ${event.params.eventId}`);
+      logger.info(`Sent ${results.successCount} completion notifications for event ${event.params.eventId}`);
     }
 
     return { success: true, notificationsSent: notifications.length };
 
   } catch (error) {
-    console.error('Error sending completion notifications:', error);
+    logger.error('Error sending completion notifications:', error);
     return { success: false, error: error.message };
   }
 });
@@ -565,7 +573,7 @@ function formatEventDate(val) {
     const d = new Date(val);
     if (!isNaN(d.getTime())) return d.toLocaleString();
   } catch (error) {
-    console.error('Error formatting event date:', error);
+    logger.error('Error formatting event date:', error);
   }
   return 'Unknown time';
 }
@@ -598,7 +606,7 @@ async function getUserTokens(userId) {
       }
     }
   } catch (error) {
-    console.error(`Error fetching tokens for user ${userId}:`, error);
+    logger.error(`Error fetching tokens for user ${userId}:`, error);
   }
   return Array.from(tokenSet);
 }
@@ -636,7 +644,7 @@ async function getAllUserTokens() {
       }
     }
   } catch (error) {
-    console.error('Error fetching user tokens:', error);
+    logger.error('Error fetching user tokens:', error);
   }
   return Array.from(tokenSet);
 }
@@ -766,13 +774,13 @@ exports.notifyEventDelete = onDocumentDeleted({
 
     if (notifications.length > 0) {
       const results = await messaging.sendEach(notifications);
-      console.log(`Sent ${results.successCount}/${notifications.length} deletion notifications for event ${eventId}`);
+      logger.info(`Sent ${results.successCount}/${notifications.length} deletion notifications for event ${eventId}`);
       
       // Log any failures
       results.responses.forEach((res, idx) => {
         if (!res.success) {
           const code = res.error?.code || res.error?.errorInfo?.code;
-          console.warn(`Notification send failed for token ${idx}:`, code, res.error?.message);
+          logger.warn(`Notification send failed for token ${idx}:`, code, res.error?.message);
         }
       });
 
@@ -792,7 +800,7 @@ exports.notifyEventDelete = onDocumentDeleted({
     return { success: true, notificationsSent: notifications.length };
 
   } catch (error) {
-    console.error('Error sending deletion notifications:', error);
+    logger.error('Error sending deletion notifications:', error);
     return { success: false, error: error.message };
   }
 });

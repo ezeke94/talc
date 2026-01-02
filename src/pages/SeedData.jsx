@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { db, auth } from '../firebase/config';
+import { db } from '../firebase/config';
 import { collection, writeBatch, addDoc, getDocs, where, query } from 'firebase/firestore';
 // ...existing code...
 import { Button, Typography, CircularProgress, Alert, Paper, Stack } from '@mui/material';

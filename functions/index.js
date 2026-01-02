@@ -33,7 +33,7 @@ exports.sendTestNotification = sendTestNotification;
 // Admin callables
 exports.previewWeeklyKPIReminders = adminRunners.previewWeeklyKPIReminders;
 exports.runWeeklyKPIReminders = adminRunners.runWeeklyKPIReminders;
-exports.sendWeeklyKPIReminders = adminRunners.sendWeeklyKPIReminders;
+exports.sendWeeklyKPIRemindersManual = adminRunners.sendWeeklyKPIRemindersManual;
 // Note: HTTP fallback endpoints were removed; use callables or scheduled functions instead.
 // Note: migrateEventTimestamps callable was removed after migration was executed (cleanup)
 
