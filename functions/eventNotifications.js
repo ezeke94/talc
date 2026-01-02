@@ -245,11 +245,108 @@ async function handleSendResults(results, recipientsMeta) {
   }
 }
 
-// REMOVED: runOwnerEventReminders runner (moved to scheduled job only); keep scheduled `sendOwnerEventReminders` for now (may be removed later if desired)
-
-
 // Owner reminders - one day before at 4 PM UTC
-// REMOVED: scheduled owner event reminders (disabled/removed by request)
+exports.sendOwnerEventReminders = onSchedule({
+  schedule: '0 16 * * *', // Every day at 16:00 UTC
+  timeZone: 'UTC',
+  region: 'us-central1',
+  memory: '256MiB'
+}, async (event) => {
+  try {
+    const now = new Date();
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    // Start and end of the next day in UTC
+    const startOfTomorrow = new Date(Date.UTC(tomorrow.getUTCFullYear(), tomorrow.getUTCMonth(), tomorrow.getUTCDate(), 0, 0, 0));
+    const endOfTomorrow = new Date(startOfTomorrow.getTime() + 24 * 60 * 60 * 1000);
+
+    // Find events starting tomorrow
+    const eventsSnap = await db.collection('events')
+      .where('startDateTime', '>=', startOfTomorrow)
+      .where('startDateTime', '<', endOfTomorrow)
+      .get();
+
+    if (eventsSnap.empty) {
+      console.log('No owner reminders to send: no events starting tomorrow');
+      try { await resolveMissingIndex('sendOwnerEventReminders'); } catch(e) { /* ignore */ }
+      return { success: true, count: 0 };
+    }
+
+    const notifications = [];
+    const recipientsMeta = [];
+
+    for (const doc of eventsSnap.docs) {
+      const ev = doc.data();
+      const eventId = doc.id;
+      const ownerId = ev.ownerId || ev.owner?.userId;
+      if (!ownerId) continue; // no owner to notify
+
+      // Dedupe: ensure we don't re-notify owner for same event within 24h
+      if (await wasNotificationRecentlySent(ownerId, eventId, 'owner_reminder')) continue;
+
+      const tokens = await getAllUserTokens(ownerId);
+      if (!tokens.length) continue; // owner has no devices
+
+      const title = `Reminder: ${ev.title} is tomorrow`;
+      const timeStr = formatTimestampTime(ev.startDateTime, 'tomorrow');
+      const body = `Your event "${ev.title}" starts at ${timeStr} tomorrow.`;
+
+      for (const token of tokens) {
+        const web = isWebToken(token);
+        if (web) {
+          notifications.push({
+            token,
+            data: { type: 'owner_reminder', eventId, url: `/calendar` },
+            webpush: {
+              fcmOptions: { link: `${baseUrl}/calendar` },
+              notification: { title, body, icon: absIcon, badge: absBadge }
+            }
+          });
+        } else {
+          notifications.push({
+            token,
+            notification: { title, body },
+            data: { type: 'owner_reminder', eventId, url: `/calendar` },
+            webpush: { fcmOptions: { link: `${baseUrl}/calendar` }, notification: { icon: absIcon, badge: absBadge } }
+          });
+        }
+        recipientsMeta.push({ userId: ownerId, token });
+      }
+
+      // Mark event as having been notified (lastNotificationAt) - do not overwrite other fields
+      try {
+        await db.collection('events').doc(eventId).set({ lastNotificationAt: new Date() }, { merge: true });
+      } catch (e) {
+        console.warn('Failed to update lastNotificationAt for event', eventId, e);
+      }
+    }
+
+    // Send notifications in batches
+    const batchSize = 500;
+    let totalSent = 0;
+    for (let i = 0; i < notifications.length; i += batchSize) {
+      const batch = notifications.slice(i, i + batchSize);
+      const metaBatch = recipientsMeta.slice(i, i + batchSize);
+      if (batch.length > 0) {
+        const results = await messaging.sendEach(batch);
+        await handleSendResults(results, metaBatch);
+        totalSent += batch.length;
+      }
+    }
+
+    console.log(`Sent ${totalSent} owner reminder notifications for ${eventsSnap.size} event(s) starting tomorrow`);
+    try { await resolveMissingIndex('sendOwnerEventReminders'); } catch(e) { /* ignore */ }
+    return { success: true, sent: totalSent, events: eventsSnap.size };
+
+  } catch (error) {
+    if (await handleMissingIndex('sendOwnerEventReminders', error)) {
+      return { success: true, sent: 0, events: 0, note: 'missing_index' };
+    }
+    console.error('Error in sendOwnerEventReminders:', error);
+    throw error;
+  }
+});
+
+// REMOVED: quality-team same-day reminders and core runner (deleted per request)
 
 // REMOVED: quality-team same-day reminders and core runner (deleted per request)
 

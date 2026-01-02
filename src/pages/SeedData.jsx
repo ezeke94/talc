@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { db } from '../firebase/config';
+import { db, auth } from '../firebase/config';
 import { collection, writeBatch, addDoc, getDocs, where, query } from 'firebase/firestore';
 // ...existing code...
 import { Button, Typography, CircularProgress, Alert, Paper, Stack } from '@mui/material';
@@ -477,10 +477,23 @@ const SeedData = () => {
                       setRunnerLoading(true);
                       setMessage('');
                       try {
-                        const functions = getFunctions();
-                        const previewFn = httpsCallable(functions, 'previewWeeklyKPIReminders');
-                        const res = await previewFn();
-                        const data = res.data || {};
+                        if (!currentUser) throw new Error('Authentication required');
+                        if (!auth || !auth.currentUser) throw new Error('Auth not initialized');
+                        const token = await auth.currentUser.getIdToken();
+                        const endpoint = 'https://us-central1-kpi-talc.cloudfunctions.net/previewWeeklyKPIRemindersHttp';
+                        const res = await fetch(endpoint, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                          },
+                          body: JSON.stringify({})
+                        });
+                        if (!res.ok) {
+                          const body = await res.json().catch(() => ({}));
+                          throw new Error(body.error || `HTTP ${res.status}`);
+                        }
+                        const data = await res.json();
                         setMessage(`Preview: ${data.pendingEvaluations} pending evaluations across ${data.evaluatorsCount} evaluators.`);
                         console.log('KPI preview', data);
                       } catch (err) {
@@ -497,10 +510,23 @@ const SeedData = () => {
                       setRunnerLoading(true);
                       setMessage('');
                       try {
-                        const functions = getFunctions();
-                        const runFn = httpsCallable(functions, 'runWeeklyKPIReminders');
-                        const res = await runFn();
-                        const data = res.data || {};
+                        if (!currentUser) throw new Error('Authentication required');
+                        if (!auth || !auth.currentUser) throw new Error('Auth not initialized');
+                        const token = await auth.currentUser.getIdToken();
+                        const endpoint = 'https://us-central1-kpi-talc.cloudfunctions.net/runWeeklyKPIRemindersHttp';
+                        const res = await fetch(endpoint, {
+                          method: 'POST',
+                          headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                          },
+                          body: JSON.stringify({})
+                        });
+                        if (!res.ok) {
+                          const body = await res.json().catch(() => ({}));
+                          throw new Error(body.error || `HTTP ${res.status}`);
+                        }
+                        const data = await res.json();
                         setMessage(`Run complete: sent ${data.notificationCount} notifications to ${data.evaluatorsNotified} evaluators.`);
                         console.log('KPI run result', data);
                       } catch (err) {

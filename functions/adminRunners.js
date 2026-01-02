@@ -54,4 +54,66 @@ exports.runWeeklyKPIReminders = onCall({
   return result;
 });
 
+// HTTP fallback endpoints (CORS-enabled) for cross-origin callers (e.g., Netlify)
+const { onRequest } = require('firebase-functions/v2/https');
+
+function setCorsHeaders(res, origin) {
+  // Consider restricting origin to a whitelist for production
+  res.set('Access-Control-Allow-Origin', origin || '*');
+  res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+}
+
+exports.previewWeeklyKPIRemindersHttp = onRequest({ region: 'us-central1', timeoutSeconds: 120, memory: '512MiB' }, async (req, res) => {
+  setCorsHeaders(res, req.get('origin'));
+  if (req.method === 'OPTIONS') {
+    return res.status(204).send('');
+  }
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+
+  const authHeader = req.get('Authorization') || req.get('authorization') || '';
+  if (!authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing Authorization Bearer token' });
+  }
+
+  const idToken = authHeader.split(' ')[1];
+  try {
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    await requireAdminOrQuality({ uid: decoded.uid });
+    const result = await kpi.runWeeklyKPIReminders(true);
+    return res.json(result);
+  } catch (err) {
+    console.error('previewWeeklyKPIRemindersHttp error', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+exports.runWeeklyKPIRemindersHttp = onRequest({ region: 'us-central1', timeoutSeconds: 120, memory: '512MiB' }, async (req, res) => {
+  setCorsHeaders(res, req.get('origin'));
+  if (req.method === 'OPTIONS') {
+    return res.status(204).send('');
+  }
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
+  }
+
+  const authHeader = req.get('Authorization') || req.get('authorization') || '';
+  if (!authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing Authorization Bearer token' });
+  }
+
+  const idToken = authHeader.split(' ')[1];
+  try {
+    const decoded = await admin.auth().verifyIdToken(idToken);
+    await requireAdminOrQuality({ uid: decoded.uid });
+    const result = await kpi.runWeeklyKPIReminders(false);
+    return res.json(result);
+  } catch (err) {
+    console.error('runWeeklyKPIRemindersHttp error', err);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // REMOVED: admin callables for removed notification flows (quality team & weekly overdue).

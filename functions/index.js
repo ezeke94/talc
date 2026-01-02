@@ -33,6 +33,9 @@ exports.sendTestNotification = sendTestNotification;
 // Admin callables
 exports.previewWeeklyKPIReminders = adminRunners.previewWeeklyKPIReminders;
 exports.runWeeklyKPIReminders = adminRunners.runWeeklyKPIReminders;
+// HTTP CORS-enabled endpoints for cross-origin admin usage
+exports.previewWeeklyKPIRemindersHttp = adminRunners.previewWeeklyKPIRemindersHttp;
+exports.runWeeklyKPIRemindersHttp = adminRunners.runWeeklyKPIRemindersHttp;
 // Note: migrateEventTimestamps callable was removed after migration was executed (cleanup)
 
 // Keep the hello world function for testing
