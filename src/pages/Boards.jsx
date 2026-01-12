@@ -408,6 +408,14 @@ const Boards = () => {
     return new Date(due) < new Date();
   };
 
+  // Safe date formatter to handle Date, Firestore Timestamps, or missing values
+  const formatDate = (input) => {
+    if (!input) return '—';
+    if (input?.toDate) return input.toDate().toLocaleDateString();
+    if (input instanceof Date) return input.toLocaleDateString();
+    try { return new Date(input).toLocaleDateString(); } catch { return '—'; }
+  };
+
   // Handle add new project
   const handleAddProject = () => {
     setSelectedProject({
@@ -796,13 +804,13 @@ const Boards = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               {project.assignedUsers && project.assignedUsers.length > 0 && (
                 <AvatarGroup max={3} sx={{ '& .MuiAvatar-root': { width: 24, height: 24, fontSize: '0.75rem' } }}>
-                  {project.assignedUsers.map((user, userIndex) => (
-                    <Tooltip key={userIndex} title={user.name || user.email}>
+                  {(project.assignedUsers || []).filter(Boolean).map((user, userIndex) => (
+                    <Tooltip key={userIndex} title={(user?.name || user?.email) || ''}>
                       <Avatar
-                        src={user.photoURL}
-                        alt={user.name || user.email}
+                        src={user?.photoURL}
+                        alt={user?.name || user?.email}
                       >
-                        {(user.name || user.email || 'U').charAt(0).toUpperCase()}
+                        {((user?.name || user?.email || 'U').charAt(0) || 'U').toUpperCase()}
                       </Avatar>
                     </Tooltip>
                   ))}
@@ -810,12 +818,12 @@ const Boards = () => {
               )}
               {isMobile && project.assignedUsers && project.assignedUsers.length > 0 && (
                 <Box sx={{ ml: 1 }}>
-                  <Typography variant="caption">{project.assignedUsers.length} members</Typography>
+                  <Typography variant="caption">{(project.assignedUsers || []).filter(Boolean).length} members</Typography>
                 </Box>
               )}
             </Box>
             <Typography variant="caption" color="text.secondary">
-              Due: {new Date(project.endDate).toLocaleDateString()}
+              Due: {formatDate(project.endDate)}
             </Typography>
           </Box>
 
@@ -1115,7 +1123,7 @@ const Boards = () => {
                     Start Date
                   </Typography>
                   <Typography variant="body1">
-                    {new Date(selectedProject.startDate).toLocaleDateString()}
+                    {formatDate(selectedProject.startDate)}
                   </Typography>
                 </Grid>
 
@@ -1124,7 +1132,7 @@ const Boards = () => {
                     End Date
                   </Typography>
                   <Typography variant="body1">
-                    {new Date(selectedProject.endDate).toLocaleDateString()}
+                    {formatDate(selectedProject.endDate)}
                   </Typography>
                 </Grid>
 
@@ -1168,13 +1176,13 @@ const Boards = () => {
                       Assigned Team Members
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                      {selectedProject.assignedUsers.map((user, index) => (
+                      {(selectedProject.assignedUsers || []).filter(Boolean).map((user, index) => (
                         <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1, bgcolor: 'grey.100', borderRadius: 1 }}>
-                          <Avatar src={user.photoURL} sx={{ width: 24, height: 24 }}>
-                            {(user.name || user.email || 'U').charAt(0).toUpperCase()}
+                          <Avatar src={user?.photoURL} sx={{ width: 24, height: 24 }}>
+                            {(user?.name || user?.email || 'U').charAt(0).toUpperCase()}
                           </Avatar>
                           <Typography variant="body2">
-                            {user.name || user.email}
+                            {user?.name || user?.email}
                           </Typography>
                         </Box>
                       ))}

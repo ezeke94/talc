@@ -1,109 +1,175 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users: Admins manage all, users manage their own profile and notifications (updated 2025-10-10)
+
+    // ------------------------------------------------------------------
+    // Users: Admins manage all, users manage their own profile and devices
+    // ------------------------------------------------------------------
     match /users/{userId} {
-      // All authed users can read user profiles
-      allow read: if isAuthed();
-
-      // Create allowed for the user themselves or admin
-      allow create: if isSelf() || isAdmin();
-
-      // Delete only by admin
-      allow delete: if isAdmin();
-
-      // Update rules:
-      //  - Admins and Quality can update any fields
-      //  - The user can only update notification-related fields (fcmToken, notificationsEnabled, lastTokenUpdate)
-      allow update: if (
-        isAdmin() || isQuality() ||
-        (isSelf() && request.resource.data.diff(resource.data).changedKeys().hasOnly(['fcmToken', 'notificationsEnabled', 'lastTokenUpdate']))
+      allow read: if isAuthed() && (request.auth.uid == userId || isAdmin());
+      // Allow a user to update their profile (basic fields) or admins to edit
+      allow write: if isAuthed() && (
+        request.auth.uid == userId || isAdmin()
       );
 
-      // Devices subcollection: users can manage their own devices; admins can read all devices
+      // Devices subcollection: users can manage their own devices, admins can read/write all devices
       match /devices/{deviceId} {
         allow read: if isAuthed() && (request.auth.uid == userId || isAdmin());
-        allow write: if isAuthed() && request.auth.uid == userId;
+        // Allow writes by device owner or admin (useful for admin cleanup)
+        allow write: if isAuthed() && (request.auth.uid == userId || isAdmin());
       }
     }
+
+    // ---------------------------------------------------------------
     // Events: Authenticated users can read/create, update/delete by owner/admin/quality
-    // All users can update todos and status fields for task management
+    // Enforce timestamp types on create and prevent ownership spoofing
+    // ---------------------------------------------------------------
     match /events/{eventId} {
-      allow read, create: if isAuthed();
+      allow read: if isAuthed();
+
+      // Create only if authenticated and createdBy/owner are the calling user (or admin),
+      // and datetimes are timestamps.
+      allow create: if isAuthed()
+                    && (
+                      (request.resource.data.createdBy.userId == request.auth.uid)
+                      || isAdmin()
+                    )
+                    && request.resource.data.startDateTime is timestamp
+                    && (
+                      request.resource.data.endDateTime == null
+                      || request.resource.data.endDateTime is timestamp
+                    );
+
+      // Allow partial todos/status updates for any authed user
+      // Full updates allowed to creator/admin/quality, but they cannot change createdBy or ownerId
       allow update: if isAuthed() && (
-        // Allow all users to update todos and status for task management
+        // Allow all users to update only todos and status for task management
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['todos', 'status'])) ||
-        // Allow full updates by creators, admins, and quality team
-        (resource.data.createdBy.userId == request.auth.uid || isAdmin() || isQuality())
+        (
+          (resource.data.createdBy.userId == request.auth.uid || isAdmin() || isQuality())
+          && request.resource.data.createdBy.userId == resource.data.createdBy.userId
+          && request.resource.data.ownerId == resource.data.ownerId
+        )
       );
+
       allow delete: if isAuthed() && (isAdmin() || isQuality());
     }
-    // SOPs: Authenticated users can read/create, update/delete by admin/quality
+
+    // -------------------------
+    // SOPs: Admin/Quality writes
+    // -------------------------
     match /sops/{sopId} {
-      allow read, create: if isAuthed();
+      allow read: if isAuthed();
+      allow create: if isAuthed();
       allow update, delete: if isAdmin() || isQuality();
     }
-    // Centers: All authed users can read, only admin can write
+
+    // -------------------------
+    // Centers: read for authed, admin write
+    // -------------------------
     match /centers/{centerId} {
       allow read: if isAuthed();
       allow write: if isAdmin();
     }
-    // Mentors: All authed users can read, only admin can write
+
+    // -------------------------
+    // Mentors: read for authed, admin write
+    // -------------------------
     match /mentors/{mentorId} {
       allow read: if isAuthed();
       allow write: if isAdmin();
     }
-    // KPI Submissions: All authed users can read/write
+
+    // --------------------------------------------------
+    // KPI Submissions: require timestamps; any authenticated user can create
+    // --------------------------------------------------
     match /kpiSubmissions/{submissionId} {
-      allow read, write: if isAuthed();
+      allow read: if isAuthed();
+      allow create: if isAuthed()
+                    && request.resource.data.createdAt is timestamp;
+      allow update, delete: if isAuthed()
+                            && (resource.data.userId == request.auth.uid || isAdmin() || isQuality());
     }
-    // KPI Forms: All authed users can read, only admin can write
+
+    // -------------------------
+    // KPI Forms: admin writes
+    // -------------------------
     match /kpiForms/{formId} {
       allow read: if isAuthed();
       allow write: if isAdmin();
     }
+
+    // --------------------------------------------------
     // Notifications: Only owner can read/update, only admin can create
+    // (Server functions using Admin SDK bypass rules as expected)
+    // --------------------------------------------------
     match /notifications/{notificationId} {
       allow read, update: if isSelfNotification();
       allow create: if isAdmin();
     }
-    // Metrics: All authed users can read, only admin can write
+
+    // -------------------------
+    // Metrics: All authed can read, admin writes
+    // -------------------------
     match /metrics/{metricId} {
       allow read: if isAuthed();
       allow write: if isAdmin();
     }
+
+    // --------------------------------------------------
     // Projects: Admin/Quality can read/write, Coordinator can read
+    // --------------------------------------------------
     match /projects/{projectId} {
-      allow read, write: if isAdmin() || isQuality();
-      allow read: if isCoordinator();
+      allow read: if isAdmin() || isQuality() || isCoordinator();
+      allow write: if isAdmin() || isQuality();
     }
-    // Notification Log: Only accessible by Cloud Functions (not by clients)
-    match /_notificationLog/{logId} {
-      allow read, write: if false; // Only Cloud Functions with admin SDK can access
-    }
+
+    // -------------------------
     // Default: Authenticated users can read
+    // (Writes are restricted by specific collection rules above)
+    // -------------------------
     match /{document=**} {
       allow read: if isAuthed();
+      allow write: if false; // Prevent accidental writes to unspecified collections
     }
+
+    // --------------------------------------------------
     // Helper functions
+    // --------------------------------------------------
     function isAuthed() {
       return request.auth != null;
     }
+
     function isSelf() {
       return isAuthed() && request.auth.uid == userId;
     }
+
     function isSelfNotification() {
       return isAuthed() && resource.data.userId == request.auth.uid;
     }
+
     function isAdmin() {
-      return isAuthed() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Admin";
+      return isAuthed() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Admin";
     }
+
     function isQuality() {
-      return isAuthed() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Quality";
+      return isAuthed() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Quality";
     }
+
     function isCoordinator() {
-      return isAuthed() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Coordinator";
+      return isAuthed() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Coordinator";
     }
-    // Removed unused isSafeSelfCreate function
+
+    // Optional helper for role checks
+    function isRole(role) {
+      return isAuthed() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == role;
+    }
+
+    // Note: Admin SDK calls from Cloud Functions bypass these rules by design.
+    // Ensure server functions that need broader access continue to use the Admin SDK.
   }
 }

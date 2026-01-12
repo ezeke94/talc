@@ -314,7 +314,6 @@ exports.notifyEventUpdate = onDocumentUpdated({
       return null;
     }
 
-    const eventId = event.params.eventId;
     const eventTitle = afterData.title || 'Unnamed Event';
     
     // Build change summary
