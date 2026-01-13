@@ -37,6 +37,8 @@ import {
   Fade,
 } from '@mui/material';
 
+import { prepareDuplicateEvent } from '../utils/eventUtils';
+
 import SearchIcon from '@mui/icons-material/Search';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import CloseIcon from '@mui/icons-material/Close';
@@ -653,7 +655,7 @@ const Calendar = () => {
         // showing on create across devices.
       }
     } catch (_ERR) {
-      alert('Error saving event/task. Please try again.');
+      alert('Error saving event/task: ' + (_ERR?.message || _ERR));
       console.error(_ERR);
     }
     setShowForm(false);
@@ -708,13 +710,8 @@ const Calendar = () => {
     // If caller wants to open editor for the new copy, they should call with options { openEdit: true }.
     try {
       const newTitle = getDuplicateTitle(event.title);
-      const copy = { ...event };
-      delete copy.id;
-      copy.title = newTitle;
-      copy.createdBy = { userId: currentUser.uid, userName: currentUser.displayName };
-      copy.lastModifiedBy = { userId: currentUser.uid, userName: currentUser.displayName };
-      copy.notificationSent = false;
-      copy.lastNotificationAt = new Date();
+      // Use helper to prepare the duplicated payload
+      const copy = prepareDuplicateEvent(event, newTitle, currentUser);
 
       const docRef = await addDoc(collection(db, 'events'), copy);
       const newEvent = { id: docRef.id, ...copy };
@@ -725,7 +722,7 @@ const Calendar = () => {
       return newEvent;
     } catch (_ERR) {
       console.error('Failed to duplicate event', _ERR);
-      alert('Failed to duplicate event. Please try again.');
+      alert('Failed to duplicate event: ' + (_ERR?.message || _ERR));
       throw _ERR;
     }
   };

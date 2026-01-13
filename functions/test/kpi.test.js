@@ -1,6 +1,7 @@
 const { expect } = require('chai');
 const sinon = require('sinon');
 const proxyquire = require('proxyquire');
+const { describe, it, beforeEach } = require('vitest');
 
 // Helper to create a minimal Firestore-like stub
 function makeFirestoreStub(initialData = {}) {

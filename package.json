@@ -8,8 +8,10 @@
     "build": "vite build",
     "lint": "eslint .",
     "analyze": "vite build --mode analyze",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "vitest"
   },
+
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
@@ -39,6 +41,7 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^16.3.0",
     "rollup-plugin-visualizer": "^5.14.0",
-    "vite": "^7.0.4"
+    "vite": "^7.0.4",
+    "vitest": "^1.0.0"
   }
 }
