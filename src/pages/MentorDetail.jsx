@@ -422,16 +422,33 @@ const MentorDetail = () => {
             {mentor && uniqueFormNames.length > 0 && (() => {
                 const activeName = uniqueFormNames[activeKpiTab];
                 if (!activeName) return null;
-                const dynamicForm = availableForms.find(f => f.name === activeName);
+                // Find form in dynamicAssignedForms for reliability
+                const dynamicForm = dynamicAssignedForms.find(f => f.name === activeName);
+                // Fallback to availableForms if not found
+                const formToUse = dynamicForm || availableForms.find(f => f.name === activeName);
                 // Always use dynamic route for assigned forms (forms come from Firestore)
                 const onClick = () => {
-                    if (dynamicForm) {
-                        navigate(`/mentor/${mentorId}/fill/${dynamicForm.id}`);
+                    if (formToUse) {
+                        navigate(`/mentor/${mentorId}/fill/${formToUse.id}`);
                     }
                 };
+                // Don't render button if no form found
+                if (!formToUse) return null;
+                
                 return (
                     <Box sx={isMobile ? {
-                        position: 'fixed', left: 0, right: 0, bottom: 0, p: 2, bgcolor: 'background.paper', boxShadow: 6, zIndex: 1200,
+                        position: 'fixed', 
+                        left: 0, 
+                        right: 0, 
+                        bottom: 0, 
+                        px: 2,
+                        pt: 1.5,
+                        pb: 'calc(env(safe-area-inset-bottom, 8px) + 8px)',
+                        bgcolor: 'background.paper', 
+                        boxShadow: '0 -4px 12px rgba(0,0,0,0.08)', 
+                        zIndex: 1200,
+                        borderTop: '1px solid',
+                        borderColor: 'divider',
                     } : {
                         position: 'fixed', bottom: 16, right: 16, display: 'flex', flexDirection: 'column', gap: 1, zIndex: 1200,
                     }}>
@@ -441,7 +458,16 @@ const MentorDetail = () => {
                             color={'secondary'}
                             onClick={onClick}
                             fullWidth={isMobile}
-                            sx={isMobile ? {} : { minWidth: 200 }}
+                            sx={isMobile ? { 
+                                py: 1.5, 
+                                fontSize: '1rem',
+                                fontWeight: 600,
+                                borderRadius: 2,
+                                textTransform: 'none',
+                                minHeight: 48,
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                            } : { minWidth: 200 }}
                         >
                             {`Fill ${activeName} Form`}
                         </Button>

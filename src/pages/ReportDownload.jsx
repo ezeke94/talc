@@ -479,243 +479,241 @@ const ReportDownload = () => {
     const formSubmissions = getFormSubmissions;
 
     return (
-        <Box sx={{ maxWidth: 1200, mx: 'auto', p: { xs: 2, md: 3 } }}>
+        <Box sx={{ maxWidth: { xs: 1200, lg: 1400 }, mx: 'auto', p: { xs: 2, md: 3 } }}>
             <Typography variant="h4" sx={{ fontWeight: 700, mb: { xs: 2, md: 3 }, fontSize: { xs: '1.5rem', md: '2rem' } }}>
                 KPI Reports
             </Typography>
 
-            {/* Month Selection */}
+            {/* Filters Card - Horizontal Layout on Desktop */}
             <Card sx={{ mb: { xs: 2, md: 3 } }}>
                 <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600, display: { xs: 'block', md: 'none' } }}>
-                        Select Months
-                    </Typography>
-                    <FormControl fullWidth sx={{ maxWidth: { xs: '100%', md: 400 } }}>
-                        <InputLabel sx={{ display: { xs: 'none', md: 'block' } }}>Select Months</InputLabel>
-                        <Select
-                            multiple
-                            value={Array.isArray(selectedMonths) ? selectedMonths : []}
-                            onChange={handleMonthChange}
-                            label={isMobile ? '' : 'Select Months'}
-                            renderValue={(selected) => (
-                                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                                    {selected.map((value) => {
-                                        const monthLabel = monthOptions.find(m => m.key === value)?.label;
-                                        return <Chip key={value} label={monthLabel} size="small" />;
-                                    })}
-                                </Box>
+                    {isMobile ? (
+                        /* Mobile - Vertical Stack */
+                        <>
+                            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                                Select Months
+                            </Typography>
+                            <FormControl fullWidth sx={{ mb: 2 }}>
+                                <Select
+                                    multiple
+                                    value={Array.isArray(selectedMonths) ? selectedMonths : []}
+                                    onChange={handleMonthChange}
+                                    renderValue={(selected) => (
+                                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                            {selected.map((value) => {
+                                                const monthLabel = monthOptions.find(m => m.key === value)?.label;
+                                                return <Chip key={value} label={monthLabel} size="small" />;
+                                            })}
+                                        </Box>
+                                    )}
+                                    sx={{ fontSize: '0.875rem' }}
+                                >
+                                    {monthOptions.map(month => (
+                                        <MenuItem key={month.key} value={month.key}>
+                                            {month.label}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
+
+                            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+                                Filter By
+                            </Typography>
+                            <ToggleButtonGroup
+                                value={filterType}
+                                exclusive
+                                onChange={(e, newValue) => newValue && setFilterType(newValue)}
+                                sx={{ 
+                                    mb: 2,
+                                    width: '100%',
+                                    display: 'flex',
+                                    '& .MuiToggleButton-root': {
+                                        flex: 1,
+                                        fontSize: '0.875rem',
+                                        py: 1
+                                    }
+                                }}
+                            >
+                                <ToggleButton value="mentor">Mentor Name</ToggleButton>
+                                <ToggleButton value="form">Form Name</ToggleButton>
+                            </ToggleButtonGroup>
+
+                            {filterType === 'mentor' ? (
+                                <FormControl fullWidth sx={{ mb: 2 }}>
+                                    <InputLabel>Select Mentor</InputLabel>
+                                    <Select
+                                        value={selectedMentor}
+                                        onChange={(e) => setSelectedMentor(e.target.value)}
+                                        label="Select Mentor"
+                                        sx={{ fontSize: '0.875rem' }}
+                                    >
+                                        {getMentorsWithSubmissions.map(mentor => (
+                                            <MenuItem key={mentor.id} value={mentor.id}>
+                                                {mentor.name}
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                            ) : (
+                                <FormControl fullWidth sx={{ mb: 2 }}>
+                                    <InputLabel>Select Form</InputLabel>
+                                    <Select
+                                        value={selectedForm}
+                                        onChange={(e) => setSelectedForm(e.target.value)}
+                                        label="Select Form"
+                                        sx={{ fontSize: '0.875rem' }}
+                                    >
+                                        {getFormsWithSubmissions.map(form => (
+                                            <MenuItem key={form.id} value={form.id}>
+                                                {form.name}
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
                             )}
-                            sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
-                        >
-                            {monthOptions.map(month => (
-                                <MenuItem key={month.key} value={month.key}>
-                                    {month.label}
-                                </MenuItem>
-                            ))}
-                        </Select>
-                    </FormControl>
-                </CardContent>
-            </Card>
 
-            {/* Filter Type Selection */}
-            <Card sx={{ mb: { xs: 2, md: 3 } }}>
-                <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-                    <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, fontSize: { xs: '1rem', md: '1.25rem' } }}>
-                        Filter By
-                    </Typography>
-                    <ToggleButtonGroup
-                        value={filterType}
-                        exclusive
-                        onChange={(e, newValue) => newValue && setFilterType(newValue)}
-                        sx={{ 
-                            mb: 2,
-                            width: { xs: '100%', md: 'auto' },
-                            display: 'flex',
-                            '& .MuiToggleButton-root': {
-                                flex: { xs: 1, md: 'initial' },
-                                fontSize: { xs: '0.875rem', md: '1rem' },
-                                py: { xs: 1, md: 1.5 }
-                            }
-                        }}
-                    >
-                        <ToggleButton value="mentor">Mentor Name</ToggleButton>
-                        <ToggleButton value="form">Form Name</ToggleButton>
-                    </ToggleButtonGroup>
-
-                    {filterType === 'mentor' ? (
-                        <FormControl fullWidth sx={{ mb: 2, maxWidth: { xs: '100%', md: 400 } }}>
-                            <InputLabel>Select Mentor</InputLabel>
-                            <Select
-                                value={selectedMentor}
-                                onChange={(e) => setSelectedMentor(e.target.value)}
-                                label="Select Mentor"
-                                sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
+                            <Button
+                                variant="contained"
+                                startIcon={<PictureAsPdfIcon />}
+                                onClick={handleExportPDF}
+                                disabled={(Array.isArray(selectedMonths) ? selectedMonths.length === 0 : true) || exporting}
+                                fullWidth
+                                sx={{ 
+                                    borderRadius: 2,
+                                    fontSize: '0.875rem',
+                                    py: 1.25
+                                }}
                             >
-                                {getMentorsWithSubmissions.map(mentor => (
-                                    <MenuItem key={mentor.id} value={mentor.id}>
-                                        {mentor.name}
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
+                                {exporting ? 'Exporting...' : 'Export as PDF'}
+                            </Button>
+                        </>
                     ) : (
-                        <FormControl fullWidth sx={{ mb: 2, maxWidth: { xs: '100%', md: 400 } }}>
-                            <InputLabel>Select Form</InputLabel>
-                            <Select
-                                value={selectedForm}
-                                onChange={(e) => setSelectedForm(e.target.value)}
-                                label="Select Form"
-                                sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}
-                            >
-                                {getFormsWithSubmissions.map(form => (
-                                    <MenuItem key={form.id} value={form.id}>
-                                        {form.name}
-                                    </MenuItem>
-                                ))}
-                            </Select>
-                        </FormControl>
-                    )}
+                        /* Desktop - Horizontal Layout */
+                        <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                            <FormControl sx={{ minWidth: 280, flex: 1 }}>
+                                <InputLabel>Select Months</InputLabel>
+                                <Select
+                                    multiple
+                                    value={Array.isArray(selectedMonths) ? selectedMonths : []}
+                                    onChange={handleMonthChange}
+                                    label="Select Months"
+                                    renderValue={(selected) => (
+                                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                            {selected.map((value) => {
+                                                const monthLabel = monthOptions.find(m => m.key === value)?.label;
+                                                return <Chip key={value} label={monthLabel} size="small" />;
+                                            })}
+                                        </Box>
+                                    )}
+                                >
+                                    {monthOptions.map(month => (
+                                        <MenuItem key={month.key} value={month.key}>
+                                            {month.label}
+                                        </MenuItem>
+                                    ))}
+                                </Select>
+                            </FormControl>
 
-                    <Box>
-                        <Button
-                            variant="contained"
-                            startIcon={<PictureAsPdfIcon />}
-                            onClick={handleExportPDF}
-                            disabled={(Array.isArray(selectedMonths) ? selectedMonths.length === 0 : true) || exporting}
-                            fullWidth={isMobile}
-                            sx={{ 
-                                borderRadius: 2,
-                                fontSize: { xs: '0.875rem', md: '1rem' },
-                                py: { xs: 1.25, md: 1.5 }
-                            }}
-                        >
-                            {exporting ? 'Exporting...' : 'Export as PDF'}
-                        </Button>
-                    </Box>
+                            <ToggleButtonGroup
+                                value={filterType}
+                                exclusive
+                                onChange={(e, newValue) => newValue && setFilterType(newValue)}
+                                sx={{ 
+                                    height: 56,
+                                    '& .MuiToggleButton-root': {
+                                        px: 3
+                                    }
+                                }}
+                            >
+                                <ToggleButton value="mentor">Mentor Name</ToggleButton>
+                                <ToggleButton value="form">Form Name</ToggleButton>
+                            </ToggleButtonGroup>
+
+                            {filterType === 'mentor' ? (
+                                <FormControl sx={{ minWidth: 250, flex: 1 }}>
+                                    <InputLabel>Select Mentor</InputLabel>
+                                    <Select
+                                        value={selectedMentor}
+                                        onChange={(e) => setSelectedMentor(e.target.value)}
+                                        label="Select Mentor"
+                                    >
+                                        {getMentorsWithSubmissions.map(mentor => (
+                                            <MenuItem key={mentor.id} value={mentor.id}>
+                                                {mentor.name}
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                            ) : (
+                                <FormControl sx={{ minWidth: 250, flex: 1 }}>
+                                    <InputLabel>Select Form</InputLabel>
+                                    <Select
+                                        value={selectedForm}
+                                        onChange={(e) => setSelectedForm(e.target.value)}
+                                        label="Select Form"
+                                    >
+                                        {getFormsWithSubmissions.map(form => (
+                                            <MenuItem key={form.id} value={form.id}>
+                                                {form.name}
+                                            </MenuItem>
+                                        ))}
+                                    </Select>
+                                </FormControl>
+                            )}
+
+                            <Button
+                                variant="contained"
+                                startIcon={<PictureAsPdfIcon />}
+                                onClick={handleExportPDF}
+                                disabled={(Array.isArray(selectedMonths) ? selectedMonths.length === 0 : true) || exporting}
+                                sx={{ 
+                                    borderRadius: 2,
+                                    px: 3,
+                                    height: 56
+                                }}
+                            >
+                                {exporting ? 'Exporting...' : 'Export as PDF'}
+                            </Button>
+                        </Box>
+                    )}
                 </CardContent>
             </Card>
 
             {/* Results Display */}
-            <Card>
-                <CardContent sx={{ p: { xs: 2, md: 3 } }}>
-                    <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, fontSize: { xs: '1rem', md: '1.25rem' } }}>
-                        {filterType === 'mentor'
-                            ? `Submissions for ${mentors.find(m => m.id === selectedMentor)?.name || 'Selected Mentor'}`
-                            : `Submissions for ${forms.find(f => f.id === selectedForm)?.name || 'Selected Form'}`}
-                    </Typography>
+            <Box>
+                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600, fontSize: { xs: '1rem', md: '1.25rem' } }}>
+                    {filterType === 'mentor'
+                        ? `Submissions for ${mentors.find(m => m.id === selectedMentor)?.name || 'Selected Mentor'}`
+                        : `Submissions for ${forms.find(f => f.id === selectedForm)?.name || 'Selected Form'}`}
+                </Typography>
 
-                    {filterType === 'mentor' ? (
-                        mentorSubmissions.length === 0 ? (
-                            <Typography color="text.secondary" sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}>
-                                No submissions found for selected criteria
-                            </Typography>
-                        ) : (
-                            <Stack spacing={{ xs: 1.5, md: 2 }}>
-                                {mentorSubmissions.map((submission) => (
-                                    <Card key={submission.id} variant="outlined" sx={{ boxShadow: { md: 1 } }}>
-                                        <CardContent sx={{ p: { xs: 2, md: 3 }, '&:last-child': { pb: { xs: 2, md: 3 } } }}>
-                                            <Typography 
-                                                variant="subtitle2" 
-                                                sx={{ 
-                                                    fontWeight: 600, 
-                                                    mb: 2,
-                                                    fontSize: { xs: '0.875rem', md: '1rem' }
-                                                }}
-                                            >
-                                                {submission.formName} - {submission.date}
-                                            </Typography>
-                                            
-                                            {/* Mobile View - Card-based layout */}
-                                            {isMobile ? (
-                                                <Stack spacing={1.5}>
-                                                    {submission.fields.map((field, idx) => (
-                                                        <Box 
-                                                            key={idx}
-                                                            sx={{ 
-                                                                p: 1.5, 
-                                                                bgcolor: 'grey.50', 
-                                                                borderRadius: 1,
-                                                                border: '1px solid',
-                                                                borderColor: 'grey.200'
-                                                            }}
-                                                        >
-                                                            <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                                                                {field.fieldLabel}
-                                                            </Typography>
-                                                            <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
-                                                                <Box>
-                                                                    <Typography variant="caption" color="text.secondary">
-                                                                        Score
-                                                                    </Typography>
-                                                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                                                        {field.score || '-'}
-                                                                    </Typography>
-                                                                </Box>
-                                                                <Box sx={{ flex: 1 }}>
-                                                                    <Typography variant="caption" color="text.secondary">
-                                                                        Note
-                                                                    </Typography>
-                                                                    <Typography variant="body2">
-                                                                        {field.note || '-'}
-                                                                    </Typography>
-                                                                </Box>
-                                                            </Box>
-                                                        </Box>
-                                                    ))}
-                                                </Stack>
-                                            ) : (
-                                                /* Desktop View - Table layout */
-                                                <TableContainer>
-                                                    <Table size="small">
-                                                        <TableHead>
-                                                            <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                                                                <TableCell sx={{ fontWeight: 600 }}>Field</TableCell>
-                                                                <TableCell sx={{ fontWeight: 600, width: '100px' }}>Score</TableCell>
-                                                                <TableCell sx={{ fontWeight: 600 }}>Note</TableCell>
-                                                            </TableRow>
-                                                        </TableHead>
-                                                        <TableBody>
-                                                            {submission.fields.map((field, idx) => (
-                                                                <TableRow key={idx}>
-                                                                    <TableCell>{field.fieldLabel}</TableCell>
-                                                                    <TableCell sx={{ textAlign: 'center' }}>
-                                                                        {field.score || '-'}
-                                                                    </TableCell>
-                                                                    <TableCell>{field.note || '-'}</TableCell>
-                                                                </TableRow>
-                                                            ))}
-                                                        </TableBody>
-                                                    </Table>
-                                                </TableContainer>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </Stack>
-                        )
+                {filterType === 'mentor' ? (
+                    mentorSubmissions.length === 0 ? (
+                        <Card>
+                            <CardContent>
+                                <Typography color="text.secondary" sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}>
+                                    No submissions found for selected criteria
+                                </Typography>
+                            </CardContent>
+                        </Card>
                     ) : (
-                        formSubmissions.length === 0 ? (
-                            <Typography color="text.secondary" sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}>
-                                No submissions found for selected criteria
-                            </Typography>
-                        ) : (
-                            <Stack spacing={{ xs: 1.5, md: 2 }}>
-                                {formSubmissions.map((submission) => (
-                                    <Card key={submission.id} variant="outlined" sx={{ boxShadow: { md: 1 } }}>
-                                        <CardContent sx={{ p: { xs: 2, md: 3 }, '&:last-child': { pb: { xs: 2, md: 3 } } }}>
-                                            <Typography 
-                                                variant="subtitle2" 
-                                                sx={{ 
-                                                    fontWeight: 600, 
-                                                    mb: 2,
-                                                    fontSize: { xs: '0.875rem', md: '1rem' }
-                                                }}
-                                            >
-                                                {submission.mentorName} - {submission.date}
-                                            </Typography>
-                                            
-                                            {/* Mobile View - Card-based layout */}
-                                            {isMobile ? (
+                        <Stack spacing={{ xs: 1.5, md: 2 }}>
+                            {mentorSubmissions.map((submission) => (
+                                <Card key={submission.id} variant="outlined">
+                                    <CardContent sx={{ p: { xs: 2, md: 2.5 }, '&:last-child': { pb: { xs: 2, md: 2.5 } } }}>
+                                        <Typography 
+                                            variant="subtitle2" 
+                                            sx={{ 
+                                                fontWeight: 600, 
+                                                mb: { xs: 2, md: 1.5 },
+                                                fontSize: { xs: '0.875rem', md: '1rem' }
+                                            }}
+                                        >
+                                            {submission.formName} - {submission.date}
+                                        </Typography>
+                                        
+                                        {/* Mobile View - Card-based layout */}
+                                        {isMobile ? (
                                                 <Stack spacing={1.5}>
                                                     {submission.fields.map((field, idx) => (
                                                         <Box 
@@ -757,17 +755,17 @@ const ReportDownload = () => {
                                                 <TableContainer>
                                                     <Table size="small">
                                                         <TableHead>
-                                                            <TableRow sx={{ bgcolor: '#f5f5f5' }}>
-                                                                <TableCell sx={{ fontWeight: 600 }}>Field</TableCell>
-                                                                <TableCell sx={{ fontWeight: 600, width: '100px' }}>Score</TableCell>
-                                                                <TableCell sx={{ fontWeight: 600 }}>Note</TableCell>
+                                                            <TableRow sx={{ bgcolor: 'grey.100' }}>
+                                                                <TableCell sx={{ fontWeight: 600, width: '30%' }}>Field</TableCell>
+                                                                <TableCell sx={{ fontWeight: 600, width: '10%', textAlign: 'center' }}>Score</TableCell>
+                                                                <TableCell sx={{ fontWeight: 600, width: '60%' }}>Note</TableCell>
                                                             </TableRow>
                                                         </TableHead>
                                                         <TableBody>
                                                             {submission.fields.map((field, idx) => (
-                                                                <TableRow key={idx}>
+                                                                <TableRow key={idx} sx={{ '&:hover': { bgcolor: 'grey.50' } }}>
                                                                     <TableCell>{field.fieldLabel}</TableCell>
-                                                                    <TableCell sx={{ textAlign: 'center' }}>
+                                                                    <TableCell sx={{ textAlign: 'center', fontWeight: 600 }}>
                                                                         {field.score || '-'}
                                                                     </TableCell>
                                                                     <TableCell>{field.note || '-'}</TableCell>
@@ -777,14 +775,106 @@ const ReportDownload = () => {
                                                     </Table>
                                                 </TableContainer>
                                             )}
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </Stack>
-                        )
-                    )}
-                </CardContent>
-            </Card>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </Stack>
+                    )
+                ) : (
+                    formSubmissions.length === 0 ? (
+                        <Card>
+                            <CardContent>
+                                <Typography color="text.secondary" sx={{ fontSize: { xs: '0.875rem', md: '1rem' } }}>
+                                    No submissions found for selected criteria
+                                </Typography>
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        <Stack spacing={{ xs: 1.5, md: 2 }}>
+                            {formSubmissions.map((submission) => (
+                                <Card key={submission.id} variant="outlined">
+                                    <CardContent sx={{ p: { xs: 2, md: 2.5 }, '&:last-child': { pb: { xs: 2, md: 2.5 } } }}>
+                                        <Typography 
+                                            variant="subtitle2" 
+                                            sx={{ 
+                                                fontWeight: 600, 
+                                                mb: { xs: 2, md: 1.5 },
+                                                fontSize: { xs: '0.875rem', md: '1rem' }
+                                            }}
+                                        >
+                                            {submission.mentorName} - {submission.date}
+                                        </Typography>
+                                        
+                                        {/* Mobile View - Card-based layout */}
+                                        {isMobile ? (
+                                                <Stack spacing={1.5}>
+                                                    {submission.fields.map((field, idx) => (
+                                                        <Box 
+                                                            key={idx}
+                                                            sx={{ 
+                                                                p: 1.5, 
+                                                                bgcolor: 'grey.50', 
+                                                                borderRadius: 1,
+                                                                border: '1px solid',
+                                                                borderColor: 'grey.200'
+                                                            }}
+                                                        >
+                                                            <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                                                                {field.fieldLabel}
+                                                            </Typography>
+                                                            <Box sx={{ display: 'flex', gap: 2, mt: 1 }}>
+                                                                <Box>
+                                                                    <Typography variant="caption" color="text.secondary">
+                                                                        Score
+                                                                    </Typography>
+                                                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                                                        {field.score || '-'}
+                                                                    </Typography>
+                                                                </Box>
+                                                                <Box sx={{ flex: 1 }}>
+                                                                    <Typography variant="caption" color="text.secondary">
+                                                                        Note
+                                                                    </Typography>
+                                                                    <Typography variant="body2">
+                                                                        {field.note || '-'}
+                                                                    </Typography>
+                                                                </Box>
+                                                            </Box>
+                                                        </Box>
+                                                    ))}
+                                                </Stack>
+                                            ) : (
+                                                /* Desktop View - Table layout */
+                                                <TableContainer>
+                                                    <Table size="small">
+                                                        <TableHead>
+                                                            <TableRow sx={{ bgcolor: 'grey.100' }}>
+                                                                <TableCell sx={{ fontWeight: 600, width: '30%' }}>Field</TableCell>
+                                                                <TableCell sx={{ fontWeight: 600, width: '10%', textAlign: 'center' }}>Score</TableCell>
+                                                                <TableCell sx={{ fontWeight: 600, width: '60%' }}>Note</TableCell>
+                                                            </TableRow>
+                                                        </TableHead>
+                                                        <TableBody>
+                                                            {submission.fields.map((field, idx) => (
+                                                                <TableRow key={idx} sx={{ '&:hover': { bgcolor: 'grey.50' } }}>
+                                                                    <TableCell>{field.fieldLabel}</TableCell>
+                                                                    <TableCell sx={{ textAlign: 'center', fontWeight: 600 }}>
+                                                                        {field.score || '-'}
+                                                                    </TableCell>
+                                                                    <TableCell>{field.note || '-'}</TableCell>
+                                                                </TableRow>
+                                                            ))}
+                                                        </TableBody>
+                                                    </Table>
+                                                </TableContainer>
+                                            )}
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </Stack>
+                    )
+                )}
+            </Box>
         </Box>
     );
 };
