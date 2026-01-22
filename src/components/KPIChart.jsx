@@ -5,10 +5,10 @@ import { Box, Typography } from '@mui/material';
 
 const COLORS = {
     "Critical": "#D9534F",
-    "Not Up to Expectation": "#F0AD4E",
+    "Not Up to Expectations": "#F0AD4E",
     "As Expected": "#D3D3D3",
     "Shows Intention": "#5BC0DE",
-    "Exceeds Expectations / Exceptional": "#428BCA",
+    "Exceeds Expectations": "#428BCA",
 };
 
 const KPIChart = ({ data, onSegmentClick }) => {

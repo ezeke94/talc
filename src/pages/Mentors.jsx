@@ -107,10 +107,11 @@ const Mentors = () => {
     };
 
     const handleSave = async (mentorData) => {
+        const payload = { ...mentorData, status: mentorData.status || currentMentor?.status || 'active' };
         if (currentMentor) {
-            await updateDoc(doc(db, 'mentors', currentMentor.id), mentorData);
+            await updateDoc(doc(db, 'mentors', currentMentor.id), payload);
         } else {
-            await addDoc(collection(db, 'mentors'), mentorData);
+            await addDoc(collection(db, 'mentors'), payload);
         }
         handleClose();
     };
@@ -132,9 +133,10 @@ const Mentors = () => {
         return centerArray.map(centerId => centerMap.get(centerId) || centerId);
     };
 
-    // Filter mentors by search
+    // Filter mentors by search and hide inactive mentors
     // Sort mentors alphabetically by name
-    const sortedMentors = [...mentors].sort((a, b) => {
+    const activeMentors = mentors.filter(m => (m.status || 'active') !== 'inactive');
+    const sortedMentors = [...activeMentors].sort((a, b) => {
         const nameA = a.name?.toLowerCase() || '';
         const nameB = b.name?.toLowerCase() || '';
         return nameA.localeCompare(nameB);

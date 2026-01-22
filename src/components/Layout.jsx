@@ -113,6 +113,7 @@ const Layout = () => {
     const roleRaw = (currentUser && currentUser.role) || roleFromCache || '';
     const normalizedRole = (typeof roleRaw === 'string') ? roleRaw.trim().toLowerCase() : '';
     const showUserManagement = ['admin', 'quality'].includes(normalizedRole);
+    const canManageMentorStatus = ['admin', 'quality', 'management'].includes(normalizedRole);
     const showDashboards = ['admin', 'quality'].includes(normalizedRole);
     const canRecordKPIs = ['admin', 'quality', 'evaluator'].includes(normalizedRole);
     const canViewProjects = ['admin', 'quality', 'coordinator'].includes(normalizedRole);
@@ -142,6 +143,12 @@ const Layout = () => {
         ...(showUserManagement ? [
             { text: 'Forms', path: '/form-management' },
             { text: 'Users', path: '/user-management' }
+        ] : []),
+        ...(canManageMentorStatus ? [
+            { text: 'Mentor Status', path: '/mentor-status' }
+        ] : []),
+        ...(canManageMentorStatus ? [
+            { text: 'Reports', path: '/reports' }
         ] : []),
         { text: 'Reset App Cache', action: resetApp, icon: <RefreshIcon fontSize="small" /> }
     ];

@@ -32,10 +32,19 @@ const MentorForm = ({ open, onClose, onSave, mentor }) => {
 
     // Subscribe to available KPI forms
     useEffect(() => {
-        const unsub = onSnapshot(collection(db, 'kpiForms'), (snap) => {
-            const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            setForms(arr);
-        });
+                const unsub = onSnapshot(collection(db, 'kpiForms'), (snap) => {
+                        const arr = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                        // Hide legacy defaults from selection and sort by explicit order then name
+                        const filtered = arr
+                            .filter(f => !['Intellect', 'Cultural'].includes((f.name || '').trim()))
+                            .sort((a, b) => {
+                                const ao = typeof a.order === 'number' ? a.order : 9999;
+                                const bo = typeof b.order === 'number' ? b.order : 9999;
+                                if (ao !== bo) return ao - bo;
+                                return (a.name || '').localeCompare(b.name || '');
+                            });
+                        setForms(filtered);
+                });
         return () => unsub();
     }, []);
 
@@ -80,7 +89,8 @@ const MentorForm = ({ open, onClose, onSave, mentor }) => {
                 name, 
                 assignedCenters, 
                 assignedFormIds,
-                assignedEvaluator: evaluatorData
+                assignedEvaluator: evaluatorData,
+                status: mentor?.status || 'active'
             });
             setName('');
             setAssignedCenters([]);

@@ -8,11 +8,11 @@ import { useAuth } from '../context/AuthContext';
 
 const scoreToCategory = (score) => {
     if (score === 0 || !score) return "N/A";
-    if (score < 1.5) return "Critical";
-    if (score < 2.5) return "Not Up to Expectation";
-    if (score < 3.5) return "As Expected";
-    if (score < 4.5) return "Shows Intention";
-    return "Exceeds Expectations / Exceptional";
+    if (score <= 2) return "Critical"; // 1.0 - 2.0
+    if (score <= 3) return "Not Up to Expectations"; // 2.1 - 3.0
+    if (score <= 4) return "As Expected"; // 3.1 - 4.0
+    if (score <= 4.5) return "Shows Intention"; // 4.1 - 4.5
+    return "Exceeds Expectations"; // 4.6 - 5.0
 };
 
 const Dashboard = () => {
@@ -44,7 +44,8 @@ const Dashboard = () => {
             try {
                 const mentorsSnapshot = await getDocs(collection(db, 'mentors'));
                 const mentorsData = mentorsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setAllMentors(mentorsData);
+                const activeMentors = mentorsData.filter(m => (m.status || 'active') !== 'inactive');
+                setAllMentors(activeMentors);
 
                 const submissionsSnapshot = await getDocs(collection(db, 'kpiSubmissions'));
                 const subsData = submissionsSnapshot.docs.map(doc => ({ 
@@ -58,16 +59,21 @@ const Dashboard = () => {
                 // Load available KPI forms
                 try {
                     const formsSnap = await getDocs(collection(db, 'kpiForms'));
-                    const formsData = formsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    const formsData = formsSnap.docs
+                        .map(d => ({ id: d.id, ...d.data() }))
+                        .sort((a, b) => {
+                            const ao = typeof a.order === 'number' ? a.order : 9999;
+                            const bo = typeof b.order === 'number' ? b.order : 9999;
+                            if (ao !== bo) return ao - bo;
+                            return (a.name || '').localeCompare(b.name || '');
+                        });
                     setForms(formsData);
-                    // Keep existing default if still available; else fallback to first
+                    // Keep existing default if still available; else fallback to first sorted form
                     if (formsData.length > 0) {
                         setKpiType((prev) => {
                             const hasCurrent = formsData.some(f => f.name === prev);
                             if (hasCurrent) return prev;
-                            // Prefer Intellect/Cultural if present; otherwise first form
-                            const preferred = ['Intellect', 'Cultural'].find(n => formsData.some(f => f.name === n));
-                            return preferred || formsData[0].name;
+                            return formsData[0].name;
                         });
                     }
                 } catch { /* forms collection may not exist yet; ignore */ }
@@ -94,6 +100,8 @@ const Dashboard = () => {
                     return centers.includes(centerFilter);
                 })
                 : allMentors;
+
+            filteredMentors = filteredMentors.filter(m => (m.status || 'active') !== 'inactive');
 
             const latestScores = filteredMentors.map(mentor => {
                 // Filter submissions for this mentor and KPI type
@@ -140,10 +148,10 @@ const Dashboard = () => {
             const categoryCounts = {};
             const validCategories = [
                 "Critical",
-                "Not Up to Expectation",
+                "Not Up to Expectations",
                 "As Expected",
                 "Shows Intention",
-                "Exceeds Expectations / Exceptional"
+                "Exceeds Expectations"
             ];
 
             validCategories.forEach(category => {
@@ -207,7 +215,7 @@ const Dashboard = () => {
                     InputLabelProps={{ shrink: true }}
                 >
                     {forms.map(f => (
-                        <option key={f.id} value={f.name}>{f.name}</option>
+                        <option key={f.id} value={f.name}>{f.hideName ? 'Hidden Form' : f.name}</option>
                     ))}
                 </TextField>
                 <Box sx={{ minWidth: 220 }}>

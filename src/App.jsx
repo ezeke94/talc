@@ -23,7 +23,8 @@ const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
 const TermsOfUse = lazy(() => import('./pages/TermsOfUse'));
 const Calendar = lazy(() => import('./pages/Calendar'));
 const FormManagement = lazy(() => import('./pages/FormManagement'));
-// ...existing code...
+const MentorStatusAdmin = lazy(() => import('./pages/MentorStatusAdmin'));
+const ReportDownload = lazy(() => import('./pages/ReportDownload'));
 
 const RouteLoadingFallback = () => (
     <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '50vh' }}>
@@ -51,6 +52,8 @@ function App() {
                             <Route path="sop-management" element={<SOPManager />} />
                             <Route path="form-management" element={<FormManagement />} />
                             <Route path="user-management" element={<UserManagement />} />
+                            <Route path="mentor-status" element={<MentorStatusAdmin />} />
+                            <Route path="reports" element={<ReportDownload />} />
                             <Route path="profile" element={<UserProfile />} />
                             <Route path="mentor/:mentorId" element={<MentorDetail />} />
                             <Route path="mentor/:mentorId/fill-intellect-kpi" element={<IntellectKPIForm />} />

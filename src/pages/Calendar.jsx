@@ -327,7 +327,10 @@ const Calendar = () => {
       console.log('Centers loaded:', centersData.length, centersData);
       setCenters(centersData);
       setUsers(usersSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
-      setMentors(mentorsSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      const activeMentors = mentorsSnapshot.docs
+        .map(d => ({ id: d.id, ...d.data() }))
+        .filter(m => (m.status || 'active') !== 'inactive');
+      setMentors(activeMentors);
       setSops(sopsSnapshot.docs.map(d => ({ id: d.id, ...d.data() })));
     } catch (error) {
       console.error('Error fetching data:', error);
