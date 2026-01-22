@@ -2,8 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { db } from '../firebase/config';
 import { doc, getDoc, collection, query, where, onSnapshot, orderBy } from 'firebase/firestore';
-import { Box, Typography, Button, Paper, CircularProgress, List, ListItem, ListItemText, Divider, Grid, Dialog, DialogTitle, DialogContent, IconButton, Card, CardContent, Avatar, useTheme, useMediaQuery, Skeleton, Fade, Collapse, Tabs, Tab, Chip, Stack } from '@mui/material';
+import { Box, Typography, Button, Paper, CircularProgress, List, ListItem, ListItemText, Divider, Grid, Dialog, DialogTitle, DialogContent, IconButton, Card, CardContent, Avatar, useTheme, useMediaQuery, Skeleton, Fade, Collapse, Tabs, Tab, Chip, Stack, Fab } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import EditIcon from '@mui/icons-material/Edit';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList, ResponsiveContainer } from 'recharts';
 // ...existing code...
 import KPIScoreScale from '../components/KPIScoreScale';
@@ -210,8 +211,8 @@ const MentorDetail = () => {
             '#8884d8','#82ca9d','#ff7300','#38761d','#f44336','#2196f3','#9c27b0','#ffca28','#4caf50','#00acc1'
         ];
         return (
-            <Box sx={{ width: '100%', height: isMobile ? 300 : 420, mt: 3, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                <ResponsiveContainer>
+            <Box sx={{ width: '100%', maxWidth: '100%', height: isMobile ? 300 : 420, mt: 3, display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' }}>
+                <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={data} margin={{ top: 8, right: 24, left: 8, bottom: 8 }} barGap={isMobile ? 4 : 6} barCategoryGap={isMobile ? '40%' : '30%'}>
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis 
@@ -249,10 +250,10 @@ const MentorDetail = () => {
     const MobileLegend = ({ fieldKeys }) => {
         const colors = ['#8884d8','#82ca9d','#ff7300','#38761d','#f44336','#2196f3','#9c27b0','#ffca28','#4caf50','#00acc1'];
         return (
-            <Box sx={{ overflowX: 'auto', mt: 1 }}>
-                <Stack direction="row" spacing={1} sx={{ px: 1 }}>
+            <Box sx={{ overflowX: 'auto', overflowY: 'hidden', mt: 1, maxWidth: '100%', WebkitOverflowScrolling: 'touch' }}>
+                <Stack direction="row" spacing={1} sx={{ px: 1, minWidth: 'max-content' }}>
                     {fieldKeys && fieldKeys.map((fk, idx) => (
-                        <Chip key={fk} label={kpiFieldLabels[fk] || fk} size="small" sx={{ bgcolor: colors[idx % colors.length], color: '#fff', fontWeight: 700, fontSize: '0.85rem' }} />
+                        <Chip key={fk} label={kpiFieldLabels[fk] || fk} size="small" sx={{ bgcolor: colors[idx % colors.length], color: '#fff', fontWeight: 700, fontSize: '0.75rem', flexShrink: 0 }} />
                     ))}
                 </Stack>
             </Box>
@@ -271,7 +272,7 @@ const MentorDetail = () => {
     // Responsive KPI section layout with notes expansion
     const KPISection = ({ title, data, kpiType }) => (
         <Fade in timeout={500}>
-            <Paper sx={{ p: { xs: 2, md: 3 }, mt: 3 }}>
+            <Paper sx={{ p: { xs: 2, md: 3 }, mt: 3, overflow: 'hidden', maxWidth: '100%' }}>
                 <Typography variant="h5" sx={{ mb: 2 }}>{title}</Typography>
                 <ChartWithLabels data={data.monthlyData} fieldKeys={data.fieldKeys} />
                 {data.fieldKeys && data.fieldKeys.length > 0 && <MobileLegend fieldKeys={data.fieldKeys} />}
@@ -332,7 +333,7 @@ const MentorDetail = () => {
     const paginatedNotes = allNotes.slice((notesPage - 1) * NOTES_PER_PAGE, notesPage * NOTES_PER_PAGE);
 
     return (
-        <Box sx={{ pb: isMobile ? 14 : 4 }}>
+        <Box sx={{ pb: isMobile ? 10 : 4, overflowX: 'hidden', maxWidth: '100vw' }}>
             {/* Minimal header: only mentor name */}
             <Fade in timeout={500}>
                 <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 2, justifyContent: 'space-between' }}>
@@ -351,9 +352,16 @@ const MentorDetail = () => {
 
             {/* KPI Section Tabs for mobile only (desktop tabs live in the header) */}
             {isMobile && (
-                <Tabs value={activeKpiTab} onChange={(_, v) => setActiveKpiTab(v)} variant="scrollable" scrollButtons allowScrollButtonsMobile sx={{ mb: 2 }}>
+                <Tabs 
+                    value={activeKpiTab} 
+                    onChange={(_, v) => setActiveKpiTab(v)} 
+                    variant="scrollable" 
+                    scrollButtons="auto"
+                    allowScrollButtonsMobile 
+                    sx={{ mb: 2, maxWidth: '100%' }}
+                >
                     {uniqueFormNames.map(name => (
-                        <Tab key={name} label={`${name} KPI`} />
+                        <Tab key={name} label={`${name} KPI`} sx={{ minWidth: 'auto', px: 2 }} />
                     ))}
                 </Tabs>
             )}
@@ -418,62 +426,36 @@ const MentorDetail = () => {
                 </DialogContent>
             </Dialog>
 
-            {/* Fixed quick actions to open forms — show only the button matching the visible section/tab */}
-            {mentor && uniqueFormNames.length > 0 && (() => {
-                const activeName = uniqueFormNames[activeKpiTab];
-                if (!activeName) return null;
-                // Find form in dynamicAssignedForms for reliability
-                const dynamicForm = dynamicAssignedForms.find(f => f.name === activeName);
-                // Fallback to availableForms if not found
-                const formToUse = dynamicForm || availableForms.find(f => f.name === activeName);
-                // Always use dynamic route for assigned forms (forms come from Firestore)
-                const onClick = () => {
-                    if (formToUse) {
-                        navigate(`/mentor/${mentorId}/fill/${formToUse.id}`);
-                    }
-                };
-                // Don't render button if no form found
-                if (!formToUse) return null;
-                
-                return (
-                    <Box sx={isMobile ? {
-                        position: 'fixed', 
-                        left: 0, 
-                        right: 0, 
-                        bottom: 0, 
-                        px: 2,
-                        pt: 1.5,
-                        pb: 'calc(env(safe-area-inset-bottom, 8px) + 8px)',
-                        bgcolor: 'background.paper', 
-                        boxShadow: '0 -4px 12px rgba(0,0,0,0.08)', 
-                        zIndex: 1200,
-                        borderTop: '1px solid',
-                        borderColor: 'divider',
-                    } : {
-                        position: 'fixed', bottom: 16, right: 16, display: 'flex', flexDirection: 'column', gap: 1, zIndex: 1200,
-                    }}>
-                        <Button
-                            aria-label={`Fill ${activeName} Form`}
-                            variant="contained"
-                            color={'secondary'}
-                            onClick={onClick}
-                            fullWidth={isMobile}
-                            sx={isMobile ? { 
-                                py: 1.5, 
-                                fontSize: '1rem',
+            {/* Floating action button to fill form */}
+            {mentor && uniqueFormNames.length > 0 && dynamicAssignedForms.length > 0 && (
+                (() => {
+                    const activeName = uniqueFormNames[activeKpiTab] || uniqueFormNames[0];
+                    const formToUse = dynamicAssignedForms.find(f => f.name === activeName) || dynamicAssignedForms[0];
+                    if (!formToUse) return null;
+                    
+                    return (
+                        <Fab
+                            color="secondary"
+                            aria-label={`Fill ${formToUse.name} Form`}
+                            onClick={() => navigate(`/mentor/${mentorId}/fill/${formToUse.id}`)}
+                            variant={isMobile ? "circular" : "extended"}
+                            sx={{
+                                position: 'fixed',
+                                bottom: { xs: 24, sm: 32 },
+                                right: { xs: 20, sm: 32 },
+                                zIndex: 1300,
                                 fontWeight: 600,
-                                borderRadius: 2,
                                 textTransform: 'none',
-                                minHeight: 48,
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                            } : { minWidth: 200 }}
+                                px: isMobile ? 0 : 3,
+                                boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+                            }}
                         >
-                            {`Fill ${activeName} Form`}
-                        </Button>
-                    </Box>
-                );
-            })()}
+                            <EditIcon sx={isMobile ? {} : { mr: 1 }} />
+                            {!isMobile && 'Fill Form'}
+                        </Fab>
+                    );
+                })()
+            )}
         </Box>
     );
 };
