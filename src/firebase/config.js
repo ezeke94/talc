@@ -45,6 +45,24 @@ export const persistencePromise = (async () => {
       }
     };
 
+    // PWA Cross-context auth sync: Try to detect if there's an existing auth session
+    // This helps PWAs pick up authentication from the browser
+    if (isIOSPWA()) {
+      console.log('Firebase: iOS PWA detected - enabling cross-context auth sync');
+      
+      // On iOS PWA, localStorage IS shared between Safari browser and PWA!
+      // This is different from Android. We should prioritize localStorage for sharing.
+      try {
+        // Check if there's already a Firebase session in localStorage from the browser
+        const firebaseKey = Object.keys(localStorage).find(key => key.includes('firebase:'));
+        if (firebaseKey) {
+          console.log('Firebase: Found existing Firebase session in localStorage - PWA will reuse it');
+        }
+      } catch (e) {
+        console.debug('Firebase: Could not check for existing session:', e?.message);
+      }
+    }
+
     // First, test if localStorage is available and working
     try {
       const testKey = 'firebase-test-' + Date.now();

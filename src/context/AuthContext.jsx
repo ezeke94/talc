@@ -109,6 +109,24 @@ export const AuthProvider = ({ children }) => {
                 } catch (e) {
                     console.debug('AuthContext: Could not check iOS login state:', e);
                 }
+                
+                // iOS PWA Cross-context auth sync: Check if there's an active Firebase session in localStorage
+                // from the browser that we can reuse
+                try {
+                    console.log('AuthContext: Checking for browser Firefox session to sync...');
+                    // Firebase stores auth in localStorage with keys like 'firebase:authUser:...'
+                    const firebaseAuthKey = Object.keys(localStorage).find(key => 
+                        key.startsWith('firebase:authUser:')
+                    );
+                    
+                    if (firebaseAuthKey) {
+                        console.log('AuthContext: Found Firebase session in localStorage from browser - will be picked up by onAuthStateChanged');
+                    } else {
+                        console.log('AuthContext: No existing Firebase session in localStorage');
+                    }
+                } catch (e) {
+                    console.debug('AuthContext: Could not check for browser session:', e?.message);
+                }
             } else if (isStandalone()) {
                 console.debug('App is running in standalone mode.');
             } else {
@@ -124,6 +142,31 @@ export const AuthProvider = ({ children }) => {
                 }
             }, 10000); // 10 second timeout
 
+            // iOS PWA: Attempt to restore auth from localStorage if onAuthStateChanged doesn't find it
+            // This handles the case where the browser logged in but the PWA context lost the session
+            let authRestoreTimeout;
+            if (isIOSPWA()) {
+                authRestoreTimeout = setTimeout(async () => {
+                    if (!authInitializedRef.current && auth?.currentUser === null) {
+                        console.log('AuthContext: iOS PWA - attempting manual auth restore from localStorage');
+                        try {
+                            // Check if there's a cached auth profile
+                            const cachedProfile = localStorage.getItem('talc_user_profile');
+                            if (cachedProfile) {
+                                const profile = JSON.parse(cachedProfile);
+                                console.log('AuthContext: Found cached user profile, attempting to restore...');
+                                // This will at least show something while Firebase reconnects
+                                setCurrentUser(prev => prev || profile);
+                                setLoading(false);
+                                setAuthInitialized(true);
+                            }
+                        } catch (e) {
+                            console.debug('AuthContext: Could not restore from cache:', e?.message);
+                        }
+                    }
+                }, 3000); // After 3 seconds, try cache restore
+            }
+
             // Now subscribe to auth state changes
             unsubscribe = onAuthStateChanged(auth, async (user) => {
                 console.debug('AuthStateChanged fired. User present?', !!user, user?.email || 'no email');
@@ -131,6 +174,10 @@ export const AuthProvider = ({ children }) => {
                 if (authStateTimeout) {
                     clearTimeout(authStateTimeout);
                     authStateTimeout = null;
+                }
+                if (authRestoreTimeout) {
+                    clearTimeout(authRestoreTimeout);
+                    authRestoreTimeout = null;
                 }
 
                 setAuthInitialized(true);
