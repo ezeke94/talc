@@ -32,7 +32,12 @@ export async function setupNotifications(currentUser, deviceName = null) {
     return null;
   }
 
-  if (isIOS() && !isPWA()) {
+  const isIOSDevice = isIOS();
+  const isInPWA = isPWA();
+  
+  console.log('Notification setup:', { isIOS: isIOSDevice, isPWA: isInPWA, userAgent: navigator.userAgent });
+
+  if (isIOSDevice && !isInPWA) {
     console.warn('iOS system notifications require the app to be installed as a PWA (Add to Home Screen).');
     showCustomNotification(
       'Enable Notifications on iPhone',
@@ -49,10 +54,21 @@ export async function setupNotifications(currentUser, deviceName = null) {
   }
 
   try {
-    // Request permission
+    // iOS PWA: Check current permission state before requesting
+    const currentPermission = Notification.permission;
+    console.log('Current notification permission:', currentPermission);
+    
+    // iOS PWA-specific: If permission was already granted but token failed, try to recover
+    if (currentPermission === 'granted' && isIOSDevice && isInPWA) {
+      console.log('iOS PWA: Permission already granted, proceeding with token registration');
+    }
+    
+    // Request permission (will no-op if already granted)
     const permission = await Notification.requestPermission();
+    console.log('Notification permission result:', permission);
+    
     if (permission !== 'granted') {
-      console.log('Notification permission denied');
+      console.log('Notification permission denied or dismissed');
       return null;
     }
 
@@ -88,29 +104,97 @@ export async function setupNotifications(currentUser, deviceName = null) {
         console.log('No firebase messaging SW found, registering new one...');
         // Register it if not found, with explicit root scope
         swReg = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
-          scope: '/'
+          scope: '/',
+          updateViaCache: 'none' // iOS PWA: Force fresh fetch of service worker
         });
         console.log('Registered firebase-messaging-sw.js with scope:', swReg.scope);
-        // Wait for it to be ready
-        await navigator.serviceWorker.ready;
-        console.log('Service worker is ready');
+        
+        // iOS PWA-specific: Wait for service worker to be ready with timeout
+        if (isIOSDevice && isInPWA) {
+          console.log('iOS PWA: Waiting for service worker to activate...');
+          await Promise.race([
+            navigator.serviceWorker.ready,
+            new Promise((_, reject) => setTimeout(() => reject(new Error('Service worker timeout')), 10000))
+          ]);
+          console.log('iOS PWA: Service worker is ready');
+        } else {
+          await navigator.serviceWorker.ready;
+          console.log('Service worker is ready');
+        }
       } else {
         console.log('Found existing firebase-messaging-sw.js registration:', swReg.scope);
+        // iOS PWA: Force update check on existing SW
+        if (isIOSDevice && isInPWA) {
+          console.log('iOS PWA: Forcing service worker update check...');
+          await swReg.update();
+        }
       }
     } catch (swErr) {
-      console.warn('Service worker registration failed or unavailable:', swErr);
+      console.warn('Service worker registration failed or unavailable:', swErr?.message || swErr);
+      // iOS PWA: Don't fail completely, try to continue
+      if (isIOSDevice && isInPWA) {
+        console.log('iOS PWA: Continuing despite service worker issue...');
+      }
     }
 
     const token = await getToken(msg, { vapidKey, serviceWorkerRegistration: swReg || undefined });
     if (!token) {
       console.warn('No FCM token received - this could be due to service worker issues or VAPID key problems');
+      
+      // iOS PWA-specific debugging
+      if (isIOSDevice && isInPWA) {
+        console.error('iOS PWA: Token retrieval failed. Diagnostics:', {
+          swRegistration: !!swReg,
+          swScope: swReg?.scope,
+          swActive: !!swReg?.active,
+          vapidKeyConfigured: !!vapidKey,
+          notificationPermission: Notification.permission
+        });
+        
+        // Try one more time with explicit retry for iOS
+        console.log('iOS PWA: Retrying token retrieval...');
+        try {
+          const retryToken = await getToken(msg, { vapidKey, serviceWorkerRegistration: swReg || undefined });
+          if (retryToken) {
+            console.log('iOS PWA: Token retrieved on retry!');
+            return processToken(retryToken, currentUser, deviceName, isIOSDevice, isInPWA);
+          }
+        } catch (retryErr) {
+          console.error('iOS PWA: Retry also failed:', retryErr?.message);
+        }
+      }
+      
       return null;
     }
 
     console.log('FCM registration token obtained:', token ? 'token_received' : 'no_token');
 
-    // Store token in localStorage for device identification
-    localStorage.setItem('fcmToken', token);
+    return processToken(token, currentUser, deviceName, isIOSDevice, isInPWA);
+  } catch (error) {
+    console.error('Notification setup failed:', error);
+    
+    // iOS PWA-specific error handling
+    if (isIOS() && isPWA()) {
+      console.error('iOS PWA notification setup error details:', {
+        name: error?.name,
+        message: error?.message,
+        code: error?.code,
+        stack: error?.stack
+      });
+    }
+    
+    return null;
+  }
+}
+
+// Separate function to process token (DRY principle)
+async function processToken(token, currentUser, deviceName, isIOSDevice, isInPWA) {
+  if (!token || !currentUser) return null;
+
+  console.log('Processing FCM token for device registration');
+
+  // Store token in localStorage for device identification
+  localStorage.setItem('fcmToken', token);
 
     // Record this device token in the devices subcollection (this is the source of truth)
     try {
@@ -145,6 +229,18 @@ export async function setupNotifications(currentUser, deviceName = null) {
       }
       
       console.log('Device token successfully saved to subcollection');
+      
+      // iOS PWA-specific: Confirm registration and test notification
+      if (isIOSDevice && isInPWA) {
+        console.log('iOS PWA: Device successfully registered in Firestore');
+        console.log('iOS PWA: Notification diagnostics:', {
+          permission: Notification.permission,
+          serviceWorkerReady: !!navigator.serviceWorker?.controller,
+          fcmTokenLength: token?.length,
+          platform: navigator.platform,
+          standalone: window.navigator?.standalone
+        });
+      }
     } catch (e) {
       console.error('Failed to record device token to subcollection:', e);
       return null;
