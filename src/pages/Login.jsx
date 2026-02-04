@@ -54,18 +54,53 @@ const Login = () => {
                 console.warn('Login: Persistence setup issue (non-fatal):', persistErr);
             }
             
+            // iOS PWA-specific fix: Cache navigation state before popup
+            const isIOSPWA = () => {
+                try {
+                    return /iPhone|iPad/.test(navigator.userAgent) && 
+                           (!!window.navigator?.standalone || 
+                            window.matchMedia?.('(display-mode: standalone)')?.matches);
+                } catch {
+                    return false;
+                }
+            };
+
+            if (isIOSPWA()) {
+                console.log('Login: iOS PWA detected - using enhanced popup strategy');
+                // Store the post-login destination
+                try {
+                    sessionStorage.setItem('talc_post_login_redirect', '/');
+                    localStorage.setItem('talc_login_initiated', Date.now().toString());
+                } catch (e) {
+                    console.warn('Login: Could not cache post-login state:', e);
+                }
+            }
+            
             console.log('Login: Using popup sign-in (enforced)');
             try {
                 const result = await signInWithPopup(auth, googleProvider);
                 if (result?.user) {
                     console.log('Login: Popup sign-in successful for user:', result.user.email);
+                    // Clear session state after successful login
+                    try {
+                        sessionStorage.removeItem('talc_post_login_redirect');
+                        localStorage.removeItem('talc_login_initiated');
+                    } catch (e) {
+                        console.debug('Login: Could not clear post-login state:', e);
+                    }
                     navigate('/');
                     return;
                 }
                 console.warn('Login: Popup returned no user; this should not happen');
             } catch (popupError) {
                 console.warn('Login: Popup sign-in failed:', popupError?.code, popupError?.message);
-                setError('Sign-in failed. Please try again.');
+                
+                // iOS PWA specific: If popup fails, suggest opening in Safari
+                if (isIOSPWA()) {
+                    setError('Sign-in failed. Try opening in Safari or refreshing the page and signing in again.');
+                } else {
+                    setError('Sign-in failed. Please try again.');
+                }
             }
         } catch (err) {
             console.error('Login: Sign-in error:', err);

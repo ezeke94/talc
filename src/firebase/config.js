@@ -34,18 +34,35 @@ try { useDeviceLanguage(auth); } catch { /* noop */ }
 // Enhanced auth persistence setup for PWAs with better error handling
 export const persistencePromise = (async () => {
   try {
+    // iOS PWA-specific: Check if we're in standalone mode
+    const isIOSPWA = () => {
+      try {
+        return /iPhone|iPad/.test(navigator.userAgent) && 
+               (!!window.navigator?.standalone || 
+                window.matchMedia?.('(display-mode: standalone)')?.matches);
+      } catch {
+        return false;
+      }
+    };
+
     // First, test if localStorage is available and working
     try {
       const testKey = 'firebase-test-' + Date.now();
       localStorage.setItem(testKey, 'test');
+      const value = localStorage.getItem(testKey);
       localStorage.removeItem(testKey);
       
-      // localStorage is working, use it
-      await setPersistence(auth, browserLocalPersistence);
-      console.debug('Firebase: LocalStorage persistence configured successfully');
-      return 'localstorage';
+      // Verify the value was actually stored (iOS PWA quirk)
+      if (value === 'test') {
+        // localStorage is working, use it
+        await setPersistence(auth, browserLocalPersistence);
+        console.debug('Firebase: LocalStorage persistence configured successfully', isIOSPWA() ? '(iOS PWA)' : '');
+        return 'localstorage';
+      } else {
+        throw new Error('LocalStorage write verification failed');
+      }
     } catch (localStorageError) {
-      console.warn('Firebase: LocalStorage test failed, trying IndexedDB:', localStorageError);
+      console.warn('Firebase: LocalStorage test failed, trying IndexedDB:', localStorageError?.message);
     }
     
     // Fall back to IndexedDB
@@ -65,14 +82,14 @@ export const persistencePromise = (async () => {
         
         // IndexedDB is working, use it
         await setPersistence(auth, indexedDBLocalPersistence);
-        console.debug('Firebase: IndexedDB persistence configured successfully');
+        console.debug('Firebase: IndexedDB persistence configured successfully', isIOSPWA() ? '(iOS PWA)' : '');
         return 'indexeddb';
       } catch (indexedDBError) {
-        console.warn('Firebase: IndexedDB test failed:', indexedDBError);
+        console.warn('Firebase: IndexedDB test failed:', indexedDBError?.message);
       }
     }
     
-    console.warn('Firebase: All auth persistence mechanisms failed, using session persistence');
+    console.warn('Firebase: All auth persistence mechanisms failed, using session persistence', isIOSPWA() ? '(iOS PWA)' : '');
     return 'none';
     
   } catch (error) {

@@ -85,7 +85,31 @@ export const AuthProvider = ({ children }) => {
                 }
             };
 
-            if (isStandalone()) {
+            const isIOSPWA = () => {
+                try {
+                    return /iPhone|iPad/.test(navigator.userAgent) && isStandalone();
+                } catch {
+                    return false;
+                }
+            };
+
+            if (isIOSPWA()) {
+                console.debug('App is running in iOS PWA standalone mode - applying auth persistence fixes');
+                // iOS PWA auth state loop detection and recovery
+                try {
+                    const lastLoginInitiated = localStorage.getItem('talc_login_initiated');
+                    const loginInitiatedTime = lastLoginInitiated ? parseInt(lastLoginInitiated, 10) : 0;
+                    const timeSinceLogin = Date.now() - loginInitiatedTime;
+                    
+                    // If login was initiated less than 2 seconds ago, there might be a redirect loop
+                    if (lastLoginInitiated && timeSinceLogin < 2000) {
+                        console.warn('AuthContext: Potential auth loop detected on iOS PWA - clearing session state');
+                        sessionStorage.clear();
+                    }
+                } catch (e) {
+                    console.debug('AuthContext: Could not check iOS login state:', e);
+                }
+            } else if (isStandalone()) {
                 console.debug('App is running in standalone mode.');
             } else {
                 console.debug('App is running in browser mode.');
