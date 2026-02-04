@@ -188,7 +188,7 @@ export async function setupNotifications(currentUser, deviceName = null) {
           const retryToken = await getToken(msg, { vapidKey, serviceWorkerRegistration: swReg || undefined });
           if (retryToken) {
             console.log('iOS PWA: Token retrieved on retry!');
-            return processToken(retryToken, currentUser, deviceName, isIOSDevice, isInPWA);
+            return await processToken(retryToken, currentUser, deviceName, isIOSDevice, isInPWA);
           }
         } catch (retryErr) {
           console.error('iOS PWA: Retry also failed:', retryErr?.message);
@@ -200,7 +200,7 @@ export async function setupNotifications(currentUser, deviceName = null) {
 
     console.log('FCM registration token obtained:', token ? 'token_received' : 'no_token');
 
-    return processToken(token, currentUser, deviceName, isIOSDevice, isInPWA);
+    return await processToken(token, currentUser, deviceName, isIOSDevice, isInPWA);
   } catch (error) {
     console.error('Notification setup failed:', error);
     
@@ -214,7 +214,7 @@ export async function setupNotifications(currentUser, deviceName = null) {
       });
     }
     
-    return null;
+    throw error;
   }
 }
 
@@ -345,11 +345,6 @@ async function processToken(token, currentUser, deviceName, isIOSDevice, isInPWA
     }, 60000); // Every minute
 
     return token;
-
-  } catch (error) {
-    console.error('Error setting up notifications:', error);
-    return null;
-  }
 }
 
 // Show custom in-app notification

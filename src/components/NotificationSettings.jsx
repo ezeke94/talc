@@ -477,7 +477,6 @@ const NotificationSettings = ({ compact = false }) => {
       <Box 
         sx={{ 
           display: 'flex', 
-          alignItems: 'center', 
           justifyContent: 'space-between', 
           mb: 2,
           flexDirection: { xs: 'column', sm: 'row' },
