@@ -55,7 +55,14 @@ const ProfileSettingsDialog = ({ onClose }) => {
         Profile Information
       </Typography>
       
-      <TextField label="Name" value={name} onChange={(e) => setName(e.target.value)} fullWidth />
+      <TextField 
+        label="Name" 
+        value={name} 
+        onChange={(e) => setName(e.target.value)} 
+        fullWidth 
+        size="small"
+        variant="outlined"
+      />
       <FormControl fullWidth size="small">
         <InputLabel id="center-select-label">Assigned Center</InputLabel>
         <Select
@@ -75,9 +82,29 @@ const ProfileSettingsDialog = ({ onClose }) => {
       {/* Notification Settings with Device Manager */}
       <NotificationSettings compact />
 
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 3 }}>
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="contained" onClick={save} disabled={!name}>Save</Button>
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          justifyContent: 'flex-end', 
+          gap: 1, 
+          mt: 3,
+          flexDirection: { xs: 'column', sm: 'row' }
+        }}
+      >
+        <Button 
+          onClick={onClose}
+          fullWidth={{ xs: true, sm: false }}
+        >
+          Cancel
+        </Button>
+        <Button 
+          variant="contained" 
+          onClick={save} 
+          disabled={!name}
+          fullWidth={{ xs: true, sm: false }}
+        >
+          Save
+        </Button>
       </Box>
     </Box>
   );

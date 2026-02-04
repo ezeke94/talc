@@ -390,29 +390,90 @@ const NotificationSettings = ({ compact = false }) => {
           Notifications are blocked. Please allow notifications in your browser settings.
         </Alert>
       )}
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 2 }}>
-        <Switch
-          checked={notificationsEnabled}
-          onChange={handleToggleNotifications}
-          disabled={loading || !status.supported || status.permission === 'denied'}
-          inputProps={{ 'aria-label': 'Enable push notifications' }}
-        />
-        <Typography variant="body1">
-          {notificationsEnabled ? 'Notifications are ON' : 'Notifications are OFF'}
-        </Typography>
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          flexDirection: 'column',
+          gap: 2, 
+          mt: 2
+        }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            gap: 1,
+            flexDirection: { xs: 'column', sm: 'row' }
+          }}
+        >
+          <Button
+            variant={notificationsEnabled ? 'contained' : 'outlined'}
+            color={notificationsEnabled ? 'success' : 'inherit'}
+            onClick={handleToggleNotifications}
+            disabled={loading || !status.supported || status.permission === 'denied'}
+            fullWidth={{ xs: true, sm: false }}
+            sx={{
+              py: 1.5,
+              px: 3,
+              fontSize: '1rem',
+              fontWeight: 600,
+              flex: { xs: 1, sm: 'auto' }
+            }}
+          >
+            ✓ Turn ON
+          </Button>
+          <Button
+            variant={!notificationsEnabled ? 'contained' : 'outlined'}
+            color={!notificationsEnabled ? 'error' : 'inherit'}
+            onClick={handleToggleNotifications}
+            disabled={loading || !status.supported || status.permission === 'denied'}
+            fullWidth={{ xs: true, sm: false }}
+            sx={{
+              py: 1.5,
+              px: 3,
+              fontSize: '1rem',
+              fontWeight: 600,
+              flex: { xs: 1, sm: 'auto' }
+            }}
+          >
+            ✕ Turn OFF
+          </Button>
+        </Box>
+        <Box
+          sx={{
+            bgcolor: notificationsEnabled ? '#e8f5e9' : '#ffebee',
+            p: 2,
+            borderRadius: 1,
+            border: '1px solid',
+            borderColor: notificationsEnabled ? '#4caf50' : '#f44336'
+          }}
+        >
+          <Typography variant="body1" sx={{ fontWeight: 500, mb: 0.5 }}>
+            {notificationsEnabled ? '✓ Notifications are ON' : '✕ Notifications are OFF'}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {notificationsEnabled ? 'You will receive alerts about events, KPIs, and system updates.' : 'You will not receive any notifications.'}
+          </Typography>
+        </Box>
       </Box>
-      <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-        Toggle to receive or stop important reminders about events, KPIs, and system updates.
-      </Typography>
 
       <Divider sx={{ my: 3 }} />
 
       {/* Registered Devices Section */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+      <Box 
+        sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between', 
+          mb: 2,
+          flexDirection: { xs: 'column', sm: 'row' },
+          gap: { xs: 2, sm: 0 },
+          alignItems: { xs: 'flex-start', sm: 'center' }
+        }}
+      >
         <Typography variant="h6">
           Registered Devices
         </Typography>
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
           <Tooltip title="Clean up duplicate devices">
             <IconButton onClick={handleCleanupDuplicates} disabled={loadingDevices} size="small" color="warning">
               <DeleteIcon />
@@ -470,15 +531,20 @@ const NotificationSettings = ({ compact = false }) => {
                   sx={{
                     bgcolor: isCurrentDevice ? 'action.hover' : 'transparent',
                     borderRadius: 1,
-                    mb: 0.5
+                    mb: 0.5,
+                    display: 'flex',
+                    flexDirection: { xs: 'column', sm: 'row' },
+                    alignItems: { xs: 'flex-start', sm: 'center' },
+                    gap: { xs: 1.5, sm: 0 },
+                    p: { xs: 1.5, sm: 2 }
                   }}
                 >
-                  <Box sx={{ mr: 2, color: 'action.active' }}>
+                  <Box sx={{ mr: { xs: 0, sm: 2 }, color: 'action.active' }}>
                     {getDeviceIcon(device.userAgent)}
                   </Box>
                   <ListItemText
                     primary={
-                      <Stack direction="row" spacing={1} alignItems="center">
+                      <Stack direction="row" spacing={1} alignItems="center" sx={{ flexWrap: 'wrap' }}>
                         <Typography variant="body1">
                           {deviceName}
                         </Typography>
@@ -499,14 +565,33 @@ const NotificationSettings = ({ compact = false }) => {
                         )}
                       </Stack>
                     }
+                    sx={{ mb: { xs: 1, sm: 0 }, mr: 0 }}
                   />
-                  <ListItemSecondaryAction>
-                    <Stack direction="row" spacing={1} alignItems="center">
+                  <ListItemSecondaryAction
+                    sx={{
+                      position: { xs: 'static', sm: 'absolute' },
+                      right: { xs: 0, sm: 16 },
+                      transform: { xs: 'none', sm: 'translateY(-50%)' },
+                      top: { xs: 'auto', sm: '50%' },
+                      width: '100%',
+                      static: { xs: 'true', sm: 'false' }
+                    }}
+                  >
+                    <Stack 
+                      direction="row" 
+                      spacing={1} 
+                      alignItems="center"
+                      sx={{
+                        justifyContent: { xs: 'space-between', sm: 'flex-end' },
+                        width: '100%'
+                      }}
+                    >
                       <Tooltip title="Edit device name">
                         <IconButton
                           edge="end"
                           onClick={() => handleEditDeviceName(device)}
                           size="small"
+                          sx={{ p: { xs: 1, sm: 1 } }}
                         >
                           <EditIcon fontSize="small" />
                         </IconButton>
@@ -517,6 +602,9 @@ const NotificationSettings = ({ compact = false }) => {
                           checked={device.enabled !== false}
                           onChange={() => handleToggleDevice(device.token, device.enabled !== false)}
                           size="small"
+                          sx={{
+                            mx: { xs: 1, sm: 0.5 }
+                          }}
                         />
                       </Tooltip>
                       {!isCurrentDevice && (
@@ -526,6 +614,7 @@ const NotificationSettings = ({ compact = false }) => {
                             onClick={() => handleRemoveDevice(device.token)}
                             size="small"
                             color="error"
+                            sx={{ p: { xs: 1, sm: 1 } }}
                           >
                             <DeleteIcon fontSize="small" />
                           </IconButton>
