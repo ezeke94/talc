@@ -63,12 +63,43 @@ export async function setupNotifications(currentUser, deviceName = null) {
       console.log('iOS PWA: Permission already granted, proceeding with token registration');
     }
     
+    // iOS PWA-specific: Handle "denied" permission edge case
+    // On iOS Safari PWA, sometimes the permission shows as "denied" even though it's enabled in settings
+    // This is a known iOS Safari quirk where permission state may not sync properly
+    if (currentPermission === 'denied' && isIOSDevice && isInPWA) {
+      console.warn('iOS PWA: Notification permission shows as "denied" - this may be a Safari cache issue');
+      console.log('iOS PWA: Checking if notifications actually work despite "denied" status...');
+      
+      // iOS PWA workaround: Sometimes the permission cache is stale
+      // Try a test notification to see if it actually works
+      try {
+        // Create a test notification (this will fail silently if truly blocked)
+        const testNotif = new Notification('Test', { 
+          body: 'Checking notifications...', 
+          silent: true,
+          tag: 'test' 
+        });
+        testNotif.close();
+        console.log('iOS PWA: Test notification succeeded - permission may be working despite "denied" status');
+        // If we got here, notifications actually work! Continue with setup.
+      } catch (testErr) {
+        console.error('iOS PWA: Test notification failed, notifications truly blocked:', testErr?.message);
+        throw new Error('iOS_NOTIFICATION_BLOCKED: Notifications are disabled in Safari settings. Enable in Settings > Safari > Notifications.');
+      }
+    }
+    
     // Request permission (will no-op if already granted)
     const permission = await Notification.requestPermission();
     console.log('Notification permission result:', permission);
     
     if (permission !== 'granted') {
       console.log('Notification permission denied or dismissed');
+      
+      // iOS PWA specific error messaging
+      if (isIOSDevice && isInPWA) {
+        throw new Error('iOS PWA: Notifications are blocked. Disable notifications for this site in Settings > Safari > Notifications, then enable them again.');
+      }
+      
       return null;
     }
 

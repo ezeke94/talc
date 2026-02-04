@@ -225,7 +225,22 @@ const NotificationSettings = ({ compact = false }) => {
       }
       setStatus(getNotificationStatus());
     } catch (error) {
-      setErrorMsg("An error occurred: " + (error?.message || error));
+      const errorMsg = error?.message || error || "Unknown error";
+      
+      // iOS PWA: Provide specific troubleshooting guidance
+      if (/iPhone|iPad/.test(navigator.userAgent) && window.navigator?.standalone) {
+        if (errorMsg.includes('iOS_NOTIFICATION_BLOCKED')) {
+          setErrorMsg('📱 iOS Fix: Go to iPhone Settings > Safari > Notifications and find "kpitalc.netlify.app". Make sure it\'s set to "Allow".');
+        } else if (errorMsg.includes('permission') || errorMsg.includes('denied')) {
+          setErrorMsg('📱 iOS Permission Issue: Try toggling the notification permission off and back on in Safari Settings > Notifications.');
+        } else if (errorMsg.includes('service worker') || errorMsg.includes('token')) {
+          setErrorMsg('📱 iOS Technical Issue: Try refreshing the page. If still having issues, try: Force quit Safari, reopen the app, and enable notifications again.');
+        } else {
+          setErrorMsg('📱 iOS Error: ' + errorMsg);
+        }
+      } else {
+        setErrorMsg("An error occurred: " + errorMsg);
+      }
       console.error('Error:', error);
     } finally {
       setLoading(false);
